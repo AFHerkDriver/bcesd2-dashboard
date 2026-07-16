@@ -198,6 +198,24 @@
   .tile.ph .pmark{font-size:clamp(20px,2.4vw,36px);color:var(--dim);opacity:.4;margin-bottom:6px}
   .tile.ph .pname{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.7vw,28px);letter-spacing:1.5px;color:var(--text);opacity:.75}
   .tile.ph .pidea{font-size:clamp(10px,.95vw,14px);color:var(--dim);margin-top:6px;max-width:78%;line-height:1.4}
+  /* ── Phone (portrait) — board becomes a stacked, scrollable status page; wall TV unaffected ── */
+  @media (max-width:740px){
+    html,body{height:auto;overflow:auto}
+    body{height:auto;min-height:100vh;padding:10px;gap:8px}
+    header{flex-wrap:wrap;row-gap:8px}
+    .id h1{font-size:22px}
+    .clock{margin-left:auto}
+    .clock .time{font-size:30px}
+    .hchip{min-width:96px;flex:1 1 auto}
+    .quad{flex-direction:column}
+    .wx-tile{flex:none;width:100%}
+    .wx-hours{flex:none;height:150px}
+    .rcol{flex:none;width:100%}
+    .rcol > .tile{flex:none;min-height:96px}
+    .rcol > .hosp-tile{flex:none;min-height:150px}
+    .hosp-body{min-height:110px}
+  }
+
   .ph-strip{border-style:dashed !important;border-left-color:var(--border) !important;opacity:.7}
   .ph-strip .tag{color:var(--dim) !important;border-color:var(--border) !important;background:var(--panel2) !important}
   .ph-strip .note{color:var(--dim) !important;font-style:italic}
@@ -222,6 +240,7 @@
   .al-band.sev-minor .al-ev,.al-band.sev-unknown .al-ev{color:var(--blue)}
   .al-band.sev-error{border-color:var(--amber);background:rgba(255,193,7,.12)}
   .al-band.sev-error .al-ev{color:var(--amber)}
+  .al-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
   .al-more{font-size:clamp(10px,.9vw,14px);color:var(--dim);text-align:center;letter-spacing:1px}
 
   /* Matched header status chips (shift + UAV, identical footprint) */
@@ -678,23 +697,30 @@
     }catch(e){}
     return "";
   }
+  var alRot=null;
   function renderAlerts(alerts,err){
     var lane=document.getElementById("alertLane"); if(!lane)return;
+    if(alRot){ clearInterval(alRot); alRot=null; }
     if(err){ lane.hidden=false;
       lane.innerHTML='<div class="al-band sev-error"><div class="al-top"><span class="al-ev">NWS Alerts Unavailable</span>'+
         '<span class="al-meta">could not reach NWS \u00b7 verify active warnings manually</span></div></div>'; return; }
     if(!alerts||!alerts.length){ lane.hidden=true; lane.innerHTML=""; return; }   /* verified zero -> hidden */
     var rank={extreme:0,severe:1,moderate:2,minor:3,unknown:4};
     alerts.sort(function(a,b){return (rank[String(a.severity).toLowerCase()]==null?4:rank[String(a.severity).toLowerCase()])-(rank[String(b.severity).toLowerCase()]==null?4:rank[String(b.severity).toLowerCase()]);});
-    var MAXB=4, html="";
-    alerts.slice(0,MAXB).forEach(function(a){
+    function band(a){
       var until=a.until?("until "+new Date(a.until).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false})):"until further notice";
       var area=a.area?(alEsc(a.area)+" \u00b7 "):"";
       var sum=a.summary?('<div class="al-sum">'+alEsc(a.summary)+'</div>'):'';
-      html+='<div class="al-band '+alSev(a.severity)+'"><div class="al-top"><span class="al-ev">'+alEsc(a.event)+'</span><span class="al-meta">'+area+until+'</span></div>'+sum+'</div>';
-    });
-    if(alerts.length>MAXB) html+='<div class="al-more">+ '+(alerts.length-MAXB)+' more active</div>';
-    lane.hidden=false; lane.innerHTML=html;
+      return '<div class="al-band '+alSev(a.severity)+'"><div class="al-top"><span class="al-ev">'+alEsc(a.event)+'</span><span class="al-meta">'+area+until+'</span></div>'+sum+'</div>';
+    }
+    var PER=2;                                             /* vertical budget: 2 bands per page keeps the quad stable */
+    lane.hidden=false;
+    if(alerts.length<=PER){ lane.innerHTML=alerts.map(band).join(""); return; }
+    var pages=[]; for(var i=0;i<alerts.length;i+=PER) pages.push(alerts.slice(i,i+PER));
+    var idx=0;
+    function show(i){ lane.innerHTML=pages[i].map(band).join("")+'<div class="al-page">'+(i+1)+" / "+pages.length+" \u00b7 "+alerts.length+" active</div>"; }
+    show(0);
+    alRot=setInterval(function(){ idx=(idx+1)%pages.length; show(idx); }, 7000);
   }
   function loadAlerts(){
     if(typeof fetch!=="function"){renderAlerts(null,"nofetch");return;}
