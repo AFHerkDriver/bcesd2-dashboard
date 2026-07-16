@@ -3,7 +3,7 @@
    Strategy: network-first for the same-origin app shell (fresh HTML when online,
    cached shell when offline). Cross-origin requests (api.weather.gov, fonts) are
    NEVER intercepted, so live weather/alerts always hit the network. */
-const CACHE = 'bc2fd-sw-v2';
+const CACHE = 'bc2fd-sw-v3';
 const SHELL = [
   './', './index.html', './control.html',
   './manifest.webmanifest',

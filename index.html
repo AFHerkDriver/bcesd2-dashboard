@@ -156,24 +156,24 @@
 
   /* Q1 District Weather — now + next hours (big, glanceable) */
   .wx-now{display:flex;align-items:center;gap:clamp(10px,1.4vw,24px);flex:0 0 auto;margin-bottom:clamp(7px,.8vw,15px)}
-  .wx-ic .wic{width:clamp(50px,5.8vw,104px);height:clamp(50px,5.8vw,104px);display:block}
+  .wx-ic .wic{width:clamp(42px,4.6vw,78px);height:clamp(42px,4.6vw,78px);display:block}
   .wx-flag{flex:0 0 auto;background:rgba(255,193,7,.15);border:1px solid var(--amber);color:var(--amber);
     border-radius:8px;padding:clamp(4px,.45vw,9px) clamp(8px,.9vw,14px);font-size:clamp(11px,1vw,16px);
     letter-spacing:1px;margin-bottom:clamp(6px,.7vw,12px);text-align:center;font-family:'Bebas Neue',sans-serif}
   .wx-flag[hidden]{display:none}
   .wx-main{min-width:0}
-  .wx-temp{font-family:'Bebas Neue',sans-serif;font-size:clamp(52px,6.4vw,120px);line-height:.82;letter-spacing:1px}
-  .wx-cond{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vw,26px);letter-spacing:1px;color:var(--dim);margin-top:3px}
+  .wx-temp{font-family:'Bebas Neue',sans-serif;font-size:clamp(40px,4.8vw,82px);line-height:.85;letter-spacing:1px}
+  .wx-cond{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vw,22px);letter-spacing:1px;color:var(--dim);margin-top:2px}
   .wx-vitals{margin-left:auto;display:flex;flex-direction:column;gap:clamp(5px,.7vw,14px);text-align:right}
   .wx-vitals .k{font-size:clamp(9px,.8vw,13px);letter-spacing:2px;color:var(--dim);display:block}
-  .wx-vitals .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.3vw,40px);letter-spacing:1px;display:block}
+  .wx-vitals .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.9vw,30px);letter-spacing:1px;display:block}
   .wx-vitals .v em{font-style:normal;color:var(--amber)}
-  .wx-hours{flex:1;min-height:0;display:flex;gap:clamp(4px,.6vw,12px);border-top:1px solid var(--border);padding-top:clamp(6px,.7vw,14px)}
+  .wx-hours{flex:1 1 auto;min-height:clamp(84px,11vh,150px);display:flex;gap:clamp(4px,.6vw,12px);border-top:1px solid var(--border);padding-top:clamp(6px,.7vw,14px)}
   .hcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
     background:var(--panel2);border-radius:10px;padding:clamp(6px,.7vw,14px) clamp(2px,.3vw,6px)}
   .hcol .hh{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vw,22px);color:var(--dim);letter-spacing:1px}
-  .hcol .wic{width:clamp(28px,3.2vw,56px);height:clamp(28px,3.2vw,56px);margin:clamp(3px,.4vw,9px) 0}
-  .hcol .ht{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.2vw,38px);letter-spacing:.5px}
+  .hcol .wic{width:clamp(24px,2.7vw,46px);height:clamp(24px,2.7vw,46px);margin:clamp(2px,.35vw,7px) 0}
+  .hcol .ht{font-family:'Bebas Neue',sans-serif;font-size:clamp(17px,1.9vw,32px);letter-spacing:.5px}
   .hcol .hw{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vw,22px);color:var(--dim);letter-spacing:.5px}
   .hcol .hw.hot{color:var(--amber)}
   .hcol .hp{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vw,22px);color:var(--dim);letter-spacing:.5px}
@@ -252,7 +252,6 @@
       <div class="time" id="clock">14:32:07</div>
       <div class="date" id="date">Wednesday · July 15, 2026</div>
     </div>
-    <div class="hchip uav up"><div class="lbl">UAV</div><div class="val">121/124</div></div>
     <div class="hchip shift"><div class="lbl">ON DUTY</div><div class="val">A</div></div>
   </header>
 
