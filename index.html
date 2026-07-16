@@ -155,24 +155,24 @@
   .cal-list .e span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* Q1 District Weather — now + next hours (big, glanceable) */
-  .wx-now{display:flex;align-items:center;gap:clamp(10px,1.4vw,24px);flex:0 0 auto;margin-bottom:clamp(7px,.8vw,15px)}
-  .wx-ic .wic{width:clamp(42px,4.6vw,78px);height:clamp(42px,4.6vw,78px);display:block}
+  .wx-now{display:flex;align-items:center;gap:clamp(10px,1.4vw,24px);flex:0 0 auto;margin-bottom:clamp(4px,.5vw,9px)}
+  .wx-ic .wic{width:clamp(38px,3.7vw,60px);height:clamp(38px,3.7vw,60px);display:block}
   .wx-flag{flex:0 0 auto;background:rgba(255,193,7,.15);border:1px solid var(--amber);color:var(--amber);
     border-radius:8px;padding:clamp(4px,.45vw,9px) clamp(8px,.9vw,14px);font-size:clamp(11px,1vw,16px);
     letter-spacing:1px;margin-bottom:clamp(6px,.7vw,12px);text-align:center;font-family:'Bebas Neue',sans-serif}
   .wx-flag[hidden]{display:none}
   .wx-main{min-width:0}
-  .wx-temp{font-family:'Bebas Neue',sans-serif;font-size:clamp(40px,4.8vw,82px);line-height:.85;letter-spacing:1px}
+  .wx-temp{font-family:'Bebas Neue',sans-serif;font-size:clamp(34px,3.7vw,60px);line-height:.85;letter-spacing:1px}
   .wx-cond{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vw,22px);letter-spacing:1px;color:var(--dim);margin-top:2px}
-  .wx-vitals{margin-left:auto;display:flex;flex-direction:column;gap:clamp(5px,.7vw,14px);text-align:right}
+  .wx-vitals{margin-left:auto;display:flex;flex-direction:column;gap:clamp(3px,.4vw,8px);text-align:right}
   .wx-vitals .k{font-size:clamp(9px,.8vw,13px);letter-spacing:2px;color:var(--dim);display:block}
   .wx-vitals .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.9vw,30px);letter-spacing:1px;display:block}
   .wx-vitals .v em{font-style:normal;color:var(--amber)}
-  .wx-hours{flex:1 1 auto;min-height:clamp(84px,11vh,150px);display:flex;gap:clamp(4px,.6vw,12px);border-top:1px solid var(--border);padding-top:clamp(6px,.7vw,14px)}
+  .wx-hours{flex:1 1 0;min-height:0;overflow:hidden;display:flex;gap:clamp(4px,.6vw,12px);border-top:1px solid var(--border);padding-top:clamp(6px,.7vw,14px)}
   .hcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
     background:var(--panel2);border-radius:10px;padding:clamp(6px,.7vw,14px) clamp(2px,.3vw,6px)}
   .hcol .hh{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vw,22px);color:var(--dim);letter-spacing:1px}
-  .hcol .wic{width:clamp(24px,2.7vw,46px);height:clamp(24px,2.7vw,46px);margin:clamp(2px,.35vw,7px) 0}
+  .hcol .wic{width:clamp(24px,2.7vw,46px);height:clamp(24px,2.7vw,46px);margin:clamp(1px,.2vw,4px) 0}
   .hcol .ht{font-family:'Bebas Neue',sans-serif;font-size:clamp(17px,1.9vw,32px);letter-spacing:.5px}
   .hcol .hw{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vw,22px);color:var(--dim);letter-spacing:.5px}
   .hcol .hw.hot{color:var(--amber)}
@@ -199,8 +199,12 @@
   .ph-chip .st{color:var(--dim) !important}
   .alert-lane{flex:0 0 auto;display:flex;flex-direction:column;gap:clamp(5px,.5vw,9px)}
   .alert-lane[hidden]{display:none}
-  .al-band{display:flex;align-items:center;gap:clamp(10px,1.2vw,20px);border:2px solid;border-radius:11px;
+  .al-band{display:flex;flex-direction:column;align-items:stretch;gap:clamp(3px,.35vw,7px);border:2px solid;border-radius:11px;
     padding:clamp(7px,.75vw,13px) clamp(12px,1.4vw,22px)}
+  .al-top{display:flex;align-items:center;gap:clamp(10px,1.2vw,20px)}
+  .al-sum{font-size:clamp(12px,1.05vw,17px);color:var(--text);line-height:1.28;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .al-sum[hidden]{display:none}
   .al-band .al-ev{font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vw,34px);letter-spacing:1.5px;line-height:1}
   .al-band .al-meta{font-size:clamp(11px,1vw,16px);color:var(--text);margin-left:auto;text-align:right;line-height:1.2}
   .al-band.sev-extreme,.al-band.sev-severe{border-color:var(--red);
@@ -223,12 +227,30 @@
   .hchip .val{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2vw,32px);letter-spacing:1px;line-height:1;margin-top:2px;white-space:nowrap}
   .hchip.shift{border-color:var(--shiftA);background:rgba(255,59,48,.12)}
   .hchip.shift .val{color:var(--shiftA)}
+  .hchip.shift.sa{border-color:#FF3B30;background:rgba(255,59,48,.12)} .hchip.shift.sa .val{color:#FF3B30}
+  .hchip.shift.sb{border-color:#4A90D9;background:rgba(74,144,217,.12)} .hchip.shift.sb .val{color:#4A90D9}
+  .hchip.shift.sc{border-color:#34C759;background:rgba(52,199,89,.12)} .hchip.shift.sc .val{color:#34C759}
   .hchip.uav.up{border-color:var(--green);background:rgba(52,199,89,.10)}
   .hchip.uav.up .val{color:var(--green)}
   .hchip.uav.off{border-color:var(--border)}
   .hchip.uav.off .val{color:var(--dim)}
   .hchip.uav.oos{border-color:var(--red);background:rgba(255,59,48,.12)}
   .hchip.uav.oos .val{color:var(--red)}
+  .hchip.uav.unk{border-color:var(--amber);background:rgba(255,193,7,.12)}
+  .hchip.uav.unk .val{color:var(--amber)}
+  /* Hospital Status tile (live from shared board state) */
+  .hosp-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:clamp(3px,.4vw,8px)}
+  .hosp-body.div{justify-content:flex-start}
+  .hosp-msg{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.4vw,40px);letter-spacing:1px;line-height:1}
+  .hosp-body.ok .hosp-msg{color:var(--green)}
+  .hosp-body.err .hosp-msg{color:var(--amber)}
+  .hosp-msg.red{color:var(--red)}
+  .hosp-sub{font-size:clamp(10px,.9vw,15px);color:var(--dim);letter-spacing:1px}
+  .hosp-list{display:flex;flex-direction:column;gap:clamp(3px,.4vw,8px);margin-top:clamp(4px,.5vw,10px);overflow:hidden}
+  .hosp-list .hrow{display:flex;align-items:center;gap:10px;background:rgba(255,59,48,.10);border-left:3px solid var(--red);border-radius:7px;padding:clamp(4px,.5vw,9px) clamp(8px,.9vw,14px)}
+  .hosp-list .hrow .hn{flex:1 1 auto;min-width:0;font-size:clamp(12px,1.15vw,19px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hosp-list .hrow .hs{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;color:var(--red);letter-spacing:1px;font-size:clamp(12px,1.2vw,20px)}
+  .hosp-list .hmore{font-size:clamp(10px,.9vw,14px);color:var(--dim);text-align:center}
 </style>
 </head>
 <body>
@@ -252,7 +274,8 @@
       <div class="time" id="clock">14:32:07</div>
       <div class="date" id="date">Wednesday · July 15, 2026</div>
     </div>
-    <div class="hchip shift"><div class="lbl">ON DUTY</div><div class="val">A</div></div>
+    <div class="hchip shift" id="shiftChip"><div class="lbl">ON DUTY</div><div class="val" id="shiftVal">A</div></div>
+    <div class="hchip uav unk" id="uavChip" title="On-duty UAV units — live from Firehawk schedule"><div class="lbl">UAV</div><div class="val" id="uavVal">…</div></div>
   </header>
 
   <!-- BC / officer banner -->
@@ -287,10 +310,9 @@
     </div>
 
     <!-- Q2 · Hospitals (placeholder) -->
-    <div class="tile ph">
-      <div class="pmark">◇</div>
-      <div class="pname">Hospital Status</div>
-      <div class="pidea">Diversion status + specialty tags · officer-set</div>
+    <div class="tile">
+      <div class="head"><span class="name">Hospital Status</span><span class="stamp src" id="hospStamp">Loading&hellip;</span></div>
+      <div class="hosp-body" id="hospBody"></div>
     </div>
 
     <!-- Q3 · Fire Weather (placeholder) -->
@@ -418,6 +440,138 @@
       renderAggregate(good, good.length<STATIONS.length?(good.length+"/"+STATIONS.length+" stations reporting \u2014 partial coverage"):null);});}
   loadWeather(); setInterval(loadWeather,WX_REFRESH);
 
+  /* ── UAV on-duty units — LIVE from the Firehawk schedule (firehawk-scheduler /
+     firehawk/schedule_YYYY_M, month 0-based, day keyed by date). Units are DERIVED
+     exactly as the crew app: Sanchez (id 1) flies UAV121; any other RPIC flies UAV124.
+     Fail-loud: a read failure shows amber "?" — never a false green "up". ── */
+  (function(){
+    var FH_KEY  = "AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ";  /* public web key — same read the crew app uses */
+    var FH_BASE = "https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents";
+    var UAV_REFRESH = 5*60*1000, LEAD_PILOT_ID = 1;
+    function decodeDay(day){                                  /* mirrors index.html/chief.html decodeDay */
+      var N = function(x){ return x==null ? null : parseInt(x); };
+      var extra = (day.extra||[]).map(N).filter(function(x){ return x!=null; });
+      var u121active, u124rpic;
+      if(day.lead !== undefined){                            /* explicit (current) format */
+        u121active = !!day.lead; u124rpic = N(day.rpic);
+      } else {                                               /* legacy / historic format */
+        var rpicId = N(day.rpic);
+        u121active = (rpicId === LEAD_PILOT_ID) || extra.indexOf(LEAD_PILOT_ID) !== -1;
+        u124rpic   = (rpicId != null && rpicId !== LEAD_PILOT_ID) ? rpicId : null;
+      }
+      return { u121up: !!u121active, u124up: u124rpic != null };
+    }
+    function dayLookup(days,d){
+      if(!days) return null;
+      if(days[d] != null) return days[d];
+      if(days[String(d)] != null) return days[String(d)];
+      if(days["d"+d] != null) return days["d"+d];
+      for(var k in days){ if(parseInt(String(k).replace(/^d/,"")) === d) return days[k]; }
+      return null;
+    }
+    function setChip(cls,val){
+      var chip = document.getElementById("uavChip"), v = document.getElementById("uavVal");
+      if(!chip||!v) return;
+      chip.className = "hchip uav " + cls; v.textContent = val;
+    }
+    function render(s){                                       /* s: {ok:true,u121,u124} | {ok:false} */
+      if(!s.ok){ setChip("unk","?"); return; }                /* read failed → fail-loud amber, never green */
+      if(s.u121 && s.u124)      setChip("up","121 / 124");
+      else if(s.u121)           setChip("up","121");
+      else if(s.u124)           setChip("up","124");
+      else                      setChip("oos","OOS");         /* nobody staffed today */
+    }
+    function load(){
+      var now = new Date(), y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+      var url = FH_BASE + "/firehawk/schedule_" + y + "_" + m + "?key=" + FH_KEY;
+      fetch(url).then(function(r){
+        if(r.status === 404) return { __none:true };          /* no schedule doc this month = nothing staffed */
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      }).then(function(doc){
+        if(doc && doc.__none){ render({ ok:true, u121:false, u124:false }); return; }
+        var f = doc && doc.fields, dj = f && f.daysJson && f.daysJson.stringValue;
+        if(!dj){ render({ ok:true, u121:false, u124:false }); return; }
+        var days; try { days = JSON.parse(dj); } catch(e){ render({ ok:false }); return; }
+        var day = dayLookup(days, d);
+        if(!day){ render({ ok:true, u121:false, u124:false }); return; }
+        var dec = decodeDay(day);
+        render({ ok:true, u121:dec.u121up, u124:dec.u124up });
+      }).catch(function(){ render({ ok:false }); });           /* network/other → amber unknown */
+    }
+    load(); setInterval(load, UAV_REFRESH);
+  })();
+
+  /* ── On-duty fire shift (A/B/C) — reproduced verbatim from Firehawk todayShift():
+     6-day AABBCC rotation, anchored 2026-01-01 UTC, flips at 0700 local. Pure date
+     math (no fetch), so it's deterministic — same source Firehawk derives it from. ── */
+  (function(){
+    var ANCHOR = Date.UTC(2026,0,1), PATTERN = ["A","A","B","B","C","C"];
+    function todayShift(){
+      var s = new Date(Date.now() - 7*3600000);              /* -7h holds the prior shift until 0700 */
+      var d = Math.floor((Date.UTC(s.getFullYear(), s.getMonth(), s.getDate()) - ANCHOR) / 86400000);
+      return PATTERN[((d % 6) + 6) % 6];
+    }
+    function paint(){
+      var chip = document.getElementById("shiftChip"), v = document.getElementById("shiftVal");
+      if(!chip||!v) return;
+      var sh = todayShift();
+      v.textContent = sh;
+      chip.className = "hchip shift s" + sh.toLowerCase();
+    }
+    paint(); setInterval(paint, 60000);                        /* recompute each minute so the 0700 flip lands live */
+  })();
+
+  /* ── Hospital diversions — LIVE from the shared board state (firehawk/dashboard_state),
+     officer-set in control.html on a different device. Fail-loud: a read failure shows
+     amber "unavailable", never a false "all open". No hospital table needed — the control
+     writes an enriched diversions list. ── */
+  (function(){
+    var K="AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ";
+    var DOC="https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents/firehawk/dashboard_state";
+    var REFRESH=60*1000;
+    function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+    function hhmm(iso){ try{ return new Date(iso).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return ""; } }
+    function render(state, setAt){
+      var body=document.getElementById("hospBody"), stamp=document.getElementById("hospStamp");
+      if(!body) return;
+      if(state===false){                                       /* read failed -> loud, never a false all-clear */
+        if(stamp) stamp.textContent="UNAVAILABLE";
+        body.className="hosp-body err";
+        body.innerHTML='<div class="hosp-msg">DIVERSION STATUS UNAVAILABLE</div><div class="hosp-sub">can\u2019t reach board state \u00b7 verify via EMResource / MEDCOM</div>';
+        return;
+      }
+      var divs=(state&&state.diversions)||[];
+      if(stamp) stamp.textContent="officer-set"+(setAt?(" \u00b7 "+hhmm(setAt)):"");
+      if(!divs.length){
+        body.className="hosp-body ok";
+        body.innerHTML='<div class="hosp-msg">ALL FACILITIES OPEN</div><div class="hosp-sub">no active diversions posted</div>';
+        return;
+      }
+      body.className="hosp-body div";
+      var h='<div class="hosp-msg red">'+divs.length+(divs.length===1?" FACILITY":" FACILITIES")+' ON DIVERSION</div><div class="hosp-list">';
+      divs.slice(0,7).forEach(function(d){ h+='<div class="hrow"><span class="hn">'+esc(d.name)+'</span><span class="hs">'+esc(d.status)+'</span></div>'; });
+      if(divs.length>7) h+='<div class="hmore">+ '+(divs.length-7)+' more diverting</div>';
+      body.innerHTML=h+'</div>';
+    }
+    function load(){
+      if(typeof fetch!=="function"){ render(false); return; }
+      fetch(DOC+"?key="+K).then(function(r){
+        if(r.status===404) return {__none:true};               /* no state doc yet = nothing posted = all open */
+        if(!r.ok) throw new Error("HTTP "+r.status);
+        return r.json();
+      }).then(function(doc){
+        if(doc&&doc.__none){ render({diversions:[]},null); return; }
+        var f=doc&&doc.fields, dj=f&&f.stateJson&&f.stateJson.stringValue;
+        var setAt=f&&f.updatedAt&&f.updatedAt.timestampValue;
+        if(!dj){ render({diversions:[]}, setAt); return; }
+        var st; try{ st=JSON.parse(dj); }catch(e){ render(false); return; }
+        render(st, setAt);
+      }).catch(function(){ render(false); });                  /* network/other -> amber unavailable */
+    }
+    load(); setInterval(load, REFRESH);
+  })();
+
   /* ── NWS alerts — live; lane hidden only on a verified zero, fail-loud on failure ── */
   var ALERT_ZONES="TXZ205,TXC029";                       /* district forecast zone + Bexar county (matches Firehawk) */
   var ALERT_REFRESH=2*60*1000;
@@ -425,11 +579,23 @@
   function alSev(s){s=String(s||"").toLowerCase();
     if(s==="extreme")return"sev-extreme"; if(s==="severe")return"sev-severe";
     if(s==="moderate")return"sev-moderate"; if(s==="minor")return"sev-minor"; return"sev-unknown";}
+  function alSummary(p){                                     /* the "what" line — verified NWS fields, never fabricated */
+    try{
+      var nh = p && p.parameters && p.parameters.NWSheadline;
+      if(nh && nh.length && String(nh[0]).trim()) return String(nh[0]).replace(/\s+/g," ").trim();
+      var d = p && p.description;
+      if(d){ var t=String(d).replace(/\s+/g," ").trim();
+        var m=t.match(/^(.{20,180}?[.!?])(\s|$)/);
+        return (m?m[1]:t).slice(0,180);
+      }
+    }catch(e){}
+    return "";
+  }
   function renderAlerts(alerts,err){
     var lane=document.getElementById("alertLane"); if(!lane)return;
     if(err){ lane.hidden=false;
-      lane.innerHTML='<div class="al-band sev-error"><span class="al-ev">NWS Alerts Unavailable</span>'+
-        '<span class="al-meta">could not reach NWS \u00b7 verify active warnings manually</span></div>'; return; }
+      lane.innerHTML='<div class="al-band sev-error"><div class="al-top"><span class="al-ev">NWS Alerts Unavailable</span>'+
+        '<span class="al-meta">could not reach NWS \u00b7 verify active warnings manually</span></div></div>'; return; }
     if(!alerts||!alerts.length){ lane.hidden=true; lane.innerHTML=""; return; }   /* verified zero -> hidden */
     var rank={extreme:0,severe:1,moderate:2,minor:3,unknown:4};
     alerts.sort(function(a,b){return (rank[String(a.severity).toLowerCase()]==null?4:rank[String(a.severity).toLowerCase()])-(rank[String(b.severity).toLowerCase()]==null?4:rank[String(b.severity).toLowerCase()]);});
@@ -437,7 +603,8 @@
     alerts.slice(0,MAXB).forEach(function(a){
       var until=a.until?("until "+new Date(a.until).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false})):"until further notice";
       var area=a.area?(alEsc(a.area)+" \u00b7 "):"";
-      html+='<div class="al-band '+alSev(a.severity)+'"><span class="al-ev">'+alEsc(a.event)+'</span><span class="al-meta">'+area+until+'</span></div>';
+      var sum=a.summary?('<div class="al-sum">'+alEsc(a.summary)+'</div>'):'';
+      html+='<div class="al-band '+alSev(a.severity)+'"><div class="al-top"><span class="al-ev">'+alEsc(a.event)+'</span><span class="al-meta">'+area+until+'</span></div>'+sum+'</div>';
     });
     if(alerts.length>MAXB) html+='<div class="al-more">+ '+(alerts.length-MAXB)+' more active</div>';
     lane.hidden=false; lane.innerHTML=html;
@@ -449,7 +616,7 @@
       var alerts=feats.map(function(f){var p=(f&&f.properties)||{};return {
         event:p.event||"Alert", severity:p.severity||"Unknown",
         area:String(p.areaDesc||"").split(";")[0].trim(), until:(p.ends||p.expires||null),
-        messageType:p.messageType };}).filter(function(a){return a.messageType!=="Cancel";});
+        summary:alSummary(p), messageType:p.messageType };}).filter(function(a){return a.messageType!=="Cancel";});
       renderAlerts(alerts,null);
     }).catch(function(){renderAlerts(null,"error");});   /* failure is NOT a clear -> loud */
   }

@@ -98,18 +98,24 @@
   .hosp-group:first-child{margin-top:2px}
   .hosp-row{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:8px;background:var(--panel2);margin:5px 0;border-left:4px solid transparent}
   .hosp-row.diverted{border-left-color:var(--red);background:rgba(255,59,48,.09)}
-  .hosp-row .hn{flex:1;min-width:0}
-  .hosp-row .hn .nm{display:block;font-size:14px}
-  .hosp-row .hn .tg{display:block;font-size:10px;color:var(--dim);letter-spacing:.3px;margin-top:2px}
-  .hosp-row .hstatus{flex:0 0 auto;min-width:118px}
+  .hosp-row .hn{flex:1 1 auto;min-width:0}
+  .hosp-row .hn .nm{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hosp-row .hn .tg{display:block;font-size:10px;color:var(--dim);letter-spacing:.3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hosp-row .hstatus{flex:0 0 auto;width:150px;min-width:150px}
+  .hosp-row.diverted .hstatus{color:var(--red);border-color:var(--red)}
+  .adv{display:flex;gap:10px;margin-top:6px}
+  .advchip{flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;text-align:center}
+  .advchip .k{display:block;font-size:9px;letter-spacing:2px;color:var(--dim)}
+  .advchip .v{display:block;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:var(--text);margin-top:2px}
   .savebar{position:fixed;bottom:0;left:0;right:0;background:rgba(13,17,23,.96);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
     border-top:1px solid var(--border);display:flex;gap:10px;justify-content:center;z-index:50;
     padding:12px 14px;padding-bottom:calc(12px + env(safe-area-inset-bottom));
     padding-left:calc(14px + env(safe-area-inset-left));padding-right:calc(14px + env(safe-area-inset-right))}
   .savebar .btn{flex:1;max-width:220px;justify-content:center;padding:12px}
-  .saved{position:fixed;bottom:74px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;
+  .saved{position:fixed;top:74px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;
     font-size:12px;letter-spacing:1px;padding:8px 18px;border-radius:20px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:60}
   .saved.show{opacity:1}
+  .saved.err{background:var(--red);color:#fff}
 </style>
 </head>
 <body>
@@ -130,21 +136,14 @@
 
     <div class="notice">🔓 Unprotected — PIN login is not built yet. This page will sit behind an officer PIN (Cloudflare Worker) before go-live.</div>
 
-    <!-- Live preview -->
-    <div class="preview">
-      <div class="lbl">● Live Preview — what the board will show</div>
-      <div class="grid">
-        <div><div class="k">MEDICAL DIRECTION ON CALL</div><div class="v accent" id="pvMed">—</div></div>
-        <div><div class="k">UAV</div><div class="v" id="pvUav" style="color:var(--dim);font-size:13px;font-family:'DM Mono',monospace">via Firehawk</div></div>
-        <div><div class="k">FIRE WEATHER</div><div class="v red" id="pvFire">—</div></div>
-        <div><div class="k">BC NOTE</div><div class="v" id="pvBanner" style="font-size:13px;font-family:'DM Mono',monospace">—</div></div>
-      </div>
-    </div>
-
     <!-- Shift & UAV — auto from Firehawk, not editable here -->
     <div class="card">
       <h2>Shift &amp; UAV <span class="tag live">AUTO · FIREHAWK</span></h2>
-      <div class="hint">On-duty shift and UAV coverage pull live from the Firehawk site — nothing to set here.</div>
+      <div class="hint">Who's on right now — pulled live from Firehawk. Advisory only; not set here.</div>
+      <div class="adv">
+        <div class="advchip"><span class="k">ON DUTY</span><span class="v" id="advShift">…</span></div>
+        <div class="advchip"><span class="k">UAV</span><span class="v" id="advUav">…</span></div>
+      </div>
     </div>
 
     <!-- Medical Direction -->
@@ -237,10 +236,6 @@
 
   </div>
 
-  <div class="savebar">
-    <button class="btn ghost" id="resetBtn">Reset to defaults</button>
-    <button class="btn primary" id="saveBtn">Save to Board</button>
-  </div>
   <div class="saved" id="savedToast">✓ Saved</div>
 
 <script>
@@ -252,10 +247,24 @@
    firehawk-auth'd fetch() to the Firestore-backed Worker.
    Nothing else in this file changes.
    ───────────────────────────────────────────── */
-var KEY='bc2fd_board_state_v2';
+var FS_KEY='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ';   /* public web key — same read/write the crew app uses */
+var FS_DOC='https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents/firehawk/dashboard_state';
 var Store={
-  get:function(){ try{ return JSON.parse(localStorage.getItem(KEY))||null; }catch(e){ return null; } },
-  set:function(s){ try{ localStorage.setItem(KEY, JSON.stringify(s)); return true; }catch(e){ return false; } }
+  /* Firestore is the shared source of truth so the wall board (a DIFFERENT device)
+     sees officer changes. Single stateJson blob — mirrors the schedule daysJson pattern. */
+  get:function(){ return fetch(FS_DOC+'?key='+FS_KEY).then(function(r){
+      if(r.status===404) return null;                       /* no doc yet = first use */
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.json();
+    }).then(function(doc){
+      var dj=doc&&doc.fields&&doc.fields.stateJson&&doc.fields.stateJson.stringValue;
+      if(!dj) return null; try{ return JSON.parse(dj); }catch(e){ return null; }
+    }); },
+  set:function(s){
+    var body=JSON.stringify({fields:{stateJson:{stringValue:JSON.stringify(s)},updatedAt:{timestampValue:new Date().toISOString()}}});
+    return fetch(FS_DOC+'?key='+FS_KEY,{method:'PATCH',headers:{'Content-Type':'application/json'},body:body})
+      .then(function(r){ return r.ok; }).catch(function(){ return false; });
+  }
 };
 
 /* Fixed seed contacts (from the department) */
@@ -315,7 +324,7 @@ var HOSPITALS=[
   ]}
 ];
 
-var state = Store.get() || defaults();
+var state = defaults();
 
 /* ── helpers ── */
 function $(id){ return document.getElementById(id); }
@@ -332,15 +341,6 @@ function activeMed(){
 }
 function fmt(dt){ if(!dt) return ''; var d=new Date(dt); return d.toLocaleString('en-GB',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}); }
 
-/* ── live preview ── */
-function preview(){
-  var m=activeMed();
-  $('pvMed').textContent = m.name + '  ' + m.phone;
-  var flag = state.fire.redFlag==='on' ? 'RED FLAG (forced)' : state.fire.redFlag==='off' ? 'suppressed' : 'Auto — per NWS';
-  var teams=[]; if(state.fire.west)teams.push('W'); if(state.fire.east)teams.push('E');
-  $('pvFire').textContent = flag + (teams.length?('  · Strike '+teams.join('/')):'');
-  $('pvBanner').textContent = state.banner.text ? ('“'+state.banner.text+'” — '+state.banner.who) : '(none)';
-}
 
 /* ── render dynamic lists ── */
 function renderHosp(){
@@ -393,7 +393,7 @@ function hydrate(){
   renderAmp();
   $('bannerRole').value=state.banner.role; $('bannerWho').value=state.banner.who; $('bannerText').value=state.banner.text;
   renderCal();
-  preview();
+  
 }
 
 /* ── wire events ── */
@@ -408,14 +408,14 @@ segClick('segFlag', function(v){ state.fire.redFlag=v; });
 segClick('segWest', function(v){ state.fire.west=(v==='on'); });
 segClick('segEast', function(v){ state.fire.east=(v==='on'); });
 
-$('medName').addEventListener('input',function(){ state.med.custom.name=this.value; preview(); });
-$('medPhone').addEventListener('input',function(){ state.med.custom.phone=this.value; preview(); });
+$('medName').addEventListener('input',function(){ state.med.custom.name=this.value;  });
+$('medPhone').addEventListener('input',function(){ state.med.custom.phone=this.value;  });
 $('medEnd').addEventListener('change',function(){ state.med.end=this.value;
-  $('medRevertHint').textContent = this.value ? ('Reverts to '+DEFAULT_MED.name+' at '+fmt(this.value)) : 'No end set — stays until changed.'; preview(); });
+  $('medRevertHint').textContent = this.value ? ('Reverts to '+DEFAULT_MED.name+' at '+fmt(this.value)) : 'No end set — stays until changed.';  });
 
 $('bannerRole').addEventListener('change',function(){ state.banner.role=this.value; });
-$('bannerWho').addEventListener('input',function(){ state.banner.who=this.value; preview(); });
-$('bannerText').addEventListener('input',function(){ state.banner.text=this.value; preview(); });
+$('bannerWho').addEventListener('input',function(){ state.banner.who=this.value;  });
+$('bannerText').addEventListener('input',function(){ state.banner.text=this.value;  });
 
 /* delegated edits for dynamic lists */
 document.addEventListener('input', function(e){
@@ -438,17 +438,47 @@ document.addEventListener('click', function(e){
 $('addAmp').addEventListener('click',function(){ state.amplifying.push(''); renderAmp(); });
 $('addCal').addEventListener('click',function(){ state.calendar.push({time:'',desc:''}); renderCal(); });
 
-function save(){
-  if(Store.set(state)){ var t=$('savedToast'); t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},1400); }
-  else { alert('Could not save (storage blocked in this preview). Works on the deployed site.'); }
+function computeDiversions(){
+  var out=[]; HOSPITALS.forEach(function(g){ g.list.forEach(function(o){
+    var st=state.hospitals[o.id]; if(st && st!=='OPEN') out.push({name:o.name,status:st});
+  }); }); state.diversions=out;   /* board reads this — no hospital table needed on the wall */
 }
-$('saveBtn').addEventListener('click',save);
+var saving=false;
+function save(){
+  if(saving) return; saving=true; computeDiversions();
+  var t=$('savedToast');
+  Store.set(state).then(function(ok){ saving=false;
+    if(ok){ t.textContent='✓ Saved to board'; t.classList.remove('err'); t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},1600); }
+    else { t.textContent='✕ Save failed — not on board'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},2800); }
+  });
+}
 $('saveTop').addEventListener('click',save);
-$('resetBtn').addEventListener('click',function(){
-  if(confirm('Reset all board inputs to defaults?')){ state=defaults(); hydrate(); }
-});
 
-hydrate();
+/* ── advisory: on-duty shift + UAV, read-only (mirrors the board) ── */
+(function(){
+  var K='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ', B='https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents';
+  var ANCHOR=Date.UTC(2026,0,1), PAT=['A','A','B','B','C','C'], LEAD=1;
+  function todayShift(){ var s=new Date(Date.now()-7*3600000); var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-ANCHOR)/86400000); return PAT[((d%6)+6)%6]; }
+  function decodeDay(day){ var N=function(x){return x==null?null:parseInt(x);}; var ex=(day.extra||[]).map(N).filter(function(x){return x!=null;}); var a,r;
+    if(day.lead!==undefined){a=!!day.lead;r=N(day.rpic);} else {var id=N(day.rpic);a=(id===LEAD)||ex.indexOf(LEAD)!==-1;r=(id!=null&&id!==LEAD)?id:null;} return {u121:!!a,u124:r!=null}; }
+  function setTxt(id,t){ var e=document.getElementById(id); if(e)e.textContent=t; }
+  setTxt('advShift', todayShift());
+  var now=new Date();
+  fetch(B+'/firehawk/schedule_'+now.getFullYear()+'_'+now.getMonth()+'?key='+K).then(function(r){
+    if(r.status===404) return {__none:true}; if(!r.ok) throw new Error('HTTP '+r.status); return r.json();
+  }).then(function(doc){
+    if(doc&&doc.__none){ setTxt('advUav','OOS'); return; }
+    var dj=doc&&doc.fields&&doc.fields.daysJson&&doc.fields.daysJson.stringValue; if(!dj){ setTxt('advUav','OOS'); return; }
+    var days=JSON.parse(dj), d=now.getDate(), day=days[d]||days[String(d)]||days['d'+d]||null;
+    if(!day){ setTxt('advUav','OOS'); return; }
+    var dec=decodeDay(day); setTxt('advUav', dec.u121&&dec.u124?'121 / 124':dec.u121?'121':dec.u124?'124':'OOS');
+  }).catch(function(){ setTxt('advUav','?'); });
+})();
+
+/* ── load shared state from Firestore, then render; fail loud on read error ── */
+function ensureShape(s){ var d=defaults(); for(var k in d){ if(s[k]===undefined) s[k]=d[k]; } if(!s.hospitals)s.hospitals={}; return s; }
+Store.get().then(function(s){ if(s) state=ensureShape(s); hydrate(); })
+  .catch(function(){ hydrate(); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
 </script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
