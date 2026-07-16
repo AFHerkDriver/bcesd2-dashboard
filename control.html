@@ -209,21 +209,12 @@
       <button class="add" id="addAmp">+ Add closure / note</button>
     </div>
 
-    <!-- Banner -->
+    <!-- Announcements (top ticker) -->
     <div class="card">
-      <h2>BC / Officer Note <span class="tag">OFFICER</span></h2>
-      <div class="hint">Full-width banner under the header.</div>
-      <div class="row">
-        <div class="field" style="flex:0 0 auto;min-width:180px">
-          <label>Posted By</label>
-          <select id="bannerRole">
-            <option>Battalion Chief</option><option>Station Officer</option>
-            <option>Admin Chief</option><option>Medical Officer</option>
-          </select>
-        </div>
-        <div class="field"><label>Name</label><input type="text" id="bannerWho" placeholder="e.g. BC Alvarez"></div>
-      </div>
-      <div class="field"><label>Note</label><textarea id="bannerText" placeholder="Shift note…"></textarea></div>
+      <h2>Announcements <span class="tag">OFFICER</span> <span class="tag live">TICKER</span></h2>
+      <div class="hint">Posts to the top banner. More than one rotates every few seconds on the board — keep each short.</div>
+      <div id="annList"></div>
+      <button class="add" id="addAnn">+ Add announcement</button>
     </div>
 
     <!-- Calendar -->
@@ -277,7 +268,10 @@ function defaults(){
     hospitals:{},   /* id -> diversion status; absent = OPEN */
     fire:{ redFlag:'auto', west:true, east:false },
     amplifying:['Grosenbacher low-water crossing CLOSED','Potranco @ Talley — high water'],
-    banner:{ role:'Battalion Chief', who:'BC Alvarez', text:'Water tender OOS until 1500 — cross-staff Engine 62.' },
+    announcements:[
+      {text:'Water tender OOS until 1500 — cross-staff Engine 62.', by:'BC Alvarez'},
+      {text:'Station 122 bay door repair 1300–1500 — stage apparatus outside.', by:'Station Officer'}
+    ],
     calendar:[
       {time:'09:00', desc:'Apparatus checks + SCBA'},
       {time:'13:00', desc:'UAS currency flights — M30T'},
@@ -365,6 +359,16 @@ function renderAmp(){
     box.appendChild(row);
   });
 }
+function renderAnn(){
+  var box=$('annList'); box.innerHTML='';
+  state.announcements.forEach(function(a,i){
+    var row=document.createElement('div'); row.className='list-row';
+    row.innerHTML='<input type="text" data-i="'+i+'" data-f="anntext" value="'+esc(a.text)+'" placeholder="Announcement">'+
+      '<input type="text" data-i="'+i+'" data-f="annby" value="'+esc(a.by||'')+'" placeholder="By (opt)" style="flex:0 0 128px;min-width:0">'+
+      '<button class="del" data-i="'+i+'">✕</button>';
+    box.appendChild(row);
+  });
+}
 function renderCal(){
   var box=$('calList'); box.innerHTML='';
   state.calendar.forEach(function(e,i){
@@ -391,7 +395,7 @@ function hydrate(){
   segSet('segWest', state.fire.west?'on':'off');
   segSet('segEast', state.fire.east?'on':'off');
   renderAmp();
-  $('bannerRole').value=state.banner.role; $('bannerWho').value=state.banner.who; $('bannerText').value=state.banner.text;
+  renderAnn();
   renderCal();
   
 }
@@ -413,15 +417,15 @@ $('medPhone').addEventListener('input',function(){ state.med.custom.phone=this.v
 $('medEnd').addEventListener('change',function(){ state.med.end=this.value;
   $('medRevertHint').textContent = this.value ? ('Reverts to '+DEFAULT_MED.name+' at '+fmt(this.value)) : 'No end set — stays until changed.';  });
 
-$('bannerRole').addEventListener('change',function(){ state.banner.role=this.value; });
-$('bannerWho').addEventListener('input',function(){ state.banner.who=this.value;  });
-$('bannerText').addEventListener('input',function(){ state.banner.text=this.value;  });
+/* announcements edits are handled by the delegated list handlers below */
 
 /* delegated edits for dynamic lists */
 document.addEventListener('input', function(e){
   var t=e.target, i=t.getAttribute&&t.getAttribute('data-i'), f=t.getAttribute&&t.getAttribute('data-f');
   if(i==null||!f) return; i=+i;
   if(f==='amp'){ state.amplifying[i]=t.value; }
+  else if(f==='anntext'){ state.announcements[i].text=t.value; }
+  else if(f==='annby'){ state.announcements[i].by=t.value; }
   else if(f==='time'||f==='desc'){ state.calendar[i][f]=t.value; }
 });
 document.addEventListener('change', function(e){
@@ -433,10 +437,12 @@ document.addEventListener('click', function(e){
   var d=e.target.closest && e.target.closest('.del'); if(!d) return;
   var i=+d.getAttribute('data-i');
   if(d.parentElement.parentElement.id==='ampList'){ state.amplifying.splice(i,1); renderAmp(); }
+  else if(d.parentElement.parentElement.id==='annList'){ state.announcements.splice(i,1); renderAnn(); }
   else if(d.parentElement.parentElement.id==='calList'){ state.calendar.splice(i,1); renderCal(); }
 });
 $('addAmp').addEventListener('click',function(){ state.amplifying.push(''); renderAmp(); });
 $('addCal').addEventListener('click',function(){ state.calendar.push({time:'',desc:''}); renderCal(); });
+$('addAnn').addEventListener('click',function(){ state.announcements.push({text:'',by:''}); renderAnn(); });
 
 function computeDiversions(){
   var out=[]; HOSPITALS.forEach(function(g){ g.list.forEach(function(o){
@@ -476,7 +482,9 @@ $('saveTop').addEventListener('click',save);
 })();
 
 /* ── load shared state from Firestore, then render; fail loud on read error ── */
-function ensureShape(s){ var d=defaults(); for(var k in d){ if(s[k]===undefined) s[k]=d[k]; } if(!s.hospitals)s.hospitals={}; return s; }
+function ensureShape(s){ var d=defaults();
+  if(s.announcements===undefined && s.banner && s.banner.text){ s.announcements=[{text:s.banner.text, by:s.banner.who||''}]; }  /* migrate old single note */
+  for(var k in d){ if(s[k]===undefined) s[k]=d[k]; } if(!s.hospitals)s.hospitals={}; return s; }
 Store.get().then(function(s){ if(s) state=ensureShape(s); hydrate(); })
   .catch(function(){ hydrate(); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
 </script>

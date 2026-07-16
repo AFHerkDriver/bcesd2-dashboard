@@ -78,6 +78,9 @@
   .banner .tag{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.1vw,17px);letter-spacing:1.5px;color:var(--amber);flex:0 0 auto}
   .banner .note{font-size:clamp(10px,.95vw,15px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
   .banner .who{font-size:clamp(8px,.75vw,12px);color:var(--dim);flex:0 0 auto}
+  .banner .note.idle{color:var(--dim);font-style:italic}
+  .ann-page{font-family:'DM Mono',monospace;font-size:clamp(9px,.75vw,13px);color:var(--dim);letter-spacing:1px;flex:0 0 auto}
+  .ann-page[hidden]{display:none}
 
   .alert{flex:0 0 auto;display:flex;align-items:center;gap:clamp(9px,1vw,18px);
     background:linear-gradient(90deg,rgba(255,59,48,.22),rgba(255,107,53,.12));
@@ -249,7 +252,13 @@
   .hosp-body.err .hosp-msg{color:var(--amber)}
   .hosp-msg.red{color:var(--red)}
   .hosp-sub{font-size:clamp(10px,.9vw,15px);color:var(--dim);letter-spacing:1px}
-  .hosp-list{display:flex;flex-direction:column;gap:clamp(3px,.4vw,8px);margin-top:clamp(4px,.5vw,10px);overflow:hidden}
+  .hosp-list{display:flex;flex-direction:column;gap:clamp(3px,.4vw,8px);margin-top:clamp(4px,.5vw,10px);overflow:hidden;flex:1 1 auto;min-height:0}
+  .hosp-list.compact{gap:clamp(2px,.3vw,5px)}
+  .hosp-list.compact .hrow{padding:clamp(2px,.3vw,6px) clamp(6px,.7vw,11px)}
+  .hosp-list.compact .hrow .hn{font-size:clamp(11px,1vw,16px)}
+  .hosp-list.compact .hrow .hs{font-size:clamp(11px,1vw,17px)}
+  .hosp-page{font-family:'DM Mono',monospace;font-size:clamp(10px,.85vw,14px);color:var(--dim);letter-spacing:1px;margin-left:8px}
+  .hosp-page[hidden]{display:none}
   .hosp-list .hrow{display:flex;align-items:center;gap:10px;background:rgba(255,59,48,.10);border-left:3px solid var(--red);border-radius:7px;padding:clamp(4px,.5vw,9px) clamp(8px,.9vw,14px)}
   .hosp-list .hrow .hn{flex:1 1 auto;min-width:0;font-size:clamp(12px,1.15vw,19px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hosp-list .hrow .hs{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;color:var(--red);letter-spacing:1px;font-size:clamp(12px,1.2vw,20px)}
@@ -281,10 +290,12 @@
     <div class="hchip uav unk" id="uavChip" title="On-duty UAV units — live from Firehawk schedule"><div class="lbl">UAV</div><div class="val" id="uavVal">…</div></div>
   </header>
 
-  <!-- BC / officer banner -->
-  <div class="banner ph-strip">
-    <span class="tag">BC / OFFICER NOTE</span>
-    <span class="note">placeholder — battalion / shift-officer note posts here</span>
+  <!-- Announcements ticker (officer-set, rotates) -->
+  <div class="banner" id="annBanner">
+    <span class="tag">ANNOUNCEMENTS</span>
+    <span class="note" id="annNote">&hellip;</span>
+    <span class="who" id="annBy"></span>
+    <span class="ann-page" id="annPage" hidden></span>
   </div>
 
   <!-- NWS alert lane — live; hidden when zero active alerts, fail-loud if NWS unreachable -->
@@ -523,6 +534,40 @@
     paint(); setInterval(paint, 60000);                        /* recompute each minute so the 0700 flip lands live */
   })();
 
+  /* ── Auto-fit / auto-rotate for wall lists that can't scroll: show every row if it
+     fits; if not, try a compact size; only when it still overflows, page through fitted
+     chunks on a timer with a "1 / N" indicator. Page, don't marquee — a still page that
+     swaps reads far better across a room. Reusable (hospital list now, alert lane next). ── */
+  function autoRotate(listEl, rows, indEl, intervalMs){
+    if(!listEl) return function(){};
+    var raf=(typeof requestAnimationFrame==="function")?requestAnimationFrame:function(f){return setTimeout(f,16);};
+    var timer=null, stopped=false;
+    function fits(){ return listEl.scrollHeight <= listEl.clientHeight + 1; }
+    function clearInd(){ if(indEl){ indEl.hidden=true; indEl.textContent=""; } }
+    function perPage(){
+      var first=listEl.firstElementChild; if(!first) return rows.length;
+      var rowH=first.getBoundingClientRect().height;
+      var cs=getComputedStyle(listEl), gap=parseFloat(cs.rowGap||cs.gap||"0")||0;
+      if(rowH<=0) return rows.length;
+      return Math.max(1, Math.floor((listEl.clientHeight+gap)/(rowH+gap)));
+    }
+    function run(){
+      if(stopped) return;
+      listEl.classList.remove("compact"); listEl.innerHTML=rows.join("");
+      if(fits()){ clearInd(); return; }                    /* all fit at normal size */
+      listEl.classList.add("compact"); listEl.innerHTML=rows.join("");
+      if(fits()){ clearInd(); return; }                    /* all fit compact — no rotation */
+      var per=perPage(), pages=[];                          /* still overflowing — page it */
+      for(var i=0;i<rows.length;i+=per) pages.push(rows.slice(i,i+per));
+      var idx=0;
+      function show(i){ listEl.innerHTML=pages[i].join(""); if(indEl){ indEl.hidden=false; indEl.textContent=(i+1)+" / "+pages.length; } }
+      show(0);
+      timer=setInterval(function(){ if(stopped)return; idx=(idx+1)%pages.length; show(idx); }, intervalMs);
+    }
+    raf(run);
+    return function(){ stopped=true; if(timer) clearInterval(timer); };
+  }
+
   /* ── Hospital diversions — LIVE from the shared board state (firehawk/dashboard_state),
      officer-set in control.html on a different device. Fail-loud: a read failure shows
      amber "unavailable", never a false "all open". No hospital table needed — the control
@@ -530,10 +575,12 @@
   (function(){
     var K="AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ";
     var DOC="https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents/firehawk/dashboard_state";
-    var REFRESH=60*1000;
+    var REFRESH=60*1000, hospRot=null, lastState, lastSetAt;
     function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
     function hhmm(iso){ try{ return new Date(iso).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return ""; } }
     function render(state, setAt){
+      lastState=state; lastSetAt=setAt;
+      if(hospRot){ hospRot(); hospRot=null; }               /* tear down any running rotation */
       var body=document.getElementById("hospBody"), stamp=document.getElementById("hospStamp");
       if(!body) return;
       if(state===false){                                       /* read failed -> loud, never a false all-clear */
@@ -550,10 +597,9 @@
         return;
       }
       body.className="hosp-body div";
-      var h='<div class="hosp-msg red">'+divs.length+(divs.length===1?" FACILITY":" FACILITIES")+' ON DIVERSION</div><div class="hosp-list">';
-      divs.slice(0,7).forEach(function(d){ h+='<div class="hrow"><span class="hn">'+esc(d.name)+'</span><span class="hs">'+esc(d.status)+'</span></div>'; });
-      if(divs.length>7) h+='<div class="hmore">+ '+(divs.length-7)+' more diverting</div>';
-      body.innerHTML=h+'</div>';
+      body.innerHTML='<div class="hosp-msg red">'+divs.length+(divs.length===1?" FACILITY":" FACILITIES")+' ON DIVERSION <span class="hosp-page" id="hospPage" hidden></span></div><div class="hosp-list" id="hospListRot"></div>';
+      var rows=divs.map(function(d){ return '<div class="hrow"><span class="hn">'+esc(d.name)+'</span><span class="hs">'+esc(d.status)+'</span></div>'; });
+      hospRot=autoRotate(document.getElementById("hospListRot"), rows, document.getElementById("hospPage"), 7000);
     }
     function load(){
       if(typeof fetch!=="function"){ render(false); return; }
@@ -569,6 +615,46 @@
         var st; try{ st=JSON.parse(dj); }catch(e){ render(false); return; }
         render(st, setAt);
       }).catch(function(){ render(false); });                  /* network/other -> amber unavailable */
+    }
+    load(); setInterval(load, REFRESH);
+    var rt; window.addEventListener("resize", function(){ clearTimeout(rt); rt=setTimeout(function(){ if(lastState!==undefined) render(lastState, lastSetAt); }, 250); });
+    if(document.fonts && document.fonts.ready){ document.fonts.ready.then(function(){ if(lastState!==undefined) render(lastState, lastSetAt); }); }
+  })();
+
+  /* ── Announcements ticker — officer-set, from the shared board state
+     (firehawk/dashboard_state). Rotates one post at a time (~7s) with a "1 / N" indicator;
+     a single post is static; none shows a dim idle line. Announcements aren't safety data,
+     so a transient read failure keeps the last posts on screen rather than blanking. ── */
+  (function(){
+    var K="AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ";
+    var DOC="https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents/firehawk/dashboard_state";
+    var REFRESH=60*1000, ROT=7000;
+    var anns=[], idx=0, timer=null, note, by, page;
+    function show(i){
+      note=note||document.getElementById("annNote"); by=by||document.getElementById("annBy"); page=page||document.getElementById("annPage");
+      if(!note) return;
+      if(!anns.length){ note.className="note idle"; note.textContent="\u2014 none posted"; if(by)by.textContent=""; if(page){page.hidden=true;page.textContent="";} return; }
+      var a=anns[i%anns.length];
+      note.className="note"; note.textContent=a.text||"";
+      if(by) by.textContent=a.by?("\u2014 "+a.by):"";
+      if(page){ if(anns.length>1){ page.hidden=false; page.textContent=((i%anns.length)+1)+" / "+anns.length; } else { page.hidden=true; page.textContent=""; } }
+    }
+    function setAnns(list){
+      anns=(list||[]).filter(function(a){ return a && a.text && String(a.text).trim(); });
+      idx=0; if(timer){ clearInterval(timer); timer=null; }
+      show(0);
+      if(anns.length>1) timer=setInterval(function(){ idx=(idx+1)%anns.length; show(idx); }, ROT);
+    }
+    function load(){
+      if(typeof fetch!=="function") return;
+      fetch(DOC+"?key="+K).then(function(r){ if(r.status===404) return {__none:true}; if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .then(function(doc){
+        if(doc&&doc.__none){ setAnns([]); return; }
+        var dj=doc&&doc.fields&&doc.fields.stateJson&&doc.fields.stateJson.stringValue;
+        if(!dj){ setAnns([]); return; }
+        var st; try{ st=JSON.parse(dj); }catch(e){ return; }   /* parse fail -> keep last posts */
+        setAnns(st.announcements||[]);
+      }).catch(function(){ /* transient -> keep last known */ });
     }
     load(); setInterval(load, REFRESH);
   })();
