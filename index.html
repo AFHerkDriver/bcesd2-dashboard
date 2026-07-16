@@ -456,6 +456,18 @@
   }
   loadAlerts(); setInterval(loadAlerts,ALERT_REFRESH);
 </script>
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
+<script>
+if('serviceWorker' in navigator){
+  var __reloading=false;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    if(__reloading)return; __reloading=true; location.reload();      /* new version activated -> silent refresh */
+  });
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      setInterval(function(){ reg.update(); }, 10*60*1000);           /* check for a new deploy every 10 min */
+    }).catch(function(){});
+  });
+}
+</script>
 </body>
 </html>
