@@ -93,8 +93,11 @@
   .alert .until .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.8vw,28px);line-height:1}
 
   /* ── 2×2 Quadrant grid (balanced, no scroll) ─ */
-  .quad{flex:1 1 auto;display:grid;gap:clamp(6px,.6vw,10px);min-height:0;
-    grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+  .quad{flex:1 1 auto;display:flex;gap:clamp(6px,.6vw,10px);min-height:0}
+  .wx-tile{flex:1.05 1 0;min-width:0}                 /* weather owns the full-height left column */
+  .rcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vw,10px);min-height:0}
+  .rcol > .tile{flex:1 1 0;min-height:0}
+  .rcol > .hosp-tile{flex:1.35 1 0}                   /* hospital status gets the most room on the right */
   .tile{background:var(--panel);border:1px solid var(--border);border-radius:11px;
     padding:clamp(8px,.85vw,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
   .tile .head{display:flex;align-items:baseline;gap:8px;margin-bottom:clamp(4px,.5vw,9px);flex:0 0 auto}
@@ -155,16 +158,16 @@
   .cal-list .e span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* Q1 District Weather — now + next hours (big, glanceable) */
-  .wx-now{display:flex;align-items:center;gap:clamp(10px,1.4vw,24px);flex:0 0 auto;margin-bottom:clamp(4px,.5vw,9px)}
-  .wx-ic .wic{width:clamp(38px,3.7vw,60px);height:clamp(38px,3.7vw,60px);display:block}
+  .wx-now{display:flex;align-items:center;gap:clamp(10px,1.4vw,24px);flex:0 0 auto;margin-bottom:clamp(6px,.7vw,13px)}
+  .wx-ic .wic{width:clamp(44px,4.2vw,80px);height:clamp(44px,4.2vw,80px);display:block}
   .wx-flag{flex:0 0 auto;background:rgba(255,193,7,.15);border:1px solid var(--amber);color:var(--amber);
     border-radius:8px;padding:clamp(4px,.45vw,9px) clamp(8px,.9vw,14px);font-size:clamp(11px,1vw,16px);
     letter-spacing:1px;margin-bottom:clamp(6px,.7vw,12px);text-align:center;font-family:'Bebas Neue',sans-serif}
   .wx-flag[hidden]{display:none}
   .wx-main{min-width:0}
-  .wx-temp{font-family:'Bebas Neue',sans-serif;font-size:clamp(34px,3.7vw,60px);line-height:.85;letter-spacing:1px}
+  .wx-temp{font-family:'Bebas Neue',sans-serif;font-size:clamp(44px,4.4vw,90px);line-height:.85;letter-spacing:1px}
   .wx-cond{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vw,22px);letter-spacing:1px;color:var(--dim);margin-top:2px}
-  .wx-vitals{margin-left:auto;display:flex;flex-direction:column;gap:clamp(3px,.4vw,8px);text-align:right}
+  .wx-vitals{margin-left:auto;display:flex;flex-direction:column;gap:clamp(5px,.6vw,12px);text-align:right}
   .wx-vitals .k{font-size:clamp(9px,.8vw,13px);letter-spacing:2px;color:var(--dim);display:block}
   .wx-vitals .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.9vw,30px);letter-spacing:1px;display:block}
   .wx-vitals .v em{font-style:normal;color:var(--amber)}
@@ -172,7 +175,7 @@
   .hcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
     background:var(--panel2);border-radius:10px;padding:clamp(6px,.7vw,14px) clamp(2px,.3vw,6px)}
   .hcol .hh{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vw,22px);color:var(--dim);letter-spacing:1px}
-  .hcol .wic{width:clamp(24px,2.7vw,46px);height:clamp(24px,2.7vw,46px);margin:clamp(1px,.2vw,4px) 0}
+  .hcol .wic{width:clamp(28px,2.6vw,50px);height:clamp(28px,2.6vw,50px);margin:clamp(2px,.3vw,6px) 0}
   .hcol .ht{font-family:'Bebas Neue',sans-serif;font-size:clamp(17px,1.9vw,32px);letter-spacing:.5px}
   .hcol .hw{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vw,22px);color:var(--dim);letter-spacing:.5px}
   .hcol .hw.hot{color:var(--amber)}
@@ -290,8 +293,8 @@
   <!-- 2×2 Quadrants -->
   <div class="quad">
 
-    <!-- Q1 · District Weather (LIVE NWS · now + next hours) -->
-    <div class="tile">
+    <!-- District Weather — full-height left column (now + outlook) -->
+    <div class="tile wx-tile">
       <div class="head"><span class="name">District Weather</span><span class="stamp src" id="wxStamp">Loading NWS&hellip;</span></div>
       <div class="wx-flag" id="wxFlag" hidden></div>
       <div class="wx-now">
@@ -309,24 +312,22 @@
       <div class="wx-hours" id="wxHours"></div>
     </div>
 
-    <!-- Q2 · Hospitals (placeholder) -->
-    <div class="tile">
-      <div class="head"><span class="name">Hospital Status</span><span class="stamp src" id="hospStamp">Loading&hellip;</span></div>
-      <div class="hosp-body" id="hospBody"></div>
-    </div>
-
-    <!-- Q3 · Fire Weather (placeholder) -->
-    <div class="tile ph">
-      <div class="pmark">◇</div>
-      <div class="pname">Fire Weather</div>
-      <div class="pidea">Red Flag · East/West strike teams · RH / wind / temp</div>
-    </div>
-
-    <!-- Q4 · Medical Direction + Calendar (placeholder) -->
-    <div class="tile ph">
-      <div class="pmark">◇</div>
-      <div class="pname">Medical Direction</div>
-      <div class="pidea">On-call director + backup contact · shift calendar</div>
+    <!-- Right column: Hospital (tall) · Medical · Fire Weather -->
+    <div class="rcol">
+      <div class="tile hosp-tile">
+        <div class="head"><span class="name">Hospital Status</span><span class="stamp src" id="hospStamp">Loading&hellip;</span></div>
+        <div class="hosp-body" id="hospBody"></div>
+      </div>
+      <div class="tile ph">
+        <div class="pmark">◇</div>
+        <div class="pname">Medical Direction</div>
+        <div class="pidea">On-call director + backup contact · shift calendar</div>
+      </div>
+      <div class="tile ph">
+        <div class="pmark">◇</div>
+        <div class="pname">Fire Weather</div>
+        <div class="pidea">Red Flag · East/West strike teams · RH / wind / temp</div>
+      </div>
     </div>
 
   </div>
