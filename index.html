@@ -105,19 +105,22 @@
   /* ── 2×2 Quadrant grid (balanced, no scroll) ─ */
   .quad{flex:1 1 auto;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .lcol{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
-  .wx-tile{flex:.75 1 0;min-width:0;min-height:0}     /* weather at half presence — dense, not dominant */
-  .sched-tile{flex:1.35 1 0;min-height:0}
+  .lcol > .wxrow{flex:.8 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .wxrow > .tile{min-width:0;min-height:0}
+  .wxrow > .wx-tile{flex:1.05 1 0}
+  .wxrow > .teams-tile{flex:1 1 0}
+  .sched-tile{flex:1.2 1 0;min-height:0}
   .rcol{flex:.85 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rcol > .tile{flex:1 1 0;min-height:0}
-  .rcol > .rrow{flex:.85 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .rcol > .rrow{flex:.8 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rrow > .hosp-tile{flex:1.5 1 0;min-width:0}
   .rrow > .med-tile{flex:1 1 0;min-width:0}
-  .lcol > .calls-tile{flex:1.05 1 0;min-height:0}
+  .lcol > .calls-tile{flex:1 1 0;min-height:0}
   .lcol > .calls-tile[hidden]{display:none}
-  .rcol > .rrow2{flex:.5 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
-  .rrow2 > .tile{flex:1 1 0;min-width:0}
   .empty-body{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;color:var(--dim);
     font-size:clamp(11px,1vmin,16px);letter-spacing:1px}
+  .lcol > .empty-tile{flex:.4 1 0;min-height:0}
+  .rcol > .empty-tile{flex:.45 1 0;min-height:0}
   .tile{background:var(--panel);border:1px solid var(--border);border-radius:11px;
     padding:clamp(8px,.85vmin,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
   .tile .head{display:block;position:relative;text-align:center;background:var(--panel2);border-radius:8px;
@@ -441,6 +444,7 @@
 
     <!-- Left column: District Weather (compact) over Shift Schedule -->
     <div class="lcol">
+    <div class="wxrow">
     <div class="tile wx-tile">
       <div class="head"><span class="name">District Weather</span><span class="stamp src" id="wxStamp">Loading NWS&hellip;</span></div>
       <div class="wx-flag" id="wxFlag" hidden></div>
@@ -458,6 +462,11 @@
       </div>
       <div class="wx-hours" id="wxHours"></div>
     </div>
+    <div class="tile teams-tile">
+      <div class="head"><span class="name">Specialty Units &amp; OOS</span><span class="stamp src" id="teamsStamp"></span></div>
+      <div class="teams-body" id="teamsBody"></div>
+    </div>
+    </div><!-- /wxrow -->
     <!-- Active Calls — CAD via the bc2fd-dash-auth worker /dispatch relay. Hidden until the
          relay is configured (no feed ≠ failure); amber when a configured feed can't be reached. -->
     <div class="tile calls-tile" id="callsTile" hidden>
@@ -469,20 +478,14 @@
       <div class="head"><span class="name">Shift Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
       <div class="sched-list" id="schedList"></div>
     </div>
+    <div class="tile empty-tile">
+      <div class="head"><span class="name">Empty Tile</span></div>
+      <div class="empty-body">&mdash; open slot &mdash;</div>
+    </div>
     </div>
 
-    <!-- Right column: Unit Status (top) · Hospital · Medical · Fire Weather -->
+    <!-- Right column: Hospital + Medical (top) · NWS Alerts · Empty -->
     <div class="rcol">
-      <div class="rrow2">
-        <div class="tile teams-tile">
-          <div class="head"><span class="name">Unit Status</span><span class="stamp src" id="teamsStamp"></span></div>
-          <div class="teams-body" id="teamsBody"></div>
-        </div>
-        <div class="tile empty-tile">
-          <div class="head"><span class="name">Empty Tile</span></div>
-          <div class="empty-body">&mdash; open slot &mdash;</div>
-        </div>
-      </div>
       <div class="rrow">
         <div class="tile hosp-tile">
           <div class="head"><span class="name">Hospital Status</span><span class="stamp src" id="hospStamp">Loading&hellip;</span></div>
@@ -498,6 +501,10 @@
         <div class="alert-lane" id="alertLane"></div>
         <div class="fw-body" id="fwBody"></div>
         <div class="strike" id="strikeRow"></div>
+      </div>
+      <div class="tile empty-tile">
+        <div class="head"><span class="name">Empty Tile</span></div>
+        <div class="empty-body">&mdash; open slot &mdash;</div>
       </div>
     </div>
 
@@ -958,9 +965,11 @@
      GREEN = on/staffed · RED = out of service · AMBER = source unreachable (fail-loud,
      never a false all-clear) · dim = not staffed. No status words on chips. ── */
   (function(){
-    var OFF=[["b121","B121"],["bat161","BC161"],["boat124","BOAT124"],["rescue124","RESCUE124"]];
+    var OFF=[["b121","B121"],["mac121","MAC121"],["bat161","BC161"],["boat124","BOAT124"],["rescue124","RESCUE124"]];
     var APP=[["l123","L123"],["ap124","AP124"],["l125","L125"]];
     var stOk=null, stSt=null;
+    function esc2(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+    function expired(x){ if(!x) return false; var d=new Date(x); return !isNaN(d.getTime()) && new Date()>d; }  /* unparseable = never expires */
     function chip(label, cls){ return '<div class="tchip'+(cls?(" "+cls):"")+'"><span class="tcn">'+label+'</span></div>'; }
     function uavChip(label, key){
       var s=window.UAV_STATE;
@@ -975,21 +984,30 @@
       if(stOk===false){
         body.className="teams-body err";
         html+=OFF.map(function(t){ return chip(t[1],"err"); }).join("");
-        html+=APP.map(function(a){ return chip(a[1],"err"); }).join("");   /* hidden-on-fail would read as in-service */
+        /* apparatus unknown on read-fail: hiding them would read as "all in service" — a false all-clear */
+        html+=APP.map(function(a){ return chip(a[1],"err"); }).join("");
       } else if(stOk===null){
         body.className="teams-body";
         html+=OFF.map(function(t){ return chip(t[1],""); }).join("");
       } else {
         var tm=(stSt&&stSt.teams)||{}, ap=(stSt&&stSt.apparatus)||{};
+        var tx=(stSt&&stSt.tExp)||{}, ax=(stSt&&stSt.aExp)||{};
         body.className="teams-body";
-        html+=OFF.map(function(t){ return chip(t[1], tm[t[0]]?"on":""); }).join("");
-        html+=APP.filter(function(a){ return !!ap[a[0]]; }).map(function(a){ return chip(a[1],"oos"); }).join("");
+        html+=OFF.map(function(t){ var on=!!tm[t[0]] && !expired(tx[t[0]]);          /* expiry passed -> quietly off */
+          return chip(t[1], on?"on":""); }).join("");
+        html+=APP.filter(function(a){ return !!ap[a[0]] && !expired(ax[a[0]]); })    /* expiry passed -> back in service */
+          .map(function(a){ return chip(a[1],"oos"); }).join("");
+        ((stSt&&stSt.writeins)||[]).forEach(function(u){                              /* ad-hoc write-ins */
+          if(!u || !u.name || !String(u.name).trim() || expired(u.exp)) return;
+          html+=chip(esc2(String(u.name).trim().toUpperCase()), u.mode==="oos"?"oos":"on");
+        });
       }
       body.innerHTML=html;
     }
     window.renderUnits=render;
     render();
     onBoardState(function(ok,st){ stOk=ok; stSt=st; render(); });
+    setInterval(render, 60000);                            /* expiry sweep between polls */
   })();
 
   /* ── Shift Scheduled Events — officer-set state.calendar:[{date?,time,end?,desc}].

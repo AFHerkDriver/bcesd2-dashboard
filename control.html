@@ -86,9 +86,9 @@
   /* Editable list rows */
   .list-row{display:flex;gap:8px;align-items:center;margin:4px 0}
   .list-row input{flex:1}
-  .list-row .del{flex:0 0 auto;min-width:0;background:transparent;border:1px solid var(--border);
+  .list-row .del,.list-row .wdel{flex:0 0 auto;min-width:0;background:transparent;border:1px solid var(--border);
     color:var(--dim);border-radius:7px;padding:6px 10px;min-height:34px;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none}
-  .list-row .del:hover{border-color:var(--red);color:var(--red)}
+  .list-row .del:hover,.list-row .wdel:hover{border-color:var(--red);color:var(--red)}
   .hstatus{flex:0 0 auto;min-width:130px}
   .add{margin-top:6px;font-size:12px;color:var(--accent);background:transparent;border:1px dashed var(--border);
     border-radius:7px;padding:6px 14px;min-height:32px;cursor:pointer;font-family:inherit;width:auto;-webkit-appearance:none;appearance:none}
@@ -135,6 +135,7 @@
   .gate-msg.warn{color:#FFC107}
   @keyframes gateshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
   .gate-card.shake{animation:gateshake .3s ease}
+  .uexp{margin-top:6px;width:100%;box-sizing:border-box}
 </style>
 </head>
 <body>
@@ -211,34 +212,36 @@
     </div>
 
     <!-- Fire Weather -->
-    <!-- Specialty Teams -->
+    <!-- Specialty Units & OOS — one card: team staffing, ladder OOS, write-ins; optional expiry auto-reverts -->
     <div class="card">
-      <h2>Specialty Teams <span class="tag">OFFICER</span></h2>
-      <div class="hint">Staffed / not staffed — shows on the board. Officer-set (no feed).</div>
+      <h2>Specialty Units &amp; OOS <span class="tag">OFFICER</span></h2>
+      <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on any unit — when it passes, the status reverts on its own (teams drop to —, ladders return to service).</div>
       <div class="row">
-        <div class="field"><label>Brush 121</label><div class="seg red" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
-        <div class="field"><label>Battalion 161</label><div class="seg red" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
-        <div class="field"><label>Boat Team 124</label><div class="seg red" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+        <div class="field"><label>Brush 121</label><div class="seg red" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:b121" title="Expires (optional)"></div>
+        <div class="field"><label>MAC 121</label><div class="seg red" id="segMac121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:mac121" title="Expires (optional)"></div>
+        <div class="field"><label>Battalion 161</label><div class="seg red" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:bat161" title="Expires (optional)"></div>
       </div>
       <div class="row">
-        <div class="field"><label>Rescue Team 124</label><div class="seg red" id="segRescue124"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
-        <div class="field"><label>West Strike Team</label><div class="seg red" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+        <div class="field"><label>Boat Team 124</label><div class="seg red" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:boat124" title="Expires (optional)"></div>
+        <div class="field"><label>Rescue Team 124</label><div class="seg red" id="segRescue124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:rescue124" title="Expires (optional)"></div>
       </div>
       <div class="row">
-        <div class="field"><label>East Strike Team</label><div class="seg red" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+        <div class="field"><label>Ladder 123</label><div class="seg red" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:l123" title="OOS expires (optional)"></div>
+        <div class="field"><label>Aerial Platform 124</label><div class="seg red" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:ap124" title="OOS expires (optional)"></div>
+        <div class="field"><label>Ladder 125</label><div class="seg red" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:l125" title="OOS expires (optional)"></div>
       </div>
+      <div class="hint" style="margin-top:10px">Write-in units — anything not listed above (borrowed engine, task force, tender). Shows as a green (staffed) or red (OOS) pill.</div>
+      <div id="wiList"></div>
+      <button class="btn ghost" id="addWi" type="button">+ Add write-in unit</button>
     </div>
 
-    <!-- Heavy Apparatus OOS -->
+    <!-- Strike Teams — feeds the NWS Alerts tile chips -->
     <div class="card">
-      <h2>Heavy Apparatus <span class="tag">OFFICER</span></h2>
-      <div class="hint">Mark units OUT OF SERVICE — they appear red on the board only while OOS.</div>
+      <h2>Strike Teams <span class="tag">OFFICER</span></h2>
+      <div class="hint">Deployment chips at the bottom of the NWS Alerts tile.</div>
       <div class="row">
-        <div class="field"><label>Ladder 123</label><div class="seg red" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
-        <div class="field"><label>Aerial Platform 124</label><div class="seg red" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
-      </div>
-      <div class="row">
-        <div class="field"><label>Ladder 125</label><div class="seg red" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+        <div class="field"><label>West Strike Team</label><div class="seg red" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+        <div class="field"><label>East Strike Team</label><div class="seg red" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
       </div>
     </div>
 
@@ -361,8 +364,10 @@ function defaults(){
     med:{ mode:'default', custom:{name:'',phone:''}, end:'' },
     hospitals:{},   /* id -> diversion status; absent = OPEN */
     fire:{ redFlag:'auto' },
-    teams:{ b121:false, bat161:false, boat124:false, rescue124:false, west:false, east:false },
+    teams:{ b121:false, mac121:false, bat161:false, boat124:false, rescue124:false, west:false, east:false },
     apparatus:{ l123:false, ap124:false, l125:false },   /* true = OUT OF SERVICE */
+    tExp:{}, aExp:{},                                    /* unit -> optional expiry (datetime-local); board auto-reverts past it */
+    writeins:[],                                         /* [{name, mode:'on'|'oos', exp}] ad-hoc units */
     announcements:[
       {text:'Water tender OOS until 1500 — cross-staff Engine 62.', by:'BC Alvarez'},
       {text:'Station 122 bay door repair 1300–1500 — stage apparatus outside.', by:'Station Officer'}
@@ -483,6 +488,7 @@ function hydrate(){
   renderHosp();
   segSet('segFlag', state.fire.redFlag);
   segSet('segB121', state.teams.b121?'on':'off');
+  segSet('segMac121', state.teams.mac121?'on':'off');
   segSet('segBat161', state.teams.bat161?'on':'off');
   segSet('segBoat124', state.teams.boat124?'on':'off');
   segSet('segRescue124', state.teams.rescue124?'on':'off');
@@ -491,6 +497,9 @@ function hydrate(){
   segSet('segL123', state.apparatus.l123?'oos':'in');
   segSet('segAP124', state.apparatus.ap124?'oos':'in');
   segSet('segL125', state.apparatus.l125?'oos':'in');
+  document.querySelectorAll('.uexp').forEach(function(inp){ var ux=inp.getAttribute('data-ux').split(':');
+    inp.value=((ux[0]==='t'?state.tExp:state.aExp)[ux[1]])||''; });
+  renderWi();
   renderAnn();
   renderCal();
   
@@ -506,6 +515,7 @@ function segClick(wrapId, cb){
 segClick('segMed', function(v){ state.med.mode=v; });
 segClick('segFlag', function(v){ state.fire.redFlag=v; });
 segClick('segB121', function(v){ state.teams.b121=(v==='on'); });
+segClick('segMac121', function(v){ state.teams.mac121=(v==='on'); });
 segClick('segBat161', function(v){ state.teams.bat161=(v==='on'); });
 segClick('segBoat124', function(v){ state.teams.boat124=(v==='on'); });
 segClick('segRescue124', function(v){ state.teams.rescue124=(v==='on'); });
@@ -531,8 +541,33 @@ document.addEventListener('input', function(e){
   else if(f==='annexp'){ state.announcements[i].exp=t.value; }
   else if(f==='time'||f==='desc'||f==='date'||f==='end'){ state.calendar[i][f]=t.value; }
 });
+function renderWi(){
+  var box=$('wiList'); if(!box) return; box.innerHTML='';
+  state.writeins.forEach(function(u,i){
+    var row=document.createElement('div'); row.className='list-row';
+    row.innerHTML='<input type="text" data-wi="'+i+'" data-wf="name" value="'+esc(u.name||'')+'" placeholder="Callsign (e.g. E62)" style="flex:0 0 140px;min-width:0">'+
+      '<div class="seg red wiseg" data-wi="'+i+'"><button data-v="on"'+(u.mode!=='oos'?' class="on"':'')+'>Staffed</button><button data-v="oos"'+(u.mode==='oos'?' class="on"':'')+'>OOS</button></div>'+
+      '<input type="datetime-local" data-wi="'+i+'" data-wf="exp" value="'+esc(u.exp||'')+'" title="Expires (optional)" style="flex:0 0 168px;min-width:0">'+
+      '<button class="wdel" data-wi="'+i+'">✕</button>';
+    box.appendChild(row);
+  });
+}
+document.addEventListener('click', function(e){
+  if(e.target.id==='addWi'){ state.writeins.push({name:'',mode:'on',exp:''}); renderWi(); return; }
+  var wd=e.target.closest&&e.target.closest('.wdel'); if(wd){ state.writeins.splice(+wd.getAttribute('data-wi'),1); renderWi(); return; }
+  var sb=e.target.closest&&e.target.closest('.wiseg button'); if(sb){ var seg=sb.parentElement, i=+seg.getAttribute('data-wi');
+    state.writeins[i].mode=sb.getAttribute('data-v'); seg.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===sb);}); return; }
+});
+document.addEventListener('input', function(e){
+  var t=e.target, wi=t.getAttribute&&t.getAttribute('data-wi'), wf=t.getAttribute&&t.getAttribute('data-wf');
+  if(wi!=null&&wf){ state.writeins[+wi][wf]=t.value; }
+});
 document.addEventListener('change', function(e){
-  var t=e.target, hid=t.getAttribute&&t.getAttribute('data-hid');
+  var t=e.target, ux=t.getAttribute&&t.getAttribute('data-ux');
+  if(ux){ var p=ux.split(':'); (p[0]==='t'?state.tExp:state.aExp)[p[1]]=t.value; return; }
+  var wi=t.getAttribute&&t.getAttribute('data-wi'), wf=t.getAttribute&&t.getAttribute('data-wf');
+  if(wi!=null&&wf){ state.writeins[+wi][wf]=t.value; return; }
+  var hid=t.getAttribute&&t.getAttribute('data-hid');
   if(hid){ var v=t.value; if(v==='OPEN'){ delete state.hospitals[hid]; } else { state.hospitals[hid]=v; }
     var r=t.closest('.hosp-row'); if(r) r.classList.toggle('diverted', v!=='OPEN'); return; }
   var i=t.getAttribute&&t.getAttribute('data-i'), f=t.getAttribute&&t.getAttribute('data-f');
