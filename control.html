@@ -208,14 +208,6 @@
       </div>
     </div>
 
-    <!-- NWS amplifying -->
-    <div class="card">
-      <h2>Alert Amplifying Info <span class="tag live">LIVE NWS</span> <span class="tag">OFFICER</span></h2>
-      <div class="hint">NWS warnings post automatically. Add road closures / low-water crossings to ride inside the alert banner.</div>
-      <div id="ampList"></div>
-      <button class="add" id="addAmp">+ Add closure / note</button>
-    </div>
-
     <!-- Announcements (top ticker) -->
     <div class="card">
       <h2>Announcements <span class="tag">OFFICER</span> <span class="tag live">TICKER</span></h2>
@@ -279,7 +271,6 @@ function defaults(){
     hospitals:{},   /* id -> diversion status; absent = OPEN */
     fire:{ redFlag:'auto' },
     teams:{ bat161:false, boat124:false, rescue124:false, west:false, east:false },
-    amplifying:['Grosenbacher low-water crossing CLOSED','Potranco @ Talley — high water'],
     announcements:[
       {text:'Water tender OOS until 1500 — cross-staff Engine 62.', by:'BC Alvarez'},
       {text:'Station 122 bay door repair 1300–1500 — stage apparatus outside.', by:'Station Officer'}
@@ -363,14 +354,6 @@ function renderHosp(){
     });
   });
 }
-function renderAmp(){
-  var box=$('ampList'); box.innerHTML='';
-  state.amplifying.forEach(function(t,i){
-    var row=document.createElement('div'); row.className='list-row';
-    row.innerHTML='<input type="text" data-i="'+i+'" data-f="amp" value="'+esc(t)+'" placeholder="Road closure / note"><button class="del" data-i="'+i+'">✕</button>';
-    box.appendChild(row);
-  });
-}
 function renderAnn(){
   var box=$('annList'); box.innerHTML='';
   state.announcements.forEach(function(a,i){
@@ -409,7 +392,6 @@ function hydrate(){
   segSet('segRescue124', state.teams.rescue124?'on':'off');
   segSet('segWest', state.teams.west?'on':'off');
   segSet('segEast', state.teams.east?'on':'off');
-  renderAmp();
   renderAnn();
   renderCal();
   
@@ -441,8 +423,7 @@ $('medEnd').addEventListener('change',function(){ state.med.end=this.value;
 document.addEventListener('input', function(e){
   var t=e.target, i=t.getAttribute&&t.getAttribute('data-i'), f=t.getAttribute&&t.getAttribute('data-f');
   if(i==null||!f) return; i=+i;
-  if(f==='amp'){ state.amplifying[i]=t.value; }
-  else if(f==='anntext'){ state.announcements[i].text=t.value; }
+  if(f==='anntext'){ state.announcements[i].text=t.value; }
   else if(f==='annby'){ state.announcements[i].by=t.value; }
   else if(f==='time'||f==='desc'){ state.calendar[i][f]=t.value; }
 });
@@ -454,11 +435,9 @@ document.addEventListener('change', function(e){
 document.addEventListener('click', function(e){
   var d=e.target.closest && e.target.closest('.del'); if(!d) return;
   var i=+d.getAttribute('data-i');
-  if(d.parentElement.parentElement.id==='ampList'){ state.amplifying.splice(i,1); renderAmp(); }
-  else if(d.parentElement.parentElement.id==='annList'){ state.announcements.splice(i,1); renderAnn(); }
+  if(d.parentElement.parentElement.id==='annList'){ state.announcements.splice(i,1); renderAnn(); }
   else if(d.parentElement.parentElement.id==='calList'){ state.calendar.splice(i,1); renderCal(); }
 });
-$('addAmp').addEventListener('click',function(){ state.amplifying.push(''); renderAmp(); });
 $('addCal').addEventListener('click',function(){ state.calendar.push({time:'',desc:''}); renderCal(); });
 $('addAnn').addEventListener('click',function(){ state.announcements.push({text:'',by:''}); renderAnn(); });
 
