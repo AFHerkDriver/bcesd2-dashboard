@@ -216,6 +216,7 @@
       <h2>Specialty Teams <span class="tag">OFFICER</span></h2>
       <div class="hint">Staffed / not staffed — shows on the board. Officer-set (no feed).</div>
       <div class="row">
+        <div class="field"><label>Brush 121</label><div class="seg red" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
         <div class="field"><label>Battalion 161</label><div class="seg red" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
         <div class="field"><label>Boat Team 124</label><div class="seg red" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
       </div>
@@ -255,7 +256,7 @@
     <!-- Announcements (top ticker) -->
     <div class="card">
       <h2>Announcements <span class="tag">OFFICER</span> <span class="tag live">TICKER</span></h2>
-      <div class="hint">Posts to the top banner. More than one rotates every few seconds on the board — keep each short.</div>
+      <div class="hint">Rotate on the board ticker. Optional expiration — an expired post clears itself from the board.</div>
       <div id="annList"></div>
       <button class="add" id="addAnn">+ Add announcement</button>
     </div>
@@ -263,7 +264,7 @@
     <!-- Calendar -->
     <div class="card">
       <h2>Shift Calendar <span class="tag">OFFICER</span></h2>
-      <div class="hint">Planned events. Date optional (MM/DD) &mdash; blank means today; board highlights the current item.</div>
+      <div class="hint">Date optional (MM/DD, blank = today). End time optional. Sorted automatically on the board; events clear themselves one hour after they end.</div>
       <div id="calList"></div>
       <button class="add" id="addCal">+ Add event</button>
     </div>
@@ -360,7 +361,7 @@ function defaults(){
     med:{ mode:'default', custom:{name:'',phone:''}, end:'' },
     hospitals:{},   /* id -> diversion status; absent = OPEN */
     fire:{ redFlag:'auto' },
-    teams:{ bat161:false, boat124:false, rescue124:false, west:false, east:false },
+    teams:{ b121:false, bat161:false, boat124:false, rescue124:false, west:false, east:false },
     apparatus:{ l123:false, ap124:false, l125:false },   /* true = OUT OF SERVICE */
     announcements:[
       {text:'Water tender OOS until 1500 — cross-staff Engine 62.', by:'BC Alvarez'},
@@ -450,7 +451,8 @@ function renderAnn(){
   state.announcements.forEach(function(a,i){
     var row=document.createElement('div'); row.className='list-row';
     row.innerHTML='<input type="text" data-i="'+i+'" data-f="anntext" value="'+esc(a.text)+'" placeholder="Announcement">'+
-      '<input type="text" data-i="'+i+'" data-f="annby" value="'+esc(a.by||'')+'" placeholder="By (opt)" style="flex:0 0 128px;min-width:0">'+
+      '<input type="text" data-i="'+i+'" data-f="annby" value="'+esc(a.by||'')+'" placeholder="By (opt)" style="flex:0 0 108px;min-width:0">'+
+      '<input type="datetime-local" data-i="'+i+'" data-f="annexp" value="'+esc(a.exp||'')+'" title="Expires (optional) — clears itself from the board" style="flex:0 0 168px;min-width:0">'+
       '<button class="del" data-i="'+i+'">✕</button>';
     box.appendChild(row);
   });
@@ -459,8 +461,9 @@ function renderCal(){
   var box=$('calList'); box.innerHTML='';
   state.calendar.forEach(function(e,i){
     var row=document.createElement('div'); row.className='list-row';
-    row.innerHTML='<input type="text" data-i="'+i+'" data-f="date" value="'+esc(e.date)+'" placeholder="MM/DD" style="flex:0 0 74px;min-width:0">'+
-      '<input type="text" data-i="'+i+'" data-f="time" value="'+esc(e.time)+'" placeholder="09:00" style="flex:0 0 82px;min-width:0">'+
+    row.innerHTML='<input type="text" data-i="'+i+'" data-f="date" value="'+esc(e.date)+'" placeholder="MM/DD" style="flex:0 0 70px;min-width:0">'+
+      '<input type="text" data-i="'+i+'" data-f="time" value="'+esc(e.time)+'" placeholder="09:00" style="flex:0 0 76px;min-width:0">'+
+      '<input type="text" data-i="'+i+'" data-f="end" value="'+esc(e.end)+'" placeholder="End" style="flex:0 0 76px;min-width:0">'+
       '<input type="text" data-i="'+i+'" data-f="desc" value="'+esc(e.desc)+'" placeholder="Event"><button class="del" data-i="'+i+'">✕</button>';
     box.appendChild(row);
   });
@@ -479,6 +482,7 @@ function hydrate(){
 
   renderHosp();
   segSet('segFlag', state.fire.redFlag);
+  segSet('segB121', state.teams.b121?'on':'off');
   segSet('segBat161', state.teams.bat161?'on':'off');
   segSet('segBoat124', state.teams.boat124?'on':'off');
   segSet('segRescue124', state.teams.rescue124?'on':'off');
@@ -501,6 +505,7 @@ function segClick(wrapId, cb){
 }
 segClick('segMed', function(v){ state.med.mode=v; });
 segClick('segFlag', function(v){ state.fire.redFlag=v; });
+segClick('segB121', function(v){ state.teams.b121=(v==='on'); });
 segClick('segBat161', function(v){ state.teams.bat161=(v==='on'); });
 segClick('segBoat124', function(v){ state.teams.boat124=(v==='on'); });
 segClick('segRescue124', function(v){ state.teams.rescue124=(v==='on'); });
@@ -523,12 +528,15 @@ document.addEventListener('input', function(e){
   if(i==null||!f) return; i=+i;
   if(f==='anntext'){ state.announcements[i].text=t.value; }
   else if(f==='annby'){ state.announcements[i].by=t.value; }
-  else if(f==='time'||f==='desc'||f==='date'){ state.calendar[i][f]=t.value; }
+  else if(f==='annexp'){ state.announcements[i].exp=t.value; }
+  else if(f==='time'||f==='desc'||f==='date'||f==='end'){ state.calendar[i][f]=t.value; }
 });
 document.addEventListener('change', function(e){
   var t=e.target, hid=t.getAttribute&&t.getAttribute('data-hid');
   if(hid){ var v=t.value; if(v==='OPEN'){ delete state.hospitals[hid]; } else { state.hospitals[hid]=v; }
-    var r=t.closest('.hosp-row'); if(r) r.classList.toggle('diverted', v!=='OPEN'); }
+    var r=t.closest('.hosp-row'); if(r) r.classList.toggle('diverted', v!=='OPEN'); return; }
+  var i=t.getAttribute&&t.getAttribute('data-i'), f=t.getAttribute&&t.getAttribute('data-f');
+  if(i!=null && f==='annexp'){ state.announcements[+i].exp=t.value; }   /* iOS picker commits via change */
 });
 document.addEventListener('click', function(e){
   var d=e.target.closest && e.target.closest('.del'); if(!d) return;
@@ -536,8 +544,8 @@ document.addEventListener('click', function(e){
   if(d.parentElement.parentElement.id==='annList'){ state.announcements.splice(i,1); renderAnn(); }
   else if(d.parentElement.parentElement.id==='calList'){ state.calendar.splice(i,1); renderCal(); }
 });
-$('addCal').addEventListener('click',function(){ state.calendar.push({date:'',time:'',desc:''}); renderCal(); });
-$('addAnn').addEventListener('click',function(){ state.announcements.push({text:'',by:''}); renderAnn(); });
+$('addCal').addEventListener('click',function(){ state.calendar.push({date:'',time:'',end:'',desc:''}); renderCal(); });
+$('addAnn').addEventListener('click',function(){ state.announcements.push({text:'',by:'',exp:''}); renderAnn(); });
 
 function computeDiversions(){
   var out=[]; HOSPITALS.forEach(function(g){ g.list.forEach(function(o){

@@ -25,16 +25,6 @@
   .eyebrow{font-size:clamp(8px,.7vw,11px);letter-spacing:2px;color:var(--dim);text-transform:uppercase}
   .src{font-size:clamp(7px,.6vw,10px);letter-spacing:1px;color:var(--dim)}
   .src.officer{color:var(--accent)}
-  .uc-overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
-    background:rgba(0,0,0,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
-  .uc-overlay.hide{display:none}
-  .uc-card{background:var(--panel);border:2px solid var(--amber);border-radius:16px;text-align:center;
-    padding:clamp(20px,3vw,42px);max-width:min(90vw,520px);box-shadow:0 12px 44px rgba(0,0,0,.6)}
-  .uc-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(28px,4vw,52px);letter-spacing:2px;color:var(--amber);line-height:1}
-  .uc-body{font-size:clamp(13px,1.3vw,18px);color:var(--text);margin:clamp(12px,1.6vw,22px) 0;line-height:1.5}
-  .uc-ok{font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vw,28px);letter-spacing:2px;cursor:pointer;
-    background:var(--amber);color:#000;border:0;border-radius:10px;padding:clamp(8px,1vw,14px) clamp(32px,4vw,64px)}
-  .uc-ok:hover{filter:brightness(1.1)}
   .pill{display:inline-block;font-size:clamp(8px,.68vw,11px);letter-spacing:1px;padding:1px 8px;
     border-radius:20px;border:1px solid;line-height:1.5;white-space:nowrap}
   .pill.red{color:var(--red);border-color:var(--red);background:rgba(255,59,48,.12)}
@@ -98,13 +88,16 @@
   /* ── 2×2 Quadrant grid (balanced, no scroll) ─ */
   .quad{flex:1 1 auto;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .lcol{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
-  .wx-tile{flex:1 1 0;min-width:0;min-height:0}       /* weather trimmed again — schedule now gets the larger share */
-  .sched-tile{flex:1.15 1 0;min-height:0}
+  .wx-tile{flex:.75 1 0;min-width:0;min-height:0}     /* weather at half presence — dense, not dominant */
+  .sched-tile{flex:1.6 1 0;min-height:0}
   .rcol{flex:.85 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rcol > .tile{flex:1 1 0;min-height:0}
-  .rcol > .hosp-tile{flex:1.35 1 0}                   /* hospital status gets the most room on the right */
-  .rcol > .teams-tile{flex:.8 1 0}                    /* unit chips get real presence */
-  .rcol > .med-tile{flex:.5 1 0}                      /* medical direction is reference info — smallest tile */
+  .rcol > .rrow{flex:.85 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .rrow > .hosp-tile{flex:1.5 1 0;min-width:0}
+  .rrow > .med-tile{flex:1 1 0;min-width:0}
+  .rcol > .calls-tile{flex:1 1 0}
+  .rcol > .calls-tile[hidden]{display:none}
+  .rcol > .teams-tile{flex:.32 1 0}                   /* one tight row of color-state chips */
   .tile{background:var(--panel);border:1px solid var(--border);border-radius:11px;
     padding:clamp(8px,.85vmin,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
   .tile .head{display:flex;align-items:baseline;gap:8px;margin-bottom:clamp(4px,.5vmin,9px);flex:0 0 auto}
@@ -165,29 +158,30 @@
   .cal-list .e span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* Q1 District Weather — now + next hours (big, glanceable) */
-  .wx-now{display:flex;align-items:center;gap:clamp(10px,1.4vmin,24px);flex:0 0 auto;margin-bottom:clamp(6px,.7vmin,13px)}
-  .wx-ic .wic{width:clamp(34px,3vmin,56px);height:clamp(34px,3vmin,56px);display:block}
+  .wx-now{display:flex;align-items:center;gap:clamp(8px,1vmin,18px);flex:0 0 auto;margin-bottom:clamp(4px,.5vmin,9px)}
+  .wx-ic .wic{width:clamp(28px,2.5vmin,44px);height:clamp(28px,2.5vmin,44px);display:block}
   .wx-flag{flex:0 0 auto;background:rgba(255,193,7,.15);border:1px solid var(--amber);color:var(--amber);
     border-radius:8px;padding:clamp(4px,.45vmin,9px) clamp(8px,.9vmin,14px);font-size:clamp(11px,1vmin,16px);
     letter-spacing:1px;margin-bottom:clamp(6px,.7vmin,12px);text-align:center;font-family:'Bebas Neue',sans-serif}
   .wx-flag[hidden]{display:none}
   .wx-main{min-width:0}
-  .wx-temp{font-family:'Bebas Neue',sans-serif;font-size:clamp(32px,3.2vmin,60px);line-height:.85;letter-spacing:1px}
+  .wx-temp{font-family:'Bebas Neue',sans-serif;font-size:clamp(26px,2.7vmin,46px);line-height:.85;letter-spacing:1px}
   .wx-cond{font-family:'Bebas Neue',sans-serif;font-size:clamp(11px,1.15vmin,18px);letter-spacing:1px;color:var(--dim);margin-top:2px}
-  .wx-vitals{margin-left:auto;display:flex;flex-direction:column;gap:clamp(5px,.6vmin,12px);text-align:right}
+  .wx-vitals{margin-left:auto;display:flex;flex-direction:row;align-items:center;gap:clamp(12px,1.6vmin,28px);text-align:center}
   .wx-vitals .k{font-size:clamp(9px,.8vmin,13px);letter-spacing:2px;color:var(--dim);display:block}
-  .wx-vitals .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(14px,1.5vmin,24px);letter-spacing:1px;display:block}
+  .wx-vitals .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.7vmin,27px);letter-spacing:1px;display:block}
   .wx-vitals .v em{font-style:normal;color:var(--amber)}
   .wx-hours{flex:1 1 0;min-height:0;overflow:hidden;display:flex;gap:clamp(4px,.6vmin,12px);border-top:1px solid var(--border);padding-top:clamp(6px,.7vmin,14px)}
   .hcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
-    background:var(--panel2);border-radius:10px;padding:clamp(6px,.7vmin,14px) clamp(2px,.3vmin,6px)}
+    background:var(--panel2);border-radius:10px;padding:clamp(4px,.45vmin,9px) clamp(2px,.3vmin,6px)}
   .hcol .hh{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vmin,22px);color:var(--dim);letter-spacing:1px}
-  .hcol .wic{width:clamp(28px,2.6vmin,50px);height:clamp(28px,2.6vmin,50px);margin:clamp(2px,.3vmin,6px) 0}
+  .hcol .wic{width:clamp(22px,2vmin,36px);height:clamp(22px,2vmin,36px);margin:clamp(1px,.2vmin,4px) 0}
   .hcol .ht{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,26px);letter-spacing:.5px}
   .hcol .hw{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vmin,22px);color:var(--dim);letter-spacing:.5px}
   .hcol .hw.hot{color:var(--amber)}
-  .hcol .hp{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vmin,22px);color:var(--dim);letter-spacing:.5px}
+  .hcol .hp{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.2vmin,20px);color:var(--dim);letter-spacing:.5px}
   .hcol .hp.wet{color:var(--blue)}
+  .hcol .hp.dry{color:var(--amber)}
 
   /* Compact medical block (shares Q4 with calendar) */
   .med-compact{flex:0 0 auto;justify-content:flex-start;margin-bottom:clamp(6px,.7vmin,12px)}
@@ -287,16 +281,30 @@
   .hchip.burn.unk{border-color:var(--amber);background:rgba(255,193,7,.12)} .hchip.burn.unk .val{color:var(--amber)}
   /* Medical Direction tile */
   .med-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;gap:clamp(2px,.3vmin,6px)}
-  .med-body .mrole{font-size:clamp(9px,.8vmin,13px);letter-spacing:2px;color:var(--dim);text-transform:uppercase}
-  .med-body .mname{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vmin,21px);letter-spacing:1px;line-height:1.05}
-  .med-body .mphone{font-size:clamp(12px,1.1vmin,18px);color:var(--accent);letter-spacing:1px}
+  .med-body .mrole{font-size:clamp(10px,1vmin,16px);letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+  .med-body .mname{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2.1vmin,34px);letter-spacing:1px;line-height:1.05}
+  .med-body .mphone{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2.1vmin,34px);color:var(--accent);letter-spacing:2px}
   .med-body .mnote{font-size:clamp(9px,.8vmin,13px);color:var(--dim)}
   .med-body.err .mname{color:var(--amber)}
+  /* Active Calls tile */
+  .calls-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px)}
+  .call-e{display:flex;align-items:baseline;gap:clamp(8px,1vmin,18px);padding:clamp(3px,.4vmin,7px) clamp(6px,.7vmin,12px);
+    border-left:4px solid var(--red);border-radius:7px;background:rgba(255,59,48,.10)}
+  .call-e .ct{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,26px);letter-spacing:1px;color:var(--red);flex:0 0 auto;white-space:nowrap}
+  .call-e .ca{font-size:clamp(12px,1.2vmin,19px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .call-e .cu{font-family:'DM Mono',monospace;font-size:clamp(10px,1vmin,16px);color:var(--dim);flex:0 0 auto;white-space:nowrap}
+  .call-e .ce{margin-left:auto;flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vmin,22px);letter-spacing:1px;color:var(--accent)}
+  .calls-body.compact .call-e .ct{font-size:clamp(12px,1.25vmin,20px)}
+  .calls-body.compact .call-e .ca{font-size:clamp(10px,1vmin,16px)}
+  .calls-body .idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px)}
+  .calls-body.err .idle{color:var(--amber);font-style:normal}
+
   /* Shift Schedule tile — vertical list (replaces the old bottom strip) */
   .sched-list{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px)}
   .sched-e{display:flex;align-items:baseline;gap:clamp(8px,.9vmin,16px);padding:clamp(2px,.3vmin,5px) 0;border-bottom:1px solid rgba(48,54,61,.5)}
   .sched-e:last-child{border-bottom:0}
   .sched-e .tm{font-family:'Bebas Neue',sans-serif;color:var(--accent);letter-spacing:1px;font-size:clamp(19px,2.1vmin,34px);flex:0 0 auto;min-width:clamp(58px,5.4vmin,94px)}
+  .sched-e .tme{font-family:'Bebas Neue',sans-serif;color:var(--accent);opacity:.75;letter-spacing:1px;font-size:clamp(15px,1.6vmin,26px);flex:0 0 auto;margin-left:calc(-1*clamp(4px,.5vmin,9px))}
   .sched-e .dt{font-family:'DM Mono',monospace;font-size:clamp(10px,.95vmin,15px);color:var(--dim);flex:0 0 auto}
   .sched-e .ds{font-size:clamp(14px,1.45vmin,23px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sched-e.now{background:rgba(255,107,53,.14);border-left:3px solid var(--accent);border-radius:7px;
@@ -312,17 +320,16 @@
 
   /* Unit Status tile (UAV live + officer-set teams) */
   .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-wrap:wrap;align-content:flex-start;gap:clamp(5px,.6vmin,10px)}
-  .tchip{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:0 1 auto;padding-left:clamp(12px,1.4vmin,24px);padding-right:clamp(12px,1.4vmin,24px);
-    border:1px solid var(--border);border-left:3px solid var(--border);border-radius:8px;background:var(--panel2);
-    padding:clamp(4px,.5vmin,9px) clamp(6px,.6vmin,11px)}
-  .tchip .tcn{font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2.1vmin,34px);letter-spacing:1px;line-height:1;white-space:nowrap}
-  .tchip .tcs{font-size:clamp(10px,1vmin,16px);letter-spacing:1px;color:var(--dim);margin-top:3px;line-height:1}
-  .tchip.on{border-color:var(--green);border-left-color:var(--green);background:rgba(52,199,89,.10)}
-  .tchip.on .tcs{color:var(--green)}
-  .teams-body.err .tchip .tcs{color:var(--amber)}
-  .tchip.err{border-color:var(--amber)} .tchip.err .tcs{color:var(--amber)}
-  .tchip.oos{border-color:var(--red);border-left-color:var(--red);background:rgba(255,59,48,.12)}
-  .tchip.oos .tcn{color:var(--red)} .tchip.oos .tcs{color:var(--red)}
+  .tchip{display:flex;align-items:center;justify-content:center;text-align:center;
+    flex:0 0 auto;width:clamp(72px,7vmin,116px);height:clamp(30px,3.1vmin,50px);
+    border:2px solid var(--border);border-radius:9px;background:var(--panel2)}
+  .tchip .tcn{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.8vmin,29px);letter-spacing:1px;line-height:1;white-space:nowrap;color:var(--dim)}
+  .tchip.on{border-color:var(--green);background:rgba(52,199,89,.14)}
+  .tchip.on .tcn{color:var(--green)}
+  .tchip.err{border-color:var(--amber);background:rgba(255,193,7,.10)}
+  .tchip.err .tcn{color:var(--amber)}
+  .tchip.oos{border-color:var(--red);background:rgba(255,59,48,.14)}
+  .tchip.oos .tcn{color:var(--red)}
   .trow{display:flex;align-items:center;gap:10px;border-left:3px solid var(--border);border-radius:6px;background:var(--panel2);padding:clamp(3px,.4vmin,7px) clamp(8px,.9vmin,14px)}
   .trow .tn{flex:1 1 auto;min-width:0;font-size:clamp(11px,1.05vmin,17px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .trow .ts{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;font-size:clamp(12px,1.1vmin,18px);color:var(--dim)}
@@ -361,13 +368,6 @@
 </style>
 </head>
 <body>
-  <div class="uc-overlay" id="ucOverlay">
-    <div class="uc-card">
-      <div class="uc-title">Under Construction</div>
-      <div class="uc-body">This dashboard is still being built. Some tiles are placeholders and data may be incomplete &mdash; verify critical information through primary sources.</div>
-      <button class="uc-ok" id="ucOk">OK</button>
-    </div>
-  </div>
 
   <!-- Header -->
   <header>
@@ -424,7 +424,7 @@
     </div>
     <!-- Shift schedule — officer-set via control.html; vertical list, auto-paging on overflow -->
     <div class="tile sched-tile">
-      <div class="head"><span class="name">Shift Schedule</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
+      <div class="head"><span class="name">Shift Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
       <div class="sched-list" id="schedList"></div>
     </div>
     </div>
@@ -435,13 +435,21 @@
         <div class="head"><span class="name">Unit Status</span><span class="stamp src" id="teamsStamp">Loading&hellip;</span></div>
         <div class="teams-body" id="teamsBody"></div>
       </div>
-      <div class="tile hosp-tile">
-        <div class="head"><span class="name">Hospital Status</span><span class="stamp src" id="hospStamp">Loading&hellip;</span></div>
-        <div class="hosp-body" id="hospBody"></div>
+      <!-- Active Calls — CAD via the bc2fd-dash-auth worker /dispatch relay. Hidden until the
+           relay is configured (no feed ≠ failure); amber when a configured feed can't be reached. -->
+      <div class="tile calls-tile" id="callsTile" hidden>
+        <div class="head"><span class="name">Active Calls</span><span class="sched-page" id="callsPage" hidden></span></div>
+        <div class="calls-body" id="callsBody"></div>
       </div>
-      <div class="tile med-tile">
-        <div class="head"><span class="name">Medical Direction</span><span class="stamp src" id="medStamp">Loading&hellip;</span></div>
-        <div class="med-body" id="medBody"></div>
+      <div class="rrow">
+        <div class="tile hosp-tile">
+          <div class="head"><span class="name">Hospital Status</span><span class="stamp src" id="hospStamp">Loading&hellip;</span></div>
+          <div class="hosp-body" id="hospBody"></div>
+        </div>
+        <div class="tile med-tile">
+          <div class="head"><span class="name">Medical Direction</span><span class="stamp src" id="medStamp">Loading&hellip;</span></div>
+          <div class="med-body" id="medBody"></div>
+        </div>
       </div>
       <div class="tile">
         <div class="head"><span class="name">Fire Weather</span><span class="stamp src" id="fwStamp">Loading&hellip;</span></div>
@@ -459,9 +467,6 @@
     document.getElementById('date').textContent=n.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   }
   tick();setInterval(tick,1000);
-  (function(){var o=document.getElementById('ucOverlay');function hide(){o.classList.add('hide');}
-    document.getElementById('ucOk').addEventListener('click',hide);
-    o.addEventListener('click',function(e){if(e.target===o)hide();});})();
 
   /* ── District weather — live NWS (now + next hours) ── */
   var STATIONS=[ /* District 2 stations — lat/lon estimated from addresses; refine with exact geocode */
@@ -520,13 +525,15 @@
       var r=condRank(n.shortForecast); if(r>rank){rank=r;sf=n.shortForecast;}
       var hiS=(n.temperature!=null&&rh!=null)?wxHI(n.temperature,rh):n.temperature; if(hiS!=null&&(maxHI==null||hiS>maxHI))maxHI=hiS;});
     return {temp:maxT,rh:minRH,spd:maxSpd,gust:maxGust,dir:dir,sf:sf,hi:maxHI,day:(good[0][0]?good[0][0].isDaytime:true)};}
-  function aggHour(good,i){var maxT=null,maxSpd=-1,maxGust=null,maxP=-1,sf="",rank=-1,t0=null,day=true;
+  function aggHour(good,i){var maxT=null,maxSpd=-1,maxGust=null,maxP=-1,minRH=null,sf="",rank=-1,t0=null,day=true;
     good.forEach(function(P){var p=P[i]; if(!p)return; if(!t0){t0=p.startTime;day=p.isDaytime;}
       if(p.temperature!=null&&(maxT==null||p.temperature>maxT))maxT=p.temperature;
       var w=wxW(p); if(w.spd>maxSpd)maxSpd=w.spd; if(w.gust!=null&&(maxGust==null||w.gust>maxGust))maxGust=w.gust;
+      var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
+      if(rh!=null&&(minRH==null||rh<minRH))minRH=rh;                       /* driest across the 5 stations */
       var pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:0; if(pop>maxP)maxP=pop;
       var r=condRank(p.shortForecast); if(r>rank){rank=r;sf=p.shortForecast;}});
-    return {time:t0,temp:maxT,spd:maxSpd,gust:maxGust,pop:maxP<0?0:maxP,sf:sf,day:day};}
+    return {time:t0,temp:maxT,spd:maxSpd,gust:maxGust,pop:maxP<0?0:maxP,rh:minRH,sf:sf,day:day};}
   function renderAggregate(good,flag){
     try{ var _n=aggNow(good); FireWx.wx(_n); }catch(e){}
     var n=aggNow(good);
@@ -539,10 +546,11 @@
     var html="";
     for(var i=1;i<=6;i++){var a=aggHour(good,i); if(!a.time)break;
       var wt=a.gust!=null?("G"+a.gust):(a.spd>=0?(""+a.spd):"\u2014");
+      var rhTxt=(a.rh!=null?a.rh+"%":"\u2014"), rhCls=(a.rh!=null&&a.rh<=25)?" dry":"";
       html+='<div class="hcol"><div class="hh">'+wxHr(a.time)+'</div>'+wxIcon(a.sf,a.day)+
         '<div class="ht">'+(a.temp!=null?a.temp:"\u2014")+'&deg;</div>'+
         '<div class="hw'+(((a.gust&&a.gust>=25)||a.spd>=25)?" hot":"")+'">'+wt+'</div>'+
-        '<div class="hp'+(a.pop>=30?" wet":"")+'">'+a.pop+'%</div></div>';}
+        '<div class="hp'+rhCls+'">'+rhTxt+'</div></div>';}
     document.getElementById("wxHours").innerHTML=html;
     var fl=document.getElementById("wxFlag"), st=document.getElementById("wxStamp");
     var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false});
@@ -740,10 +748,17 @@
   (function(){
     var PXSEC=60;                                            /* scroll speed, px per second */
     function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-    var lastKey=null;
+    var lastKey=null, lastList=null;
+    function notExpired(a){                                  /* exp: "YYYY-MM-DDTHH:MM" from control's picker; blank = never */
+      if(!a.exp) return true;
+      var d=new Date(a.exp);
+      if(isNaN(d.getTime())) return true;                    /* unparseable: keep — never silently drop an officer's post */
+      return new Date() <= d;
+    }
     function setAnns(list){
+      lastList=list;
       var note=document.getElementById("annNote"); if(!note) return;
-      var anns=(list||[]).filter(function(a){ return a && a.text && String(a.text).trim(); });
+      var anns=(list||[]).filter(function(a){ return a && a.text && String(a.text).trim() && notExpired(a); });
       var key=JSON.stringify(anns);
       if(key===lastKey) return;                              /* unchanged — don't restart the scroll */
       lastKey=key;
@@ -760,6 +775,7 @@
       });
     }
     onBoardState(function(ok, st){ if(ok) setAnns((st&&st.announcements)||[]); /* fail -> keep last known */ });
+    setInterval(function(){ if(lastList) setAnns(lastList); }, 60000);   /* expiry sweep between polls */
   })();
 
   /* ── Medical Direction — subscribes to the state bus. Constants are VERBATIM copies of
@@ -798,43 +814,89 @@
     setInterval(function(){ if(lastOk!==null) render(lastOk,lastSt); }, 5*60*1000);   /* re-evaluate the revert window between polls */
   })();
 
-  /* ── Unit Status — UAV121/UAV124 are LIVE from the Firehawk schedule (never officer-set);
-     BC161 / BOAT124 / RESCUE124 are officer-set via control.html. Two independent sources,
-     each fails loud on its own: a Firehawk read failure ambers the UAV chips only, a board-state
-     failure ambers the officer chips only — never a green shown from a failed read. ── */
+  /* ── Active Calls — polls the dedicated dashboard worker (/dispatch), which holds the CAD
+     credentials and returns a normalized shape: {ok:true, calls:[{id,type,address,units:[..],started}]}.
+     Tile states: relay NOT CONFIGURED (worker 501) -> tile hidden, that's a legitimate "feature off";
+     zero calls -> dim idle line; calls -> red rows, autoRotate on overflow; configured-but-unreachable
+     -> visible amber (a dispatch feed that silently disappears is a false all-clear). ── */
   (function(){
-    var OFF=[["bat161","BC161"],["boat124","BOAT124"],["rescue124","RESCUE124"]];
-    var APP=[["l123","L123"],["ap124","AP124"],["l125","L125"]];   /* heavy apparatus — chip appears ONLY while OOS */
+    var URL_="https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/dispatch";
+    var REFRESH=30000, rot=null, everConfigured=false;
+    function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+    function stopRot(){ if(rot){ rot(); rot=null; } }
+    function elapsed(iso){ try{ var m=Math.floor((Date.now()-new Date(iso).getTime())/60000);
+      if(!isFinite(m)||m<0) return ""; return m<60?(m+"m"):(Math.floor(m/60)+"h"+(m%60)+"m"); }catch(e){ return ""; } }
+    function show(tileOn){ var tl=document.getElementById("callsTile"); if(tl) tl.hidden=!tileOn; }
+    function render(state, calls){
+      var body=document.getElementById("callsBody"), pg=document.getElementById("callsPage");
+      if(!body) return;
+      stopRot();
+      if(state==="off"){ show(false); return; }             /* relay not built/configured */
+      show(true);
+      if(state==="err"){ body.className="calls-body err";
+        body.innerHTML='<div class="idle">DISPATCH FEED UNAVAILABLE \u2014 verify via CAD / radio</div>';
+        if(pg) pg.hidden=true; return; }
+      body.className="calls-body";
+      if(!calls.length){ body.innerHTML='<div class="idle">\u2014 no active calls</div>'; if(pg) pg.hidden=true; return; }
+      var rows=calls.map(function(c){
+        var un=(c.units&&c.units.length)?c.units.join(" "):"";
+        return '<div class="call-e"><span class="ct">'+esc(c.type||"CALL")+'</span>'+
+               '<span class="ca">'+esc(c.address||"")+'</span>'+
+               (un?('<span class="cu">'+esc(un)+'</span>'):'')+
+               '<span class="ce">'+elapsed(c.started)+'</span></div>';
+      });
+      rot=autoRotate(body, rows, pg, 7000);
+    }
+    function load(){
+      fetch(URL_,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})
+        .then(function(r){
+          if(r.status===501||r.status===404){ render("off"); return null; }   /* feature off, not a failure */
+          if(!r.ok) throw new Error("HTTP "+r.status);
+          return r.json();
+        })
+        .then(function(j){
+          if(j===null) return;
+          if(!j.ok || !Array.isArray(j.calls)) { render("err"); return; }
+          everConfigured=true;
+          render("ok", j.calls);
+        })
+        .catch(function(){ render(everConfigured?"err":"off"); });   /* never-configured + unreachable worker -> stay hidden */
+    }
+    load(); setInterval(load, REFRESH);
+  })();
+
+  /* ── Unit Status — UAV121/UAV124 are LIVE from the Firehawk schedule (never officer-set);
+     B121 / BC161 / BOAT124 / RESCUE124 are officer-set via control.html; L123 / AP124 / L125
+     are heavy apparatus that appear ONLY while OOS. Color carries the whole signal:
+     GREEN = on/staffed · RED = out of service · AMBER = source unreachable (fail-loud,
+     never a false all-clear) · dim = not staffed. No status words on chips. ── */
+  (function(){
+    var OFF=[["b121","B121"],["bat161","BC161"],["boat124","BOAT124"],["rescue124","RESCUE124"]];
+    var APP=[["l123","L123"],["ap124","AP124"],["l125","L125"]];
     var stOk=null, stSt=null;
+    function chip(label, cls){ return '<div class="tchip'+(cls?(" "+cls):"")+'"><span class="tcn">'+label+'</span></div>'; }
     function uavChip(label, key){
       var s=window.UAV_STATE;
-      if(!s) return '<div class="tchip"><span class="tcn">'+label+'</span><span class="tcs">&hellip;</span></div>';
-      if(!s.ok) return '<div class="tchip err"><span class="tcn">'+label+'</span><span class="tcs">?</span></div>';
-      var on=!!s[key];
-      return '<div class="tchip'+(on?" on":"")+'"><span class="tcn">'+label+'</span><span class="tcs">'+(on?"ON DUTY":"\u2014")+'</span></div>';
+      if(!s) return chip(label,"");
+      if(!s.ok) return chip(label,"err");
+      return chip(label, s[key]?"on":"");
     }
     function render(){
-      var body=document.getElementById("teamsBody"), stamp=document.getElementById("teamsStamp");
+      var body=document.getElementById("teamsBody");
       if(!body) return;
       var html=uavChip("UAV121","u121")+uavChip("UAV124","u124");
       if(stOk===false){
         body.className="teams-body err";
-        html+=OFF.map(function(t){ return '<div class="tchip err"><span class="tcn">'+t[1]+'</span><span class="tcs">?</span></div>'; }).join("");
-        /* apparatus unknown on read-fail: hiding them would read as "all in service" — a false all-clear */
-        html+=APP.map(function(a){ return '<div class="tchip err"><span class="tcn">'+a[1]+'</span><span class="tcs">?</span></div>'; }).join("");
+        html+=OFF.map(function(t){ return chip(t[1],"err"); }).join("");
+        html+=APP.map(function(a){ return chip(a[1],"err"); }).join("");   /* hidden-on-fail would read as in-service */
       } else if(stOk===null){
         body.className="teams-body";
-        html+=OFF.map(function(t){ return '<div class="tchip"><span class="tcn">'+t[1]+'</span><span class="tcs">&hellip;</span></div>'; }).join("");
+        html+=OFF.map(function(t){ return chip(t[1],""); }).join("");
       } else {
         var tm=(stSt&&stSt.teams)||{}, ap=(stSt&&stSt.apparatus)||{};
         body.className="teams-body";
-        html+=OFF.map(function(t){
-          var on=!!tm[t[0]];
-          return '<div class="tchip'+(on?" on":"")+'"><span class="tcn">'+t[1]+'</span><span class="tcs">'+(on?"STAFFED":"\u2014")+'</span></div>';
-        }).join("");
-        html+=APP.filter(function(a){ return !!ap[a[0]]; }).map(function(a){   /* in-service apparatus stays off the board */
-          return '<div class="tchip oos"><span class="tcn">'+a[1]+'</span><span class="tcs">OOS</span></div>';
-        }).join("");
+        html+=OFF.map(function(t){ return chip(t[1], tm[t[0]]?"on":""); }).join("");
+        html+=APP.filter(function(a){ return !!ap[a[0]]; }).map(function(a){ return chip(a[1],"oos"); }).join("");
       }
       body.innerHTML=html;
     }
@@ -843,41 +905,42 @@
     onBoardState(function(ok,st){ stOk=ok; stSt=st; render(); });
   })();
 
-  /* ── Strike Teams — relocated into the Fire Weather tile (fire-context red styling).
-     Same officer-set state keys (teams.west / teams.east); display-only move. Fail-loud "?" on read fail. ── */
-  (function(){
-    var STK=[["west","WEST"],["east","EAST"]];
-    function render(ok, st){
-      var row=document.getElementById("strikeRow"); if(!row) return;
-      var tm=(ok&&st&&st.teams)||{};
-      row.innerHTML=STK.map(function(s){
-        var on=!!tm[s[0]];
-        return '<div class="s'+(on?" on":"")+'"><div class="n">'+s[1]+' STRIKE</div><div class="v">'+(!ok?"?":(on?"ACTIVE":"\u2014"))+'</div></div>';
-      }).join("");
-    }
-    onBoardState(render);
-  })();
-
-  /* ── Shift Schedule — vertical tile in the left column (officer-set state.calendar:[{time,desc}]).
-     Empty is a legitimate idle state (dim line, tile stays for layout stability). Read failure →
-     amber fail-loud, never a silent drop. Vertical overflow pages via the shared autoRotate helper. ── */
+  /* ── Shift Scheduled Events — officer-set state.calendar:[{date?,time,end?,desc}].
+     Sorted by date+start time. An event is NOW while start \u2264 now \u2264 end (no end = start+1h);
+     overlapping events can all be NOW. Auto-clears one hour after it ends — done work leaves
+     the board on its own. Dates: blank = today; unparseable entries display verbatim, sort last,
+     and never auto-clear (we don't guess). Read failure \u2192 amber fail-loud. ── */
   (function(){
     var rot=null, lastOk=null, lastSt=null;
     function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
     function stopRot(){ if(rot){ rot(); rot=null; } }
-    function parseDate(s){                                   /* "MM/DD" "M/D" "MM/DD/YYYY" "YYYY-MM-DD" -> Date | null */
+    function parseDate(s){
       if(!s) return null; s=String(s).trim(); var m, now=new Date();
       if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)))  return new Date(+m[1], +m[2]-1, +m[3]);
       if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))) return new Date(+m[3]<100?2000+ +m[3]:+m[3], +m[1]-1, +m[2]);
       if((m=s.match(/^(\d{1,2})\/(\d{1,2})$/)))          return new Date(now.getFullYear(), +m[1]-1, +m[2]);
-      return null;                                          /* unparseable -> shown verbatim, never guessed */
+      return null;
     }
-    function parseMin(tm){                                   /* "HH:MM" or "HHMM" 24h -> minutes | null */
+    function parseMin(tm){
       if(!tm) return null; var m=String(tm).trim().match(/^(\d{1,2}):?(\d{2})$/);
       if(!m) return null; var h=+m[1], mi=+m[2];
       return (h>23||mi>59)?null:h*60+mi;
     }
-    function isToday(d){ var n=new Date(); return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate(); }
+    function resolve(e){                                    /* -> {startDT,endDT,sortKey,valid} */
+      var today=new Date(); today.setHours(0,0,0,0);
+      var d = e.date ? parseDate(e.date) : new Date(today);
+      if(e.date && !d) return { valid:false, sortKey:Infinity };        /* unparseable date: verbatim, last, never cleared */
+      d.setHours(0,0,0,0);
+      var sMin=parseMin(e.time), eMin=parseMin(e.end);
+      var startDT, endDT;
+      if(sMin==null){ startDT=new Date(d); endDT=new Date(d.getTime()+86400000-60000); }   /* no time: all-day */
+      else{
+        startDT=new Date(d.getTime()+sMin*60000);
+        if(eMin!=null){ endDT=new Date(d.getTime()+eMin*60000); if(eMin<sMin) endDT=new Date(endDT.getTime()+86400000); } /* past-midnight end */
+        else endDT=new Date(startDT.getTime()+3600000);     /* no end: one-hour block */
+      }
+      return { valid:true, startDT:startDT, endDT:endDT, sortKey:startDT.getTime() };
+    }
     function render(ok, st){
       var list=document.getElementById("schedList"), pg=document.getElementById("schedPage");
       if(!list) return;
@@ -885,28 +948,28 @@
       if(!ok){ list.className="sched-list err";
         list.innerHTML='<div class="sched-e"><span class="ds">shift schedule unavailable \u2014 can\u2019t reach board state</span></div>';
         if(pg) pg.hidden=true; return; }
-      var cal=((st&&st.calendar)||[]).filter(function(e){ return e && (e.time || e.desc); });
+      var now=new Date();
+      var items=((st&&st.calendar)||[])
+        .filter(function(e){ return e && (e.time || e.desc); })
+        .map(function(e){ var r=resolve(e); r.e=e; return r; })
+        .filter(function(r){ return !r.valid || now.getTime() <= r.endDT.getTime()+3600000; })   /* clear 1h after end */
+        .sort(function(a,b){ return a.sortKey-b.sortKey; });
       list.className="sched-list";
-      if(!cal.length){ list.innerHTML='<div class="idle">\u2014 nothing scheduled</div>'; if(pg) pg.hidden=true; return; }
-      /* active = the latest today (or undated) entry whose start time has passed */
-      var nowMin=new Date().getHours()*60+new Date().getMinutes(), actIdx=-1, actMin=-1;
-      cal.forEach(function(e,i){
-        var d=parseDate(e.date);
-        if(e.date && (!d || !isToday(d))) return;            /* dated for another day (or unparseable) -> never "now" */
-        var m=parseMin(e.time);
-        if(m!=null && m<=nowMin && m>actMin){ actMin=m; actIdx=i; }
-      });
-      var rows=cal.map(function(e,i){
-        var d=parseDate(e.date), dtxt="";
-        if(e.date && !(d&&isToday(d))) dtxt='<span class="dt">'+esc(e.date)+'</span>';   /* show the date only when it isn't today */
-        var now=(i===actIdx);
-        return '<div class="sched-e'+(now?" now":"")+'"><span class="tm">'+esc(e.time||"\u2014")+'</span>'+dtxt+
-               '<span class="ds">'+esc(e.desc||"")+'</span>'+(now?'<span class="nowtag">NOW</span>':'')+'</div>';
+      if(!items.length){ list.innerHTML='<div class="idle">\u2014 nothing scheduled</div>'; if(pg) pg.hidden=true; return; }
+      var todayKey=new Date().toDateString();
+      var rows=items.map(function(r){
+        var e=r.e;
+        var isNow = r.valid && r.startDT<=now && now<=r.endDT && parseMin(e.time)!=null;
+        var dtxt = (e.date && !(r.valid && r.startDT.toDateString()===todayKey && (parseMin(e.time)!=null)))
+                   ? ((r.valid && r.startDT.toDateString()===todayKey) ? "" : '<span class="dt">'+esc(e.date)+'</span>') : "";
+        var endTxt = e.end ? ('<span class="tme">\u2013 '+esc(e.end)+'</span>') : "";
+        return '<div class="sched-e'+(isNow?" now":"")+'"><span class="tm">'+esc(e.time||"\u2014")+'</span>'+endTxt+dtxt+
+               '<span class="ds">'+esc(e.desc||"")+'</span>'+(isNow?'<span class="nowtag">NOW</span>':'')+'</div>';
       });
       rot=autoRotate(list, rows, pg, 7000);
     }
     onBoardState(function(ok,st){ lastOk=ok; lastSt=st; render(ok,st); });
-    setInterval(function(){ if(lastOk!==null) render(lastOk,lastSt); }, 60000);   /* re-evaluate the NOW window each minute */
+    setInterval(function(){ if(lastOk!==null) render(lastOk,lastSt); }, 60000);   /* NOW window + auto-clear tick each minute */
   })();
 
   /* ── Bexar County burn ban — TFS via the firehawk-wx worker /burnban endpoint
