@@ -1014,9 +1014,11 @@
       var isStation=function(u){ return /^\d{3}[A-F]$/i.test(u); };
       var real=units.filter(function(u){ return !isStation(u); });
       return (real.length?real:units).join(" "); }   /* real units supersede station assignments */
+    function ageBasis(c){ return c.logged||c.started||""; }   /* logged = worker first-seen UTC (trustworthy); started = A911's own stamp (TZ undocumented) */
     function freshOnly(calls){ return calls.filter(function(c){
-      if(!c.started) return true;                      /* no timestamp: keep (fail-visible) */
-      var m=(Date.now()-new Date(c.started).getTime())/60000;
+      var ts=ageBasis(c);
+      if(!ts) return true;                             /* no timestamp: keep (fail-visible) */
+      var m=(Date.now()-new Date(ts).getTime())/60000;
       return !isFinite(m)||m<=ADVISORY_MIN; }); }
     function render(state, calls){
       var body=document.getElementById("callsBody"), pg=document.getElementById("callsPage");
@@ -1035,7 +1037,7 @@
         return '<div class="call-e '+classify(c.type)+'"><span class="ct">'+esc(c.type||"CALL")+'</span>'+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
                (un?('<span class="cu">'+esc(un)+'</span>'):'')+
-               '<span class="ce">'+elapsed(c.started)+'</span></div>';
+               '<span class="ce">'+elapsed(ageBasis(c))+'</span></div>';
       });
       rot=autoRotate(body, rows, pg, 7000);
     }
@@ -1069,7 +1071,8 @@
           tallyOk=true;
           var since=tourStart().getTime(), counts={};
           j.calls.forEach(function(c){
-            if(c.started && new Date(c.started).getTime()<since) return;
+            var ts=c.logged||c.started;
+            if(ts && new Date(ts).getTime()<since) return;
             var sts=(c.stations||[]).map(function(s){ return s==="126"?"123":s; });   /* M126 -> Station 123 */
             var seen={};
             sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
