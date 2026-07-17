@@ -240,6 +240,28 @@
   .cx.offline{border-left-color:var(--amber)} .cx.offline .st{color:var(--amber)}
   .cx.open{border-left-color:var(--green)} .cx.open .st{color:var(--green)}
 
+  /* ── Wall TV readability (min-width:1500px, i.e. the 1920-effective 4K display):
+     raise the caps that were squint-sized from across a bay floor. iPad/phone untouched. ── */
+  @media (min-width:1500px){
+    .tile .head .name{font-size:clamp(18px,1.7vmin,30px)}
+    .calls-body .idle{font-size:clamp(15px,1.5vmin,24px)}
+    .call-e .ct{font-size:clamp(20px,2.1vmin,36px)}
+    .call-e .ca{font-size:clamp(16px,1.7vmin,28px)}
+    .call-e .cu{font-size:clamp(13px,1.4vmin,22px)}
+    .call-e .ce{font-size:clamp(17px,1.8vmin,30px)}
+    .sched-e .tm{font-size:clamp(24px,2.6vmin,44px)}
+    .sched-e .ds{font-size:clamp(18px,1.9vmin,32px)}
+    .sched-list .idle{font-size:clamp(15px,1.5vmin,24px)}
+    .tally .tlbl{font-size:clamp(11px,1vmin,16px)}
+    .tally .tchip2{font-size:clamp(14px,1.5vmin,24px)}
+    .med-body .mname{font-size:clamp(24px,2.6vmin,44px)}
+    .med-body .mphone{font-size:clamp(24px,2.6vmin,44px)}
+    .med-body .mrole{font-size:clamp(13px,1.3vmin,21px)}
+    .hosp-sub{font-size:clamp(13px,1.2vmin,20px)}
+    .hosp-list .hrow{font-size:clamp(15px,1.5vmin,24px)}
+    .tchip{font-size:clamp(14px,1.4vmin,23px)}
+  }
+
   /* ── Phone (portrait) — board becomes a stacked, scrollable status page; wall TV unaffected ── */
   @media (max-width:740px){
     html,body{height:auto;overflow:auto}
@@ -368,13 +390,13 @@
   .call-e.k-mvc{border-left-color:var(--accent);background:rgba(255,107,53,.12)} .call-e.k-mvc .ct{color:var(--accent)}
   .calls-body .idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px)}
   /* District 2 tour tally strip (per-station call counts, resets 0700 day 1) */
-  .tally{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:clamp(5px,.6vmin,10px);
-    border-top:1px solid rgba(48,54,61,.5);padding-top:clamp(4px,.45vmin,8px);margin-top:clamp(3px,.35vmin,6px)}
+  .tally{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:clamp(5px,.6vmin,12px);
+    border-top:1px solid rgba(48,54,61,.5);padding-top:clamp(4px,.45vmin,9px);margin-top:clamp(3px,.35vmin,6px)}
   .tally[hidden]{display:none}
-  .tally .tlbl{font-size:clamp(8px,.7vw,11px);letter-spacing:2px;color:var(--dim)}
-  .tally .tchip2{font-family:'DM Mono',monospace;font-size:clamp(10px,.95vmin,15px);color:var(--dim);
-    border:1px solid var(--border);border-radius:7px;background:var(--panel2);
-    padding:clamp(2px,.25vmin,4px) clamp(6px,.7vmin,11px);white-space:nowrap}
+  .tally .tlbl{flex:0 0 auto;font-size:clamp(8px,.75vw,13px);letter-spacing:2px;color:var(--dim)}
+  .tally .tchip2{flex:1 1 0;text-align:center;font-family:'DM Mono',monospace;font-size:clamp(10px,1.1vmin,18px);color:var(--dim);
+    border:1px solid var(--border);border-radius:8px;background:var(--panel2);
+    padding:clamp(3px,.4vmin,7px) clamp(4px,.5vmin,9px);white-space:nowrap}
   .tally .tchip2 b{color:var(--text);font-weight:500;margin-left:2px}
   .tally .tchip2.hot{border-color:var(--blue)} .tally .tchip2.hot b{color:var(--blue)}
   .calls-body.err .idle{color:var(--amber);font-style:normal}
@@ -534,6 +556,8 @@
         <span class="tchip2" data-st="123">123 <b>0</b></span>
         <span class="tchip2" data-st="124">124 <b>0</b></span>
         <span class="tchip2" data-st="125">125 <b>0</b></span>
+        <span class="tchip2" data-st="161">161 <b>0</b></span>
+        <span class="tchip2" data-st="162">162 <b>0</b></span>
       </div>
     </div>
     <!-- Shift schedule — officer-set via control.html; vertical list, auto-paging on overflow -->
@@ -1018,7 +1042,7 @@
     /* ── District 2 tour tally: counts /calls log per station 121-125 since 0700 of tour day 1.
        M126 rides with Station 123. Same anchor/flip math as the shift chip and schedule. ── */
     var TALLY_URL=URL_.replace("/dispatch","/calls");
-    var TALLY_ANCHOR=Date.UTC(2026,0,1), STATIONS=["121","122","123","124","125"];
+    var TALLY_ANCHOR=Date.UTC(2026,0,1), STATIONS=["121","122","123","124","125","161","162"];
     function tourStart(){
       var s=new Date(Date.now()-7*3600000);                  /* -7h holds prior tour until 0700 */
       var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-TALLY_ANCHOR)/86400000);
