@@ -239,6 +239,17 @@
     <!-- Fire Weather -->
     <!-- Specialty Units & OOS — one card: team staffing, ladder OOS, write-ins; optional expiry auto-reverts -->
     <div class="card">
+      <h2>Drone Streams <span class="tag">OFFICER</span></h2>
+      <div class="list-row"><input type="text" id="drLbl0" placeholder="Label (e.g. UAV121 — structure fire)" style="flex:1 1 38%;min-width:0">
+        <input type="url" id="drUrl0" placeholder="OpsHub share link (https://…)" style="flex:1 1 62%;min-width:0"></div>
+      <div class="list-row"><input type="text" id="drLbl1" placeholder="Label — stream 2 (optional)" style="flex:1 1 38%;min-width:0">
+        <input type="url" id="drUrl1" placeholder="Second stream link — board splits 50/50" style="flex:1 1 62%;min-width:0"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);margin-top:6px">
+        <input type="checkbox" id="drBanner"> Banner only (no embed) — use if the link refuses to display in the frame</label>
+      <div class="hint">Paste when a bird goes up, Save; clear the link and Save when it lands (board holds 30&thinsp;s, then closes). TV shows video full-screen; phones/iPads show a tappable DRONE LIVE badge.</div>
+    </div>
+
+    <div class="card">
       <h2>Specialty Units &amp; OOS <span class="tag">OFFICER</span></h2>
       <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on team staffing — when it passes, the team drops to — on its own. Ladders/AP have no dates: maintenance returns are unknown; flip them back In Service manually.</div>
       <div class="unit-row"><span class="ulabel">Brush 121</span><div class="seg red useg" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:b121" title="Expires (optional)"></div>
@@ -383,6 +394,7 @@ function defaults(){
   return {
     med:{ mode:'default', custom:{name:'',phone:''}, end:'' },
     hospitals:{},   /* id -> diversion status; absent = OPEN */
+    drone:{ streams:[{url:'',label:''},{url:'',label:''}], bannerOnly:false },   /* OpsHub share links; board pops overlay */
     fire:{ redFlag:'auto' },
     teams:{ b121:false, mac121:false, bat161:false, boat124:false, rescue124:false, west:false, east:false },
     apparatus:{ l123:false, ap124:false, l125:false },   /* true = OUT OF SERVICE */
@@ -498,6 +510,13 @@ function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,
 
 /* ── hydrate form from state ── */
 function hydrate(){
+  if(!state.drone||!Array.isArray(state.drone.streams)) state.drone={streams:[{url:'',label:''},{url:'',label:''}],bannerOnly:false};
+  while(state.drone.streams.length<2) state.drone.streams.push({url:'',label:''});
+  if($('drLbl0'))$('drLbl0').value=state.drone.streams[0].label||'';
+  if($('drUrl0'))$('drUrl0').value=state.drone.streams[0].url||'';
+  if($('drLbl1'))$('drLbl1').value=state.drone.streams[1].label||'';
+  if($('drUrl1'))$('drUrl1').value=state.drone.streams[1].url||'';
+  if($('drBanner'))$('drBanner').checked=!!state.drone.bannerOnly;
 
   segSet('segMed', state.med.mode);
   $('medName').value=state.med.custom.name||''; $('medPhone').value=state.med.custom.phone||'';
@@ -611,6 +630,13 @@ document.addEventListener('click', function(e){
 document.addEventListener('input', function(e){
   var t=e.target, wi=t.getAttribute&&t.getAttribute('data-wi'), wf=t.getAttribute&&t.getAttribute('data-wf');
   if(wi!=null&&wf){ state.writeins[+wi][wf]=t.value; }
+  if(t.id==='drLbl0'){ state.drone.streams[0].label=t.value; }
+  if(t.id==='drUrl0'){ state.drone.streams[0].url=t.value; }
+  if(t.id==='drLbl1'){ state.drone.streams[1].label=t.value; }
+  if(t.id==='drUrl1'){ state.drone.streams[1].url=t.value; }
+});
+document.addEventListener('change', function(e){
+  if(e.target.id==='drBanner'){ state.drone.bannerOnly=!!e.target.checked; }
 });
 document.addEventListener('change', function(e){
   var t=e.target, ux=t.getAttribute&&t.getAttribute('data-ux');

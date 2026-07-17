@@ -15,7 +15,7 @@
   :root{
     --bg:#0D1117; --panel:#161B22; --panel2:#1C2230; --border:#30363D;
     --text:#E6EDF3; --dim:#8B949E; --accent:#FF6B35; --blue:#3B82F6;
-    --green:#34C759; --amber:#FFC107; --red:#FF3B30; --shiftA:#FF3B30; --purple:#AF52DE;
+    --green:#34C759; --amber:#FFC107; --red:#FF3B30; --shiftA:#FF3B30; --purple:#AF52DE; --teal:#2DD4BF;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;height:100%;overflow:hidden}
@@ -240,6 +240,26 @@
   .cx.offline{border-left-color:var(--amber)} .cx.offline .st{color:var(--amber)}
   .cx.open{border-left-color:var(--green)} .cx.open .st{color:var(--green)}
 
+  /* ── Drone stream overlay + badge ── */
+  .drone-overlay{position:fixed;inset:0;z-index:900;background:#000;display:none;flex-direction:column}
+  .drone-overlay[hidden]{display:none}
+  @media (min-width:1500px){ .drone-overlay:not([hidden]){display:flex} }   /* TV only auto-plays */
+  .dro-banner{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:10px 22px;
+    background:rgba(13,17,23,.92);border-bottom:2px solid var(--red);
+    font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.2vmin,38px);letter-spacing:2px;color:var(--red)}
+  .dro-banner.ending{border-bottom-color:var(--amber);color:var(--amber)}
+  .dro-dot{width:14px;height:14px;border-radius:50%;background:var(--red);animation:pulse 1.6s ease-in-out infinite}
+  .dro-banner.ending .dro-dot{background:var(--amber);animation:none}
+  .dro-lbls{margin-left:auto;font-family:'DM Mono',monospace;font-size:clamp(12px,1.2vmin,20px);letter-spacing:1px;color:var(--text)}
+  .dro-frames{flex:1 1 auto;display:flex;min-height:0}
+  .dro-frames iframe{flex:1 1 0;width:100%;height:100%;border:0;background:#000}
+  .dro-frames .dro-link{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--text)}
+  .dro-frames .dro-link .big{font-family:'Bebas Neue',sans-serif;font-size:clamp(34px,4vmin,72px);letter-spacing:3px;color:var(--red)}
+  .dro-frames .dro-link .url{font-family:'DM Mono',monospace;font-size:clamp(13px,1.3vmin,22px);color:var(--dim);word-break:break-all;max-width:80%}
+  .hchip.drone-badge{display:none;text-decoration:none;border-color:var(--red);background:rgba(255,59,48,.14);animation:pulse 1.6s ease-in-out infinite}
+  .hchip.drone-badge .val{color:var(--red)}
+  @media (max-width:1499px){ .hchip.drone-badge.live{display:flex} }        /* iOS/small: badge, tap to open */
+
   /* ── Wall TV readability (min-width:1500px, i.e. the 1920-effective 4K display):
      raise the caps that were squint-sized from across a bay floor. iPad/phone untouched. ── */
   @media (min-width:1500px){
@@ -388,6 +408,8 @@
   .call-e.k-alarm{border-left-color:var(--purple);background:rgba(175,82,222,.12)} .call-e.k-alarm .ct{color:var(--purple)}
   .call-e.k-assist{border-left-color:var(--blue);background:rgba(59,130,246,.12)} .call-e.k-assist .ct{color:var(--blue)}
   .call-e.k-mvc{border-left-color:var(--accent);background:rgba(255,107,53,.12)} .call-e.k-mvc .ct{color:var(--accent)}
+  .call-e.k-gen{border-left-color:var(--green);background:rgba(52,199,89,.12)} .call-e.k-gen .ct{color:var(--green)}
+  .call-e.k-fuel{border-left-color:var(--teal);background:rgba(45,212,191,.12)} .call-e.k-fuel .ct{color:var(--teal)}
   .calls-body .idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px)}
   /* District 2 tour tally strip (per-station call counts, resets 0700 day 1) */
   .tally{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:clamp(5px,.6vmin,12px);
@@ -494,6 +516,7 @@
       <div class="sub">Bexar County Emergency Services District No. 2</div>
     </div>
     <div class="hchip burn unk" id="burnChip" title="Bexar County burn ban — TFS via firehawk-wx worker"><div class="lbl">BURN BAN</div><div class="val" id="burnVal">…</div></div>
+    <a class="hchip drone-badge" id="droneBadge" hidden target="_blank" rel="noopener"><div class="lbl">UAS</div><div class="val">DRONE LIVE</div></a>
     <div class="clock">
       <div class="time" id="clock">14:32:07</div>
       <div class="date" id="date">Wednesday · July 15, 2026</div>
@@ -517,6 +540,11 @@
   </div>
 
   <!-- 2×2 Quadrants -->
+  <!-- Drone stream overlay: TV full-screen; 2 live = 50/50 split; 30s grace on end -->
+  <div class="drone-overlay" id="droneOverlay" hidden>
+    <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><span id="droTitle">DRONE LIVE</span><span class="dro-lbls" id="droLbls"></span></div>
+    <div class="dro-frames" id="droFrames"></div>
+  </div>
   <div class="quad">
 
     <!-- Left column: District Weather (compact) over Shift Schedule -->
@@ -987,6 +1015,61 @@
     setInterval(function(){ if(lastOk!==null) render(lastOk,lastSt); }, 5*60*1000);   /* re-evaluate the revert window between polls */
   })();
 
+  /* ── Drone stream overlay — officer pastes OpsHub share links in control; board reacts via
+     dashboard state. TV (>=1500px) auto-plays full-screen (2 live = split); smaller screens get a
+     tappable header badge. Stream cleared in control -> 30s amber grace, then close. ── */
+  (function(){
+    var graceT=null, lastKey="", lastStreams=[], lastBannerOnly=false;
+    function escA(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+    function activeStreams(st){
+      var d=st&&st.drone; if(!d||!Array.isArray(d.streams)) return [];
+      return d.streams
+        .filter(function(s){ return s && typeof s.url==="string" && /^https:\/\//i.test(s.url.trim()); })
+        .slice(0,2)
+        .map(function(s){ return { url:s.url.trim(), label:String(s.label||"").trim() }; });
+    }
+    function buildFrames(streams, bannerOnly){
+      var fr=document.getElementById("droFrames"); if(!fr) return;
+      fr.innerHTML = streams.map(function(s){
+        if(bannerOnly) return '<div class="dro-link"><div class="big">DRONE LIVE'+(s.label?(' \u2014 '+escA(s.label)):'')+'</div>'+
+                              '<div class="url">'+escA(s.url)+'</div></div>';
+        return '<iframe src="'+escA(s.url)+'" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
+      }).join("");
+      var lb=document.getElementById("droLbls");
+      if(lb) lb.textContent = streams.map(function(s){ return s.label; }).filter(Boolean).join("  \u00b7  ");
+    }
+    function setEnding(on){
+      var b=document.getElementById("droBanner"), ttl=document.getElementById("droTitle");
+      if(b) b.className="dro-banner"+(on?" ending":"");
+      if(ttl) ttl.textContent = on ? "STREAM ENDED \u2014 CLEARING" : "DRONE LIVE";
+    }
+    function render(streams, bannerOnly){
+      var ov=document.getElementById("droneOverlay"), badge=document.getElementById("droneBadge");
+      if(!ov) return;
+      var key=streams.map(function(s){return s.url;}).join("|")+(bannerOnly?"#b":"");
+      if(streams.length){
+        if(graceT){ clearTimeout(graceT); graceT=null; }
+        setEnding(false);
+        if(key!==lastKey) buildFrames(streams, bannerOnly);   /* rebuild only on change: no reload flicker */
+        ov.hidden=false;
+        if(badge){ badge.hidden=false; badge.classList.add("live"); badge.href=streams[0].url; }
+        lastKey=key; lastStreams=streams; lastBannerOnly=bannerOnly;
+      } else {
+        if(badge){ badge.hidden=true; badge.classList.remove("live"); }
+        if(lastKey && !ov.hidden && !graceT){                 /* was live: 30s amber grace before closing */
+          setEnding(true);
+          graceT=setTimeout(function(){ graceT=null; lastKey="";
+            ov.hidden=true; var fr=document.getElementById("droFrames"); if(fr) fr.innerHTML=""; setEnding(false); }, 30000);
+        } else if(!lastKey){ ov.hidden=true; }
+      }
+    }
+    onBoardState(function(ok, st){
+      if(!ok) return;                                         /* state fetch failed: hold current overlay */
+      var d=st&&st.drone;
+      render(activeStreams(st), !!(d&&d.bannerOnly));
+    });
+  })();
+
   /* ── Active Calls — polls the dedicated dashboard worker (/dispatch), which holds the CAD
      credentials and returns a normalized shape: {ok:true, calls:[{id,type,address,units:[..],started}]}.
      Tile states: relay NOT CONFIGURED (worker 501) -> tile hidden, that's a legitimate "feature off";
@@ -1002,11 +1085,13 @@
     function show(tileOn){ var tl=document.getElementById("callsTile"); if(tl) tl.hidden=!tileOn;
       if(tileOn){ var tr=document.getElementById("tallyRow"); if(tr) tr.hidden=false; } }   /* zeros beat invisible */
     /* advisory board, not CAD: rows age out after 10 min */
-    var ADVISORY_MIN=10;
+    var ADVISORY_MIN=15;
     function classify(t){ t=String(t||"").toUpperCase();
+      if(/GENERAL/.test(t)) return "k-gen";
       if(/ALARM/.test(t)) return "k-alarm";
       if(/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "k-mvc";
       if(/FIRE|STRUCTURE|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "k-fire";
+      if(/GAS|FUEL|LEAK|SPILL|ODOR|HAZMAT|FLUID/.test(t)) return "k-fuel";
       if(/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZURE|OVERDOSE|DIABET/.test(t)) return "k-med";
       if(/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "k-assist";
       return ""; }
