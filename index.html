@@ -18,7 +18,7 @@
     --green:#34C759; --amber:#FFC107; --red:#FF3B30; --shiftA:#FF3B30;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%;overflow:hidden}
+  html,body{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;height:100%;overflow:hidden}
   body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;
     display:flex;flex-direction:column;height:100vh;
     padding:clamp(7px,.8vw,14px);gap:clamp(6px,.6vw,10px)}
@@ -523,7 +523,7 @@
     function unlock(){ var g=$g("gate"); if(g) g.classList.add("hide"); }
     function verify(pin, stored){
       var go=$g("gateGo"); if(go) go.disabled=true;
-      return fetch(DASH_AUTH+"/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:pin})})
+      return fetch(DASH_AUTH+"/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:pin,scope:"board"})})
         .then(function(r){ return r.json().then(function(j){ return {status:r.status,j:j}; }); })
         .then(function(res){
           if(go) go.disabled=false;

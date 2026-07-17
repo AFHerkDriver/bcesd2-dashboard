@@ -294,7 +294,7 @@
   function verify(pin, silent){
     var go=$g('gateGo'); if(go) go.disabled=true;
     if(!silent) msg('Checking\u2026','');
-    return fetch(AUTH_URL+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})})
+    return fetch(AUTH_URL+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin,scope:'control'})})
       .then(function(r){ return r.json().then(function(j){ return {status:r.status, j:j}; }); })
       .then(function(res){
         if(go) go.disabled=false;
@@ -302,7 +302,8 @@
           try{ sessionStorage.setItem(SKEY, JSON.stringify({pin:pin, name:res.j.name})); }catch(e){}
           unlock(res.j.name); return true;
         }
-        if(res.status===429){ msg('Too many attempts \u2014 wait 5 minutes','warn'); }
+        if(res.status===403){ msg('That PIN is display-only \u2014 it can\u2019t open the control panel','bad'); shake(); }
+        else if(res.status===429){ msg('Too many attempts \u2014 wait 5 minutes','warn'); }
         else if(!silent){ msg('Wrong PIN','bad'); shake(); }
         return false;
       })
