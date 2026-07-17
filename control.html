@@ -116,6 +116,25 @@
     font-size:12px;letter-spacing:1px;padding:8px 18px;border-radius:20px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:60}
   .saved.show{opacity:1}
   .saved.err{background:var(--red);color:#fff}
+  /* ── PIN gate ── */
+  .gate{position:fixed;inset:0;z-index:999;background:rgba(6,9,14,.96);display:flex;align-items:center;justify-content:center;
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .gate.hide{display:none}
+  .gate-card{background:var(--panel,#161B22);border:1px solid #30363D;border-radius:16px;padding:34px 30px;width:min(88vw,360px);
+    text-align:center;box-shadow:0 16px 48px rgba(0,0,0,.6)}
+  .gate-title{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:3px;color:#FF6B35;line-height:1}
+  .gate-sub{font-size:11px;color:#8B949E;letter-spacing:1px;margin:6px 0 20px}
+  .gate-pin{width:100%;box-sizing:border-box;font-size:24px;letter-spacing:10px;text-align:center;font-family:'DM Mono',monospace;
+    background:#0D1117;border:1px solid #30363D;border-radius:10px;color:#E6EDF3;padding:12px 8px;outline:none}
+  .gate-pin:focus{border-color:#FF6B35}
+  .gate-btn{width:100%;margin-top:14px;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;cursor:pointer;
+    background:#FF6B35;color:#000;border:0;border-radius:10px;padding:12px 0;min-height:44px}
+  .gate-btn:disabled{opacity:.5}
+  .gate-msg{margin-top:12px;font-size:12px;letter-spacing:.5px;min-height:16px}
+  .gate-msg.bad{color:#FF3B30}
+  .gate-msg.warn{color:#FFC107}
+  @keyframes gateshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+  .gate-card.shake{animation:gateshake .3s ease}
 </style>
 </head>
 <body>
@@ -132,9 +151,21 @@
     </div>
   </div>
 
+  <!-- ── PIN GATE — officer access via the dedicated bc2fd-dash-auth Cloudflare Worker.
+       Fail-closed: no verify, no panel. Session lasts until the tab closes. ── -->
+  <div class="gate" id="gate">
+    <div class="gate-card">
+      <div class="gate-title">OFFICER ACCESS</div>
+      <div class="gate-sub">BC2FD Station Dashboard &middot; Control Panel</div>
+      <input class="gate-pin" id="gatePin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="PIN">
+      <button class="gate-btn" id="gateGo">Unlock</button>
+      <div class="gate-msg" id="gateMsg"></div>
+    </div>
+  </div>
+
   <div class="wrap">
 
-    <div class="notice">🔓 Unprotected — PIN login is not built yet. This page will sit behind an officer PIN (Cloudflare Worker) before go-live.</div>
+    <div class="notice" id="lockNotice">🔒 Checking access&hellip;</div>
 
     <!-- Shift & UAV — auto from Firehawk, not editable here -->
     <div class="card">
@@ -242,6 +273,52 @@
   <div class="saved" id="savedToast">✓ Saved</div>
 
 <script>
+/* ── PIN GATE — verifies against the dedicated dashboard auth worker (bc2fd-dash-auth).
+   Fail-closed: a wrong PIN, a rate limit, or an unreachable worker all keep the panel locked.
+   NOTE (honest scope): this gates the PAGE. Board-state writes still go direct to Firestore;
+   locking the write path itself is the Phase B worker-relay job. ── */
+(function(){
+  var AUTH_URL='https://bc2fd-dash-auth.usafsentinel-45e.workers.dev';   /* worker MUST be named bc2fd-dash-auth */
+  var SKEY='bc2fd_ctl_auth';
+  function $g(id){ return document.getElementById(id); }
+  function msg(txt, cls){ var m=$g('gateMsg'); if(m){ m.textContent=txt||''; m.className='gate-msg'+(cls?(' '+cls):''); } }
+  function unlock(name){
+    var g=$g('gate'); if(g) g.classList.add('hide');
+    var n=$g('lockNotice'); if(n) n.textContent='🔒 Officer access \u00b7 '+(name||'verified');
+  }
+  function shake(){ var c=document.querySelector('.gate-card'); if(!c) return; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
+  function verify(pin, silent){
+    var go=$g('gateGo'); if(go) go.disabled=true;
+    if(!silent) msg('Checking\u2026','');
+    return fetch(AUTH_URL+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})})
+      .then(function(r){ return r.json().then(function(j){ return {status:r.status, j:j}; }); })
+      .then(function(res){
+        if(go) go.disabled=false;
+        if(res.j && res.j.ok){
+          try{ sessionStorage.setItem(SKEY, JSON.stringify({pin:pin, name:res.j.name})); }catch(e){}
+          unlock(res.j.name); return true;
+        }
+        if(res.status===429){ msg('Too many attempts \u2014 wait 5 minutes','warn'); }
+        else if(!silent){ msg('Wrong PIN','bad'); shake(); }
+        return false;
+      })
+      .catch(function(){
+        if(go) go.disabled=false;
+        msg('AUTH SERVICE UNREACHABLE \u2014 panel stays locked','warn');   /* fail closed, never fail open */
+        return false;
+      });
+  }
+  function submit(){ var p=($g('gatePin').value||'').trim(); if(!p){ msg('Enter your PIN',''); return; } verify(p,false); }
+  document.addEventListener('DOMContentLoaded', function(){
+    var go=$g('gateGo'), pin=$g('gatePin');
+    if(go) go.addEventListener('click', submit);
+    if(pin) pin.addEventListener('keydown', function(e){ if(e.key==='Enter') submit(); });
+    var saved=null; try{ saved=JSON.parse(sessionStorage.getItem(SKEY)||'null'); }catch(e){}
+    if(saved && saved.pin){ verify(saved.pin, true).then(function(ok){ if(!ok){ try{ sessionStorage.removeItem(SKEY); }catch(e){} msg('Session expired \u2014 enter PIN',''); } }); }
+    else msg('','');
+  });
+})();
+
 /* ─────────────────────────────────────────────
    STORE — interim persistence layer.
    Reads/writes localStorage (same-origin on GitHub Pages,
