@@ -107,15 +107,15 @@
   .lcol{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
   .lcol > .wxrow{flex:.8 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .wxrow > .tile{min-width:0;min-height:0}
-  .wxrow > .wx-tile{flex:1.05 1 0}
-  .wxrow > .teams-tile{flex:1 1 0}
-  .sched-tile{flex:1.2 1 0;min-height:0}
+  .wxrow > .wx-tile{flex:1.6 1 0}
+  .wxrow > .teams-tile{flex:.55 1 0}
+  .sched-tile{flex:.6 1 0;min-height:0}
   .rcol{flex:.85 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rcol > .tile{flex:1 1 0;min-height:0}
   .rcol > .rrow{flex:.8 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rrow > .hosp-tile{flex:1.5 1 0;min-width:0}
   .rrow > .med-tile{flex:1 1 0;min-width:0}
-  .lcol > .calls-tile{flex:1 1 0;min-height:0}
+  .lcol > .calls-tile{flex:1.7 1 0;min-height:0}
   .lcol > .calls-tile[hidden]{display:none}
   .empty-body{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;color:var(--dim);
     font-size:clamp(11px,1vmin,16px);letter-spacing:1px}
@@ -240,6 +240,20 @@
   .cx.offline{border-left-color:var(--amber)} .cx.offline .st{color:var(--amber)}
   .cx.open{border-left-color:var(--green)} .cx.open .st{color:var(--green)}
 
+  /* ── Fire-weather hourly pills: RH · wind · temp per hour, tier-colored ── */
+  .fw-pills{display:flex;flex-wrap:wrap;gap:clamp(4px,.5vmin,9px);justify-content:center;
+    margin-top:clamp(5px,.6vmin,11px)}
+  .fwp{display:flex;align-items:baseline;gap:clamp(4px,.45vmin,8px);border:1px solid var(--border);
+    border-radius:8px;background:var(--panel2);padding:clamp(3px,.35vmin,6px) clamp(6px,.7vmin,12px);
+    font-family:'DM Mono',monospace;font-size:clamp(9px,.9vmin,14px);white-space:nowrap}
+  .fwp .ph{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--dim);font-size:clamp(11px,1.05vmin,17px)}
+  .fwp .pv{color:var(--text)}
+  .fwp.t0{border-color:var(--green)} .fwp.t0 .ph{color:var(--green)}
+  .fwp.t1{border-color:var(--amber);background:rgba(255,193,7,.08)} .fwp.t1 .ph{color:var(--amber)}
+  .fwp.t2{border-color:var(--accent);background:rgba(255,107,53,.10)} .fwp.t2 .ph{color:var(--accent)}
+  .fwp.t3{border-color:var(--red);background:rgba(255,59,48,.14)} .fwp.t3 .ph{color:var(--red)}
+  .fwp.t3 .pv{color:var(--red)}
+
   /* ── Drone stream overlay + badge ── */
   .drone-overlay{position:fixed;inset:0;z-index:900;background:#000;display:none;flex-direction:column}
   .drone-overlay[hidden]{display:none}
@@ -274,12 +288,36 @@
     .sched-list .idle{font-size:clamp(15px,1.5vmin,24px)}
     .tally .tlbl{font-size:clamp(11px,1vmin,16px)}
     .tally .tchip2{font-size:clamp(14px,1.5vmin,24px)}
-    .med-body .mname{font-size:clamp(24px,2.6vmin,44px)}
-    .med-body .mphone{font-size:clamp(24px,2.6vmin,44px)}
-    .med-body .mrole{font-size:clamp(13px,1.3vmin,21px)}
-    .hosp-sub{font-size:clamp(13px,1.2vmin,20px)}
-    .hosp-list .hrow{font-size:clamp(15px,1.5vmin,24px)}
+    .med-body .mname{font-size:clamp(28px,3vmin,52px)}
+    .med-body .mphone{font-size:clamp(28px,3vmin,52px)}
+    .med-body .mrole{font-size:clamp(15px,1.55vmin,25px)}
+    .hosp-msg{font-size:clamp(26px,3vmin,52px)}
+    .hosp-sub{font-size:clamp(14px,1.4vmin,23px)}
+    .hosp-list .hrow{font-size:clamp(17px,1.8vmin,29px)}
+    /* header: shield, title, clock, chips */
+    .shield{width:clamp(56px,4.8vw,94px)}
+    .id h1{font-size:clamp(28px,3.1vw,54px)}
+    .id .sub{font-size:clamp(11px,1.05vw,17px)}
+    .clock .time{font-size:clamp(40px,4.4vw,76px)}
+    .clock .date{font-size:clamp(12px,1.15vw,19px)}
+    .hchip .lbl{font-size:clamp(10px,.9vw,15px)}
+    .hchip .val{font-size:clamp(26px,2.7vw,46px)}
+    .hchip{min-width:clamp(104px,9.6vw,164px)}
+    /* announcements ticker (now bottom of screen) */
+    .banner .tag{font-size:clamp(17px,1.6vw,27px)}
+    .banner .note{font-size:clamp(16px,1.5vw,25px)}
+    .tick-track .ti .tw{font-size:clamp(12px,1.1vw,18px)}
+    .ann-page{font-size:clamp(12px,1.05vw,18px)}
+    /* district weather 12-hour outlook */
+    .hcol .hh{font-size:clamp(16px,1.7vmin,29px)}
+    .hcol .wic{width:clamp(28px,2.7vmin,46px);height:clamp(28px,2.7vmin,46px)}
+    .hcol .ht{font-size:clamp(19px,2.1vmin,35px)}
+    .hcol .hw{font-size:clamp(16px,1.7vmin,29px)}
+    .hcol .hp{font-size:clamp(15px,1.55vmin,26px)}
+    .wx-ic .wic{width:clamp(36px,3.2vmin,56px);height:clamp(36px,3.2vmin,56px)}
     .tchip{font-size:clamp(14px,1.4vmin,23px)}
+    .fwp{font-size:clamp(12px,1.15vmin,19px)}
+    .fwp .ph{font-size:clamp(14px,1.35vmin,22px)}
   }
 
   /* ── Phone (portrait) — board becomes a stacked, scrollable status page; wall TV unaffected ── */
@@ -398,8 +436,8 @@
     border-left:4px solid var(--red);border-radius:7px;background:rgba(255,59,48,.10)}
   .call-e .ct{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,26px);letter-spacing:1px;color:var(--red);flex:0 0 auto;white-space:nowrap}
   .call-e .ca{font-size:clamp(12px,1.2vmin,19px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .call-e .cu{font-family:'DM Mono',monospace;font-size:clamp(10px,1vmin,16px);color:var(--dim);flex:0 0 auto;white-space:nowrap}
-  .call-e .ce{margin-left:auto;flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vmin,22px);letter-spacing:1px;color:var(--accent)}
+  .call-e .cu{margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(10px,1.05vmin,17px);color:var(--green);flex:0 0 auto;white-space:nowrap}
+  .call-e .ce{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vmin,22px);letter-spacing:1px;color:var(--accent)}
   .calls-body.compact .call-e .ct{font-size:clamp(12px,1.25vmin,20px)}
   .calls-body.compact .call-e .ca{font-size:clamp(10px,1vmin,16px)}
   /* call-type color coding: med=yellow fire=red alarm=purple assist=blue mvc=orange (default red) */
@@ -524,12 +562,6 @@
     <div class="hchip shift" id="shiftChip"><div class="lbl">ON DUTY</div><div class="val" id="shiftVal">A</div></div>
   </header>
 
-  <!-- Announcements ticker (officer-set, rotates) -->
-  <div class="banner" id="annBanner">
-    <span class="tag">ANNOUNCEMENTS</span>
-    <div class="note" id="annNote">&hellip;</div>
-  </div>
-
   <!-- NWS alert lane — live; hidden when zero active alerts, fail-loud if NWS unreachable -->
 
   <!-- Flood ops band — appears only while a Warning-tier flood product is active -->
@@ -593,6 +625,10 @@
       <div class="head"><span class="name">Shift Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
       <div class="sched-list" id="schedList"></div>
     </div>
+    <div class="tile empty-tile">
+      <div class="head"><span class="name">Empty Tile</span></div>
+      <div class="empty-body">&mdash; Open slot &mdash;</div>
+    </div>
     </div>
 
     <!-- Right column: Hospital + Medical (top) · NWS Alerts · Empty -->
@@ -619,6 +655,12 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- Announcements ticker (officer-set, rotates) — bottom of screen for wall readability -->
+  <div class="banner" id="annBanner">
+    <span class="tag">ANNOUNCEMENTS</span>
+    <div class="note" id="annNote">&hellip;</div>
   </div>
 
 <script>
@@ -745,7 +787,7 @@
     document.getElementById("wxRH").textContent=(n.rh!=null?n.rh+"%":"\u2014");
     document.getElementById("wxWind").innerHTML=(n.spd>=0?n.spd:"\u2014")+(n.gust!=null?(' <em>G'+n.gust+'</em>'):"")+(n.dir?" "+n.dir:"");
     var html="";
-    for(var i=1;i<=6;i++){var a=aggHour(good,i); if(!a.time)break;
+    for(var i=1;i<=12;i++){var a=aggHour(good,i); if(!a.time)break;
       var wt=a.gust!=null?("G"+a.gust):(a.spd>=0?(""+a.spd):"\u2014");
       var rhTxt=(a.rh!=null?a.rh+"%":"\u2014"), rhCls=(a.rh!=null&&a.rh<=25)?" dry":"";
       html+='<div class="hcol"><div class="hh">'+wxHr(a.time)+'</div>'+wxIcon(a.sf,a.day)+
@@ -753,6 +795,8 @@
         '<div class="hw'+(((a.gust&&a.gust>=25)||a.spd>=25)?" hot":"")+'">'+wt+'</div>'+
         '<div class="hp'+rhCls+'">'+rhTxt+'</div></div>';}
     document.getElementById("wxHours").innerHTML=html;
+    var fhrs=[]; for(var j=1;j<=12;j++){ var b=aggHour(good,j); if(!b.time)break; fhrs.push(b); }
+    try{ FireWx.hours(fhrs); }catch(e){}
     var fl=document.getElementById("wxFlag"), st=document.getElementById("wxStamp");
     var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false});
     if(!flag){fl.hidden=true; st.textContent="NWS \u00b7 5-sta worst-case \u00b7 "+tm;}
@@ -1353,16 +1397,40 @@
      Fail-loud: unknown NWS status shows amber "STATUS UNKNOWN" with the numbers still up. ── */
   var FireWx=(function(){
     var WX="https://firehawk-wx.usafsentinel-45e.workers.dev";
-    var nws=null, mode="auto", agg=null;
+    var nws=null, mode="auto", agg=null, hrs=null;
     function cls(v,warn,bad,invert){ if(v==null)return "ok";
       return invert ? (v<=bad?"bad":v<=warn?"warn":"ok") : (v>=bad?"bad":v>=warn?"warn":"ok"); }
+    /* per-hour fire-weather tier 0-3 (green/yellow/orange/red). Mirrors STX Red Flag combo:
+       red only when dry AND windy; a single critical factor floors at orange. */
+    function fwTier(rh,spd,gust,temp){
+      var wEff=(spd!=null&&spd>=0)?spd:null;
+      if(gust!=null) wEff=Math.max(wEff==null?0:wEff, gust-10);   /* gusts count, discounted */
+      var rt = rh==null?0 : rh>=40?0 : rh>=30?1 : rh>=25?2 : 3;
+      var wt = wEff==null?0 : wEff<15?0 : wEff<20?1 : wEff<25?2 : 3;
+      var s = rt+wt + ((temp!=null&&temp>=100)?1:0);
+      var t = s<=1?0 : s<=3?1 : s===4?2 : 3;
+      if((rt===3||wt===3)&&t<2) t=2;
+      return t;
+    }
+    function hr24(iso){ try{ var x=new Date(iso).getHours(); return ("0"+x).slice(-2); }catch(e){ return "\u2014"; } }
+    function pills(){
+      if(!hrs||!hrs.length) return "";
+      return '<div class="fw-pills">'+hrs.map(function(a){
+        var t=fwTier(a.rh,a.spd,a.gust,a.temp);
+        var w=(a.spd>=0?a.spd:"\u2014")+(a.gust!=null?"G"+a.gust:"");
+        return '<div class="fwp t'+t+'"><span class="ph">'+hr24(a.time)+'</span>'+
+               '<span class="pv">'+(a.rh!=null?a.rh+"%":"\u2014")+'</span>'+
+               '<span class="pv">'+w+'</span>'+
+               '<span class="pv">'+(a.temp!=null?a.temp+"\u00b0":"\u2014")+'</span></div>';
+      }).join("")+'</div>';
+    }
     function render(){
       var body=document.getElementById("fwBody"), stamp=document.getElementById("fwStamp");
       if(!body) return;
       var active = mode==="on" ? true : mode==="off" ? false : (nws===true);
       var unknown = mode==="auto" && nws===null;
       if(!active && !unknown){
-        body.innerHTML='<div class="fw-idle">No Red Flag Warning</div>';
+        body.innerHTML='<div class="fw-idle">No Red Flag Warning</div>'+pills();
         if(stamp) stamp.textContent = mode==="off" ? "officer: forced off" : "NWS auto";
         return;
       }
@@ -1375,7 +1443,7 @@
         box("RH", rh, cls(rh,25,15,true), "%")+
         box("WIND", w!=null?(""+w+(g!=null?" G"+g:"")):null, cls(wmax,20,25), "")+
         box("TEMP", t, cls(t,95,100), "°")+
-        '</div>';
+        '</div>'+pills();
       if(stamp) stamp.textContent = (mode==="on"?"officer: forced on":"NWS")+" · worst of 5 stations";
     }
     function loadNws(){
@@ -1386,7 +1454,7 @@
     }
     loadNws(); setInterval(loadNws, 10*60*1000);
     onBoardState(function(ok,st){ mode=(ok&&st&&st.fire&&st.fire.redFlag)||"auto"; render(); });
-    return { wx:function(n){ agg=n; render(); } };
+    return { wx:function(n){ agg=n; render(); }, hours:function(a){ hrs=a; render(); } };
   })();
 
   var FloodOps=(function(){
