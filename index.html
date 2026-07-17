@@ -1224,11 +1224,50 @@
         } else if(!lastKey){ ov.hidden=true; }
       }
     }
+    /* Two sources feed the overlay: officer-pasted OpsHub links (board state) and auto-detected
+       DroneSense aircraft (worker /drones). Auto-detected live drones take the overlay; officer
+       paste is the fallback/override when nothing is auto-detected. */
+    var officerStreams=[], autoStreams=[], bannerPref=false;
+    function recompute(){ render(autoStreams.length ? autoStreams : officerStreams, bannerPref); }
     onBoardState(function(ok, st){
       if(!ok) return;                                         /* state fetch failed: hold current overlay */
       var d=st&&st.drone;
-      render(activeStreams(st), !!(d&&d.bannerOnly));
+      officerStreams=activeStreams(st); bannerPref=!!(d&&d.bannerOnly);
+      recompute();
     });
+    /* ── DroneSense auto-detect (Phase 2): poll the worker /drones relay every 15s. Active aircraft
+       with a playable video_url auto-populate the overlay — no manual paste. Only a SUCCESSFUL list
+       (incl. empty = landed) or an explicit "feature off" changes the auto set; transient errors hold
+       the current live view so a network blip never blanks a flight. video_url embed vs. the officer's
+       Banner Only toggle is honored, so if DroneSense refuses framing it degrades to callsign + link. ── */
+    (function(){
+      var DR_URL="https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/drones", POLL=15000;
+      function setAuto(next){
+        var key=next.map(function(s){return s.url;}).join("|"), prev=autoStreams.map(function(s){return s.url;}).join("|");
+        if(key!==prev){ autoStreams=next; recompute(); }
+      }
+      function load(){
+        var pin=window.BOARD_PIN?window.BOARD_PIN():""; if(!pin) return;
+        fetch(DR_URL+"?pin="+encodeURIComponent(pin))
+          .then(function(r){
+            if(r.status===501){ return {ok:true, off:true}; }  /* feature off -> no auto streams */
+            if(!r.ok) return null;                             /* transient -> hold current auto view */
+            return r.json();
+          })
+          .then(function(j){
+            if(j===null) return;                               /* transient error: hold */
+            if(j.off){ setAuto([]); return; }
+            if(!j.ok || !Array.isArray(j.drones)) return;      /* bad shape: hold */
+            var next=j.drones
+              .filter(function(d){ return d && typeof d.video_url==="string" && /^https:\/\//i.test(d.video_url); })
+              .slice(0,2)
+              .map(function(d){ return { url:d.video_url, label:(d.callSign||d.model||"UAS") }; });
+            setAuto(next);                                     /* authoritative (incl. empty = drone landed) */
+          })
+          .catch(function(){ /* network error: hold current auto view */ });
+      }
+      load(); setInterval(load, POLL);
+    })();
   })();
 
   /* ── Active Calls — polls the dedicated dashboard worker (/dispatch), which holds the CAD
