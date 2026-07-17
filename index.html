@@ -92,11 +92,10 @@
 
   /* ── 2×2 Quadrant grid (balanced, no scroll) ─ */
   .quad{flex:1 1 auto;display:flex;gap:clamp(6px,.6vw,10px);min-height:0}
-  .wx-tile{flex:1.05 1 0;min-width:0}                 /* weather owns the full-height left column */
+  .wx-tile{flex:.8 1 0;min-width:0}                   /* weather column narrowed so the dense right column gets more room */
   .rcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vw,10px);min-height:0}
   .rcol > .tile{flex:1 1 0;min-height:0}
   .rcol > .hosp-tile{flex:1.35 1 0}                   /* hospital status gets the most room on the right */
-  .rcol > .med-tile{flex:.72 1 0}                     /* medical direction is compact — role/name/phone only */
   .tile{background:var(--panel);border:1px solid var(--border);border-radius:11px;
     padding:clamp(8px,.85vw,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
   .tile .head{display:flex;align-items:baseline;gap:8px;margin-bottom:clamp(4px,.5vw,9px);flex:0 0 auto}
@@ -296,7 +295,7 @@
   .hchip.burn.off{border-color:var(--border);background:var(--panel2)} .hchip.burn.off .val{color:var(--dim)}
   .hchip.burn.unk{border-color:var(--amber);background:rgba(255,193,7,.12)} .hchip.burn.unk .val{color:var(--amber)}
   /* Medical Direction tile */
-  .med-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:clamp(2px,.3vw,6px)}
+  .med-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;gap:clamp(2px,.3vw,6px)}
   .med-body .mrole{font-size:clamp(9px,.8vw,13px);letter-spacing:2px;color:var(--dim);text-transform:uppercase}
   .med-body .mname{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vw,26px);letter-spacing:1px;line-height:1.05}
   .med-body .mphone{font-size:clamp(13px,1.3vw,22px);color:var(--accent);letter-spacing:1px}
