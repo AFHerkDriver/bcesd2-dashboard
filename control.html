@@ -240,16 +240,16 @@
     <!-- Specialty Units & OOS — one card: team staffing, ladder OOS, write-ins; optional expiry auto-reverts -->
     <div class="card">
       <h2>Specialty Units &amp; OOS <span class="tag">OFFICER</span></h2>
-      <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on any unit — when it passes, the status reverts on its own (teams drop to —, ladders return to service).</div>
+      <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on team staffing — when it passes, the team drops to — on its own. Ladders/AP have no dates: maintenance returns are unknown; flip them back In Service manually.</div>
       <div class="unit-row"><span class="ulabel">Brush 121</span><div class="seg red useg" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:b121" title="Expires (optional)"></div>
       <div class="unit-row"><span class="ulabel">MAC 121</span><div class="seg red useg" id="segMac121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:mac121" title="Expires (optional)"></div>
       <div class="unit-row"><span class="ulabel">Battalion 161</span><div class="seg red useg" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:bat161" title="Expires (optional)"></div>
       <div class="unit-row"><span class="ulabel">Boat Team 124</span><div class="seg red useg" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:boat124" title="Expires (optional)"></div>
       <div class="unit-row"><span class="ulabel">Rescue Team 124</span><div class="seg red useg" id="segRescue124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:rescue124" title="Expires (optional)"></div>
-      <div class="unit-row"><span class="ulabel">Ladder 123</span><div class="seg red useg" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:l123" title="OOS expires (optional)"></div>
-      <div class="unit-row"><span class="ulabel">Aerial Platform 124</span><div class="seg red useg" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:ap124" title="OOS expires (optional)"></div>
-      <div class="unit-row"><span class="ulabel">Ladder 125</span><div class="seg red useg" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:l125" title="OOS expires (optional)"></div>
-      <div class="hint" style="margin-top:10px">Write-in units — anything not listed above (borrowed engine, task force, tender). Shows as a green (staffed) or red (OOS) pill.</div>
+      <div class="unit-row"><span class="ulabel">Ladder 123</span><div class="seg red useg" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      <div class="unit-row"><span class="ulabel">Aerial Platform 124</span><div class="seg red useg" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      <div class="unit-row"><span class="ulabel">Ladder 125</span><div class="seg red useg" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      <div class="hint" style="margin-top:10px">Write-in units — extra staffing OR maintenance OOS for any apparatus not listed above (E121, T124, B162…). Green = staffed up · Red = out of service. Leave the date blank for unknown maintenance returns; delete the row when the unit is back.</div>
       <div id="wiList"></div>
       <button class="btn ghost" id="addWi" type="button">+ Add write-in unit</button>
     </div>
@@ -414,26 +414,26 @@ var HOSPITALS=[
     {id:'whb', name:'Westover Hills Baptist', tags:'PCI \u00b7 OB \u00b7 WEST'}
   ]},
   {sys:'CHRISTUS Health', list:[
-    {id:'christus_childrens', name:"CHRISTUS Children's Hospital", tags:'L3 \u00b7 Pediatric'},
+    {id:'christus_childrens', name:"CHRISTUS Children's", tags:'L3 \u00b7 Pediatric'},
     {id:'csr_nb', name:'CHRISTUS Santa Rosa New Braunfels', tags:'L4 \u00b7 PCI \u00b7 Resus:Primary \u00b7 Stroke:Primary \u00b7 OB'},
     {id:'csr_wh', name:'CHRISTUS Santa Rosa Westover Hills', tags:'L4 \u00b7 PCI \u00b7 Resus:Primary \u00b7 Stroke:Primary \u00b7 OB \u00b7 WEST'}
   ]},
   {sys:'Methodist Healthcare System', list:[
-    {id:'methodist', name:'Methodist Hospital', tags:'L3 \u00b7 PCI \u00b7 Resus:Comprehensive \u00b7 Stroke:Comprehensive \u00b7 OB'},
-    {id:'methodist_childrens', name:'Methodist Hospital | Children\u2019s', tags:'Heart Alert \u00b7 Pediatric'},
-    {id:'methodist_landmark', name:'Methodist Hospital | Landmark', tags:'Limited services'},
-    {id:'methodist_metro', name:'Methodist Hospital | Main', tags:'L4 \u00b7 PCI \u00b7 Stroke:Primary \u00b7 OB'},
-    {id:'methodist_ne', name:'Methodist Hospital | Northeast', tags:'L3 \u00b7 PCI \u00b7 Stroke:Primary'},
-    {id:'methodist_spec', name:'Methodist Hospital | Specialty & Transplant', tags:'L4'},
-    {id:'methodist_stoneoak', name:'Methodist Hospital | Stone Oak', tags:'L3 \u00b7 PCI \u00b7 Stroke:Primary \u00b7 OB'},
-    {id:'methodist_texsan', name:'Methodist Hospital | Texsan', tags:'L4 \u00b7 PCI'},
-    {id:'methodist_wh', name:'Methodist Hospital | Westover Hills', tags:'PCI \u00b7 OB \u00b7 WEST'}
+    {id:'methodist', name:'Methodist', tags:'L3 \u00b7 PCI \u00b7 Resus:Comprehensive \u00b7 Stroke:Comprehensive \u00b7 OB'},
+    {id:'methodist_childrens', name:'Methodist | Children\u2019s', tags:'Heart Alert \u00b7 Pediatric'},
+    {id:'methodist_landmark', name:'Methodist | Landmark', tags:'Limited services'},
+    {id:'methodist_metro', name:'Methodist | Main', tags:'L4 \u00b7 PCI \u00b7 Stroke:Primary \u00b7 OB'},
+    {id:'methodist_ne', name:'Methodist | Northeast', tags:'L3 \u00b7 PCI \u00b7 Stroke:Primary'},
+    {id:'methodist_spec', name:'Methodist | Specialty & Transplant', tags:'L4'},
+    {id:'methodist_stoneoak', name:'Methodist | Stone Oak', tags:'L3 \u00b7 PCI \u00b7 Stroke:Primary \u00b7 OB'},
+    {id:'methodist_texsan', name:'Methodist | Texsan', tags:'L4 \u00b7 PCI'},
+    {id:'methodist_wh', name:'Methodist | Westover Hills', tags:'PCI \u00b7 OB \u00b7 WEST'}
   ]},
   {sys:'Other Bexar / Guadalupe / Comal', list:[
     {id:'guadalupe', name:'Guadalupe Regional Medical Center', tags:'L4 \u00b7 OB'},
     {id:'sammc', name:'SAMMC (San Antonio Military)', tags:'L1 \u00b7 PCI \u00b7 OB \u00b7 TriCare only'},
     {id:'va', name:"South Texas Veteran's HCC", tags:'VA beneficiaries only'},
-    {id:'university', name:'University Hospital', tags:'L1 \u00b7 PCI \u00b7 Resus:Comprehensive \u00b7 Stroke:Comprehensive \u00b7 OB'},
+    {id:'university', name:'University', tags:'L1 \u00b7 PCI \u00b7 Resus:Comprehensive \u00b7 Stroke:Comprehensive \u00b7 OB'},
     {id:'university_childrens', name:"University Children's", tags:'L1 \u00b7 Pediatric \u00b7 Stroke'}
   ]}
 ];
@@ -571,11 +571,7 @@ function expireSweep(){                                     /* control mirrors t
       state.tExp[k]=''; var el=document.querySelector('.uexp[data-ux="t:'+k+'"]'); if(el) el.value='';
       var seg=document.getElementById('seg'+k.charAt(0).toUpperCase()+k.slice(1)); if(seg) segSet(seg.id,'off'); }
   });
-  Object.keys(state.aExp||{}).forEach(function(k){
-    if(past(state.aExp[k])){ if(state.apparatus[k]){ state.apparatus[k]=false; changed=true; }
-      state.aExp[k]=''; var el=document.querySelector('.uexp[data-ux="a:'+k+'"]'); if(el) el.value='';
-      var seg=document.getElementById('seg'+k.toUpperCase()); if(seg) segSet(seg.id,'in'); }
-  });
+  Object.keys(state.aExp||{}).forEach(function(k){ if(state.aExp[k]) state.aExp[k]=''; });   /* ladders carry no dates — purge legacy values, never auto-flip */
   var before=state.writeins.length;
   state.writeins=state.writeins.filter(function(u){ return !past(u.exp); });
   if(state.writeins.length!==before){ renderWi(); changed=true; }
