@@ -15,7 +15,7 @@
   :root{
     --bg:#0D1117; --panel:#161B22; --panel2:#1C2230; --border:#30363D;
     --text:#E6EDF3; --dim:#8B949E; --accent:#FF6B35; --blue:#3B82F6;
-    --green:#34C759; --amber:#FFC107; --red:#FF3B30; --shiftA:#FF3B30;
+    --green:#34C759; --amber:#FFC107; --red:#FF3B30; --shiftA:#FF3B30; --purple:#AF52DE;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;height:100%;overflow:hidden}
@@ -360,7 +360,23 @@
   .call-e .ce{margin-left:auto;flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vmin,22px);letter-spacing:1px;color:var(--accent)}
   .calls-body.compact .call-e .ct{font-size:clamp(12px,1.25vmin,20px)}
   .calls-body.compact .call-e .ca{font-size:clamp(10px,1vmin,16px)}
+  /* call-type color coding: med=yellow fire=red alarm=purple assist=blue mvc=orange (default red) */
+  .call-e.k-med{border-left-color:var(--amber);background:rgba(255,193,7,.10)} .call-e.k-med .ct{color:var(--amber)}
+  .call-e.k-fire{border-left-color:var(--red);background:rgba(255,59,48,.10)} .call-e.k-fire .ct{color:var(--red)}
+  .call-e.k-alarm{border-left-color:var(--purple);background:rgba(175,82,222,.12)} .call-e.k-alarm .ct{color:var(--purple)}
+  .call-e.k-assist{border-left-color:var(--blue);background:rgba(59,130,246,.12)} .call-e.k-assist .ct{color:var(--blue)}
+  .call-e.k-mvc{border-left-color:var(--accent);background:rgba(255,107,53,.12)} .call-e.k-mvc .ct{color:var(--accent)}
   .calls-body .idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px)}
+  /* District 2 tour tally strip (per-station call counts, resets 0700 day 1) */
+  .tally{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:clamp(5px,.6vmin,10px);
+    border-top:1px solid rgba(48,54,61,.5);padding-top:clamp(4px,.45vmin,8px);margin-top:clamp(3px,.35vmin,6px)}
+  .tally[hidden]{display:none}
+  .tally .tlbl{font-size:clamp(8px,.7vw,11px);letter-spacing:2px;color:var(--dim)}
+  .tally .tchip2{font-family:'DM Mono',monospace;font-size:clamp(10px,.95vmin,15px);color:var(--dim);
+    border:1px solid var(--border);border-radius:7px;background:var(--panel2);
+    padding:clamp(2px,.25vmin,4px) clamp(6px,.7vmin,11px);white-space:nowrap}
+  .tally .tchip2 b{color:var(--text);font-weight:500;margin-left:2px}
+  .tally .tchip2.hot{border-color:var(--blue)} .tally .tchip2.hot b{color:var(--blue)}
   .calls-body.err .idle{color:var(--amber);font-style:normal}
 
   /* Shift Schedule tile — vertical list (replaces the old bottom strip) */
@@ -511,6 +527,14 @@
     <div class="tile calls-tile" id="callsTile" hidden>
       <div class="head"><span class="name">Active Calls</span><span class="sched-page" id="callsPage" hidden></span></div>
       <div class="calls-body" id="callsBody"></div>
+      <div class="tally" id="tallyRow" hidden>
+        <span class="tlbl">DIST 2 TOUR</span>
+        <span class="tchip2" data-st="121">121 <b>0</b></span>
+        <span class="tchip2" data-st="122">122 <b>0</b></span>
+        <span class="tchip2" data-st="123">123 <b>0</b></span>
+        <span class="tchip2" data-st="124">124 <b>0</b></span>
+        <span class="tchip2" data-st="125">125 <b>0</b></span>
+      </div>
     </div>
     <!-- Shift schedule — officer-set via control.html; vertical list, auto-paging on overflow -->
     <div class="tile sched-tile">
@@ -956,10 +980,28 @@
     function elapsed(iso){ try{ var m=Math.floor((Date.now()-new Date(iso).getTime())/60000);
       if(!isFinite(m)||m<0) return ""; return m<60?(m+"m"):(Math.floor(m/60)+"h"+(m%60)+"m"); }catch(e){ return ""; } }
     function show(tileOn){ var tl=document.getElementById("callsTile"); if(tl) tl.hidden=!tileOn; }
+    /* advisory board, not CAD: rows age out after 10 min */
+    var ADVISORY_MIN=10;
+    function classify(t){ t=String(t||"").toUpperCase();
+      if(/ALARM/.test(t)) return "k-alarm";
+      if(/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "k-mvc";
+      if(/FIRE|STRUCTURE|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "k-fire";
+      if(/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZURE|OVERDOSE|DIABET/.test(t)) return "k-med";
+      if(/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "k-assist";
+      return ""; }
+    function displayUnits(units){ if(!units||!units.length) return "";
+      var isStation=function(u){ return /^\d{3}[A-F]$/i.test(u); };
+      var real=units.filter(function(u){ return !isStation(u); });
+      return (real.length?real:units).join(" "); }   /* real units supersede station assignments */
+    function freshOnly(calls){ return calls.filter(function(c){
+      if(!c.started) return true;                      /* no timestamp: keep (fail-visible) */
+      var m=(Date.now()-new Date(c.started).getTime())/60000;
+      return !isFinite(m)||m<=ADVISORY_MIN; }); }
     function render(state, calls){
       var body=document.getElementById("callsBody"), pg=document.getElementById("callsPage");
       if(!body) return;
       stopRot();
+      if(Array.isArray(calls)) calls=freshOnly(calls);
       if(state==="off"){ show(false); return; }             /* relay not built/configured */
       show(true);
       if(state==="err"){ body.className="calls-body err";
@@ -968,14 +1010,53 @@
       body.className="calls-body";
       if(!calls.length){ body.innerHTML='<div class="idle">\u2014 No active calls</div>'; if(pg) pg.hidden=true; return; }
       var rows=calls.map(function(c){
-        var un=(c.units&&c.units.length)?c.units.join(" "):"";
-        return '<div class="call-e"><span class="ct">'+esc(c.type||"CALL")+'</span>'+
+        var un=displayUnits(c.units);
+        return '<div class="call-e '+classify(c.type)+'"><span class="ct">'+esc(c.type||"CALL")+'</span>'+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
                (un?('<span class="cu">'+esc(un)+'</span>'):'')+
                '<span class="ce">'+elapsed(c.started)+'</span></div>';
       });
       rot=autoRotate(body, rows, pg, 7000);
     }
+    /* ── District 2 tour tally: counts /calls log per station 121-125 since 0700 of tour day 1.
+       M126 rides with Station 123. Same anchor/flip math as the shift chip and schedule. ── */
+    var TALLY_URL=URL_.replace("/dispatch","/calls");
+    var TALLY_ANCHOR=Date.UTC(2026,0,1), STATIONS=["121","122","123","124","125"];
+    function tourStart(){
+      var s=new Date(Date.now()-7*3600000);                  /* -7h holds prior tour until 0700 */
+      var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-TALLY_ANCHOR)/86400000);
+      var day1=((d%6)+6)%6%2===0;                            /* even index in AABBCC = day 1 of the pair */
+      return new Date(s.getFullYear(),s.getMonth(),s.getDate()-(day1?0:1),7,0,0,0);
+    }
+    function paintTally(counts){
+      var row=document.getElementById("tallyRow"); if(!row) return;
+      row.hidden=false;
+      STATIONS.forEach(function(st){
+        var el=row.querySelector('[data-st="'+st+'"]'); if(!el) return;
+        var n=counts[st]||0;
+        el.querySelector("b").textContent=String(n);
+        el.className="tchip2"+(n>0?" hot":"");
+      });
+    }
+    function loadTally(){
+      var pin=window.BOARD_PIN?window.BOARD_PIN():"";
+      if(!pin) return;
+      fetch(TALLY_URL+"?pin="+encodeURIComponent(pin))
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(j){
+          if(!j||!j.ok||!Array.isArray(j.calls)) return;     /* leave last-known tally on transient errors */
+          var since=tourStart().getTime(), counts={};
+          j.calls.forEach(function(c){
+            if(c.started && new Date(c.started).getTime()<since) return;
+            var sts=(c.stations||[]).map(function(s){ return s==="126"?"123":s; });   /* M126 -> Station 123 */
+            var seen={};
+            sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
+          });
+          paintTally(counts);
+        })
+        .catch(function(){ /* keep last-known */ });
+    }
+    loadTally(); setInterval(loadTally, 5*60*1000);          /* 5-min cadence; tourStart recomputed each pass so 0700 reset lands */
     function load(){
       fetch(URL_,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:window.BOARD_PIN?window.BOARD_PIN():""})})
         .then(function(r){
