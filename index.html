@@ -214,7 +214,8 @@
     margin-top:clamp(5px,.55vmin,11px);padding-top:clamp(5px,.55vmin,11px)}
   .wx-astro .astro{display:flex;flex-direction:column;align-items:center;gap:clamp(2px,.3vmin,5px);text-align:center;min-width:0}
   .wx-astro .k{font-size:clamp(9px,.85vmin,14px);letter-spacing:2px;color:var(--dim)}
-  .wx-astro .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,27px);letter-spacing:1px;line-height:1}
+  .wx-astro .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,27px);letter-spacing:1px;line-height:1;display:flex;align-items:center;justify-content:center;gap:clamp(3px,.4vmin,7px)}
+  .wx-astro .astro-ic{width:clamp(19px,2vmin,34px);height:clamp(19px,2vmin,34px);flex:0 0 auto}
   .wx-astro .astro.moon .v{font-size:clamp(12px,1.25vmin,20px)}
   .wx-astro .astro.moon.full .v{color:var(--amber)}
   .wx-moonflag{flex:0 0 auto;text-align:center;background:rgba(255,193,7,.15);border:1px solid var(--amber);
@@ -246,14 +247,15 @@
   .fb-rain{font-size:clamp(11px,1.05vw,17px)}
   .fb-rain .big{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.5vw,26px);letter-spacing:1px;color:var(--text)}
   .fb-rain.err,.fb-cx .cx-err{color:var(--amber)}
-  .fb-cx{display:flex;flex-wrap:wrap;gap:clamp(4px,.5vw,9px)}
-  .cx{display:flex;align-items:center;gap:8px;border-radius:7px;border-left:3px solid var(--border);
-    background:var(--panel2);padding:clamp(3px,.35vmin,6px) clamp(8px,.9vmin,13px);font-size:clamp(10px,.95vmin,15px)}
-  .cx .st{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;font-size:clamp(11px,1.05vmin,17px)}
-  .cx.closed{border-left-color:var(--red);background:rgba(255,59,48,.12)} .cx.closed .st{color:var(--red)}
-  .cx.caution{border-left-color:var(--amber);background:rgba(255,193,7,.10)} .cx.caution .st{color:var(--amber)}
-  .cx.offline{border-left-color:var(--amber)} .cx.offline .st{color:var(--amber)}
-  .cx.open{border-left-color:var(--green)} .cx.open .st{color:var(--green)}
+  .fb-cx{display:block}
+  .fb-cols{display:flex;gap:clamp(12px,1.4vw,30px)}
+  .fb-col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(3px,.35vmin,7px)}
+  .fb-coltag{font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;color:var(--dim);font-size:clamp(12px,1.15vw,20px);border-bottom:1px solid var(--border);padding-bottom:3px;margin-bottom:2px}
+  .cx2{font-family:'DM Mono',monospace;font-size:clamp(12px,1.1vw,19px);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cx2.open{color:var(--green)}
+  .cx2.bad{color:var(--red);font-weight:700}
+  .cx2.offline{color:#8B949E}
+  .cx2.none{color:var(--dim)}
 
   /* ── Fire-weather hourly pills: RH · wind · temp per hour, tier-colored ── */
   .fw-pills{display:flex;flex-wrap:wrap;gap:clamp(4px,.5vmin,9px);justify-content:center;
@@ -298,16 +300,16 @@
   @media (min-width:1500px){
     .tile .head .name{font-size:clamp(18px,1.7vmin,30px)}
     .calls-body .idle{font-size:clamp(15px,1.5vmin,24px)}
-    .call-e .ct{font-size:clamp(20px,2.1vmin,36px)}
-    .call-e .ca{font-size:clamp(16px,1.7vmin,28px)}
-    .call-e .cu{font-size:clamp(20px,2.1vmin,36px)}   /* units sized to match the call TYPE on the wall */
-    .call-e .cw{font-size:clamp(16px,1.7vmin,28px)}
+    .call-e .ct{font-size:clamp(24px,2.5vmin,44px)}
+    .call-e .ca{font-size:clamp(19px,2vmin,34px)}
+    .call-e .cu{font-size:clamp(24px,2.5vmin,44px)}   /* units sized to match the call TYPE on the wall */
+    .call-e .cw{font-size:clamp(19px,2vmin,34px)}
     .call-e .ce{font-size:clamp(17px,1.8vmin,30px)}
     .sched-e .tm{font-size:clamp(24px,2.6vmin,44px)}
     .sched-e .ds{font-size:clamp(18px,1.9vmin,32px)}
     .sched-list .idle{font-size:clamp(15px,1.5vmin,24px)}
-    .tally .tlbl{font-size:clamp(11px,1vmin,16px)}
-    .tally .tchip2{font-size:clamp(14px,1.5vmin,24px)}
+    .tally .tlbl{font-size:clamp(12px,1.15vmin,20px)}
+    .tally .tchip2{font-size:clamp(17px,1.8vmin,30px)}
     .med-body .mname{font-size:clamp(28px,3vmin,52px)}
     .med-body .mphone{font-size:clamp(28px,3vmin,52px)}
     .med-body .mrole{font-size:clamp(15px,1.55vmin,25px)}
@@ -328,17 +330,25 @@
     .banner .note{font-size:clamp(16px,1.5vw,25px)}
     .tick-track .ti .tw{font-size:clamp(12px,1.1vw,18px)}
     .ann-page{font-size:clamp(12px,1.05vw,18px)}
-    /* district weather — 12-hour outlook + compact sun/moon */
-    .hcol .hh{font-size:clamp(15px,1.55vmin,26px)}
-    .hcol .wic{width:clamp(26px,2.5vmin,42px);height:clamp(26px,2.5vmin,42px)}
-    .hcol .ht{font-size:clamp(19px,2vmin,33px)}
-    .hcol .hf{font-size:clamp(14px,1.4vmin,23px)}
+    /* district weather — current conditions + 12-hour outlook + compact sun/moon */
+    .wx-temp{font-size:clamp(42px,4.2vmin,72px)}
+    .wx-cond{font-size:clamp(15px,1.5vmin,26px)}
+    .wx-vitals .k{font-size:clamp(11px,1vmin,16px)}
+    .wx-vitals .v{font-size:clamp(22px,2.3vmin,38px)}
+    .hcol .hh{font-size:clamp(17px,1.8vmin,30px)}
+    .hcol .wic{width:clamp(30px,2.9vmin,50px);height:clamp(30px,2.9vmin,50px)}
+    .hcol .ht{font-size:clamp(22px,2.3vmin,40px)}
+    .hcol .hf{font-size:clamp(16px,1.6vmin,28px)}
     .wx-astro .k{font-size:clamp(10px,.95vmin,15px)}
-    .wx-astro .v{font-size:clamp(19px,2vmin,32px)}
+    .wx-astro .v{font-size:clamp(20px,2.1vmin,34px)}
     .wx-astro .astro.moon .v{font-size:clamp(15px,1.55vmin,25px)}
+    .wx-astro .astro-ic{width:clamp(22px,2.3vmin,40px);height:clamp(22px,2.3vmin,40px)}
     .wx-moonflag{font-size:clamp(16px,1.6vmin,27px)}
-    .wx-ic .wic{width:clamp(36px,3.2vmin,56px);height:clamp(36px,3.2vmin,56px)}
-    .tchip{font-size:clamp(14px,1.4vmin,23px)}
+    .wx-ic .wic{width:clamp(40px,3.6vmin,64px);height:clamp(40px,3.6vmin,64px)}
+    .tchip{font-size:clamp(16px,1.7vmin,29px)}
+    .fb-coltag{font-size:clamp(14px,1.35vw,23px)}
+    .cx2{font-size:clamp(14px,1.35vw,24px)}
+    .fb-rain .big{font-size:clamp(18px,1.8vw,32px)}
     .fwp .pt{font-size:clamp(15px,1.5vmin,26px)}
     .fwp .pT{font-size:clamp(20px,2.1vmin,36px)}
     .fwp .pR{font-size:clamp(15px,1.5vmin,25px)}
@@ -498,6 +508,8 @@
     padding:clamp(3px,.4vmin,7px) clamp(4px,.5vmin,9px);white-space:nowrap}
   .tally .tchip2 b{color:var(--text);font-weight:500;margin-left:2px}
   .tally .tchip2.hot{border-color:var(--blue)} .tally .tchip2.hot b{color:var(--blue)}
+  .tally .tchip2.rank1{border-color:var(--red);background:rgba(255,59,48,.16)} .tally .tchip2.rank1 b{color:var(--red)}
+  .tally .tchip2.rank2{border-color:var(--amber);background:rgba(255,193,7,.14)} .tally .tchip2.rank2 b{color:var(--amber)}
   .calls-body.err .idle{color:var(--amber);font-style:normal}
 
   /* Shift Schedule tile — vertical list (replaces the old bottom strip) */
@@ -648,7 +660,7 @@
       <div class="head"><span class="name">Active Calls</span><span class="sched-page" id="callsPage" hidden></span></div>
       <div class="calls-body" id="callsBody"></div>
       <div class="tally" id="tallyRow" hidden>
-        <span class="tlbl">DIST 2 TOUR</span>
+        <span class="tlbl">This Tour</span>
         <span class="tchip2" data-st="121">121 <b>0</b></span>
         <span class="tchip2" data-st="122">122 <b>0</b></span>
         <span class="tchip2" data-st="123">123 <b>0</b></span>
@@ -796,16 +808,37 @@
     var name= age<1.85?"New" : age<5.54?"Wax Crescent" : age<9.23?"First Qtr" : age<12.91?"Wax Gibbous"
             : age<16.61?"Full" : age<20.30?"Wan Gibbous" : age<23.99?"Last Qtr" : age<27.68?"Wan Crescent":"New";
     var full = Math.abs(age-14.7655)<1.2 || illum>=0.98;            /* ~1 day either side of full */
-    return {age:age, illum:illum, name:name, full:full};
+    return {age:age, illum:illum, name:name, full:full, waxing:(age<14.7655)};
+  }
+  /* sunrise (up, yellow) / sunset (down, orange) icons */
+  function sunIcon(up){
+    var col=up?"#FFC107":"#FF8C42";
+    var chev=up?'<path d="M20 11l4-4 4 4" fill="none" stroke="'+col+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
+               :'<path d="M20 7l4 4 4-4" fill="none" stroke="'+col+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';
+    return '<svg class="astro-ic" viewBox="0 0 48 48">'+chev+
+      '<g stroke="'+col+'" stroke-width="2.6" stroke-linecap="round"><path d="M9 23l3 3M39 23l-3 3M4 34h5M39 34h5"/></g>'+
+      '<path d="M14 35a10 10 0 0 1 20 0z" fill="'+col+'"/>'+
+      '<line x1="5" y1="35" x2="43" y2="35" stroke="#5B6B7B" stroke-width="3" stroke-linecap="round"/></svg>';
+  }
+  /* moon disc with the actual illuminated fraction drawn (waxing lights the right limb) */
+  function moonPhaseSVG(illum, waxing){
+    var r=19, cx=24, cy=24;
+    var outerSweep = waxing ? 1 : 0;
+    var innerSweep = waxing ? (illum<0.5?0:1) : (illum<0.5?1:0);
+    var ax = Math.abs(r*(1-2*illum));
+    var d = "M"+cx+","+(cy-r)+" A"+r+","+r+" 0 0 "+outerSweep+" "+cx+","+(cy+r)+
+            " A"+ax.toFixed(2)+","+r+" 0 0 "+innerSweep+" "+cx+","+(cy-r)+" Z";
+    return '<svg class="astro-ic" viewBox="0 0 48 48"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="#1c232e" stroke="#3a4552" stroke-width="1"/>'+
+           '<path d="'+d+'" fill="#DCE3EA"/></svg>';
   }
   function hm24(d){ try{ return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return "\u2014"; } }
   function renderAstro(){
     try{
       var now=new Date(), s=sunTimes(now,WX_LAT,WX_LNG), m=moonInfo(now);
       var er=document.getElementById("wxRise"), es=document.getElementById("wxSet");
-      if(er) er.textContent = s.rise?hm24(s.rise):"\u2014";
-      if(es) es.textContent = s.set ?hm24(s.set) :"\u2014";
-      var mo=document.getElementById("wxMoon"); if(mo) mo.textContent=m.name+" "+Math.round(m.illum*100)+"%";
+      if(er) er.innerHTML = sunIcon(true)+'<span class="at">'+(s.rise?hm24(s.rise):"\u2014")+'</span>';
+      if(es) es.innerHTML = sunIcon(false)+'<span class="at">'+(s.set ?hm24(s.set) :"\u2014")+'</span>';
+      var mo=document.getElementById("wxMoon"); if(mo) mo.innerHTML = moonPhaseSVG(m.illum,m.waxing)+'<span class="at">'+m.name+" "+Math.round(m.illum*100)+"%</span>";
       var col=document.getElementById("wxMoonCol"); if(col) col.className="astro moon"+(m.full?" full":"");
       var fl=document.getElementById("wxMoonFlag"); if(fl) fl.hidden=!m.full;
     }catch(e){}
@@ -1205,7 +1238,7 @@
      -> visible amber (a dispatch feed that silently disappears is a false all-clear). ── */
   (function(){
     var URL_="https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/dispatch";
-    var REFRESH=30000, rot=null, everConfigured=false, errDetail="";
+    var REFRESH=12000, rot=null, everConfigured=false, errDetail="";   /* 12s so a unit attaching after the drop shows quickly */
     function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
     function stopRot(){ if(rot){ rot(); rot=null; } }
     function elapsed(iso){ try{ var m=Math.floor((Date.now()-new Date(iso).getTime())/60000);
@@ -1286,11 +1319,18 @@
     function paintTally(counts){
       var row=document.getElementById("tallyRow"); if(!row) return;
       row.hidden=false;
+      var uniq=STATIONS.map(function(st){return counts[st]||0;}).filter(function(n){return n>0;})
+                       .sort(function(a,b){return b-a;}).filter(function(v,i,a){return a.indexOf(v)===i;});
+      var top=uniq[0]||0, second=uniq.length>1?uniq[1]:-1;   /* busiest = red, next = amber */
       STATIONS.forEach(function(st){
         var el=row.querySelector('[data-st="'+st+'"]'); if(!el) return;
         var n=counts[st]||0;
         el.querySelector("b").textContent=String(n);
-        el.className="tchip2"+(n>0?" hot":"");
+        var cls="tchip2";
+        if(n>0 && n===top) cls+=" rank1";
+        else if(n>0 && n===second) cls+=" rank2";
+        else if(n>0) cls+=" hot";
+        el.className=cls;
       });
     }
     function loadTally(){
@@ -1592,16 +1632,21 @@
         .then(function(data){
           var box=el("fbCx"); if(!box||!active) return;
           if(!Array.isArray(data)) throw 0;
-          var rows=data.filter(function(c){ return c && WATCH[String(c.id)]!==undefined; })
-            .map(function(c){ var st=c.statusTypeID;
-              var cls=st===1?"closed":st===4?"caution":st===3?"offline":"open";
+          var groups={D2:[], D6:[]};
+          data.filter(function(c){ return c && WATCH[String(c.id)]!==undefined; })
+            .forEach(function(c){ var st=c.statusTypeID;
+              var cls=(st===1||st===4)?"bad":st===3?"offline":"open";     /* closed/caution = red · inactive(dead) = gray · open = green */
               var lbl=st===1?"CLOSED":st===4?"CAUTION":st===3?"OFFLINE":"OPEN";
-              return {html:'<div class="cx '+cls+'"><span>'+esc(c.title||"Unnamed crossing")+' · '+WATCH[String(c.id)]+'</span><span class="st">'+lbl+'</span></div>',
-                      bad:st!==2};
+              groups[WATCH[String(c.id)]].push({name:esc(c.title||"Unnamed crossing"), cls:cls, lbl:lbl, bad:st!==2});
             });
-          if(!rows.length){ box.innerHTML='<span class="cx-err">⚠ watched crossings not in HALT feed — verify manually</span>'; return; }
-          rows.sort(function(a,b){ return (b.bad?1:0)-(a.bad?1:0); });   /* problems first */
-          box.innerHTML=rows.map(function(r){return r.html;}).join("");
+          function col(tag,arr){
+            arr.sort(function(a,b){ return (b.bad?1:0)-(a.bad?1:0); });    /* problems first */
+            var rows=arr.length ? arr.map(function(r){ return '<div class="cx2 '+r.cls+'">'+r.name+' \u2014 '+r.lbl+'</div>'; }).join("")
+                                : '<div class="cx2 none">\u2014 none watched</div>';
+            return '<div class="fb-col"><div class="fb-coltag">'+tag+'</div>'+rows+'</div>';
+          }
+          if(!groups.D2.length && !groups.D6.length){ box.innerHTML='<span class="cx-err">⚠ watched crossings not in HALT feed — verify manually</span>'; return; }
+          box.innerHTML='<div class="fb-cols">'+col("DISTRICT 2",groups.D2)+col("DISTRICT 6",groups.D6)+'</div>';
         })
         .catch(function(){ var box=el("fbCx"); if(box&&active) box.innerHTML='<span class="cx-err">⚠ HALT CROSSING FEED UNAVAILABLE \u2014 verify closures manually</span>'; });
     }
