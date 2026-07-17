@@ -35,11 +35,6 @@
   .uc-ok{font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vw,28px);letter-spacing:2px;cursor:pointer;
     background:var(--amber);color:#000;border:0;border-radius:10px;padding:clamp(8px,1vw,14px) clamp(32px,4vw,64px)}
   .uc-ok:hover{filter:brightness(1.1)}
-  .officer-login{position:fixed;bottom:10px;right:12px;z-index:98;text-decoration:none;
-    font-family:'DM Mono',monospace;font-size:11px;letter-spacing:1px;color:var(--dim);
-    background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:6px 12px;
-    opacity:.55;transition:opacity .2s}
-  .officer-login:hover{opacity:1;color:var(--accent);border-color:var(--accent)}
   .pill{display:inline-block;font-size:clamp(8px,.68vw,11px);letter-spacing:1px;padding:1px 8px;
     border-radius:20px;border:1px solid;line-height:1.5;white-space:nowrap}
   .pill.red{color:var(--red);border-color:var(--red);background:rgba(255,59,48,.12)}
@@ -203,6 +198,7 @@
     border:2px solid #4A90D9;border-radius:11px;background:rgba(74,144,217,.08);
     padding:clamp(6px,.7vw,12px) clamp(11px,1.3vw,20px)}
   .fb-head{display:flex;align-items:center;gap:12px}
+  .fb-stamp{font-family:'Bebas Neue',sans-serif !important;font-size:clamp(13px,1.2vw,20px) !important;letter-spacing:1.5px;color:var(--text) !important}
   .fb-tag{font-family:'Bebas Neue',sans-serif;font-size:clamp(14px,1.3vw,22px);letter-spacing:2px;color:#4A90D9}
   .fb-rain{font-size:clamp(11px,1.05vw,17px)}
   .fb-rain .big{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.5vw,26px);letter-spacing:1px;color:var(--text)}
@@ -299,6 +295,16 @@
   .trow.on{border-left-color:var(--green);background:rgba(52,199,89,.08)}
   .trow.on .ts{color:var(--green)}
   .teams-body.err .trow .ts{color:var(--amber)}
+  /* Fire Weather tile */
+  .fw-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:clamp(3px,.4vw,8px)}
+  .fw-idle{color:var(--dim);font-size:clamp(11px,1vw,16px)}
+  .fw-flag{font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vw,34px);letter-spacing:1px;color:var(--red);line-height:1}
+  .fw-flag.unk{color:var(--amber)}
+  .fw-row{display:flex;gap:clamp(6px,.7vw,12px)}
+  .fwv{flex:1;text-align:center;background:var(--panel2);border-radius:9px;padding:clamp(4px,.5vw,9px)}
+  .fwv .k{display:block;font-size:clamp(8px,.7vw,11px);letter-spacing:2px;color:var(--dim)}
+  .fwv .v{display:block;font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vw,34px);letter-spacing:1px;margin-top:2px}
+  .fwv.ok .v{color:var(--text)} .fwv.warn .v{color:var(--amber)} .fwv.bad .v{color:var(--red)}
   /* Hospital Status tile (live from shared board state) */
   .hosp-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:clamp(3px,.4vw,8px)}
   .hosp-body.div{justify-content:flex-start}
@@ -328,7 +334,6 @@
       <button class="uc-ok" id="ucOk">OK</button>
     </div>
   </div>
-  <a class="officer-login" href="control.html">Officer Login</a>
 
   <!-- Header -->
   <header>
@@ -360,7 +365,7 @@
   <!-- Flood ops band — appears only while a Warning-tier flood product is active -->
   <div class="floodband" id="floodBand" hidden>
     <div class="fb-head"><span class="fb-tag">🌊 FLOOD OPS</span><span class="fb-stamp src" id="fbStamp"></span></div>
-    <div class="fb-rain" id="fbRain">rain data loading…</div>
+    <div class="fb-rain" id="fbRain">checking station rain (MRMS)…</div>
     <div class="fb-cx" id="fbCx"></div>
   </div>
 
@@ -400,10 +405,9 @@
         <div class="head"><span class="name">Medical Direction</span><span class="stamp src" id="medStamp">Loading&hellip;</span></div>
         <div class="med-body" id="medBody"></div>
       </div>
-      <div class="tile ph">
-        <div class="pmark">◇</div>
-        <div class="pname">Fire Weather</div>
-        <div class="pidea">Red Flag · East/West strike teams · RH / wind / temp</div>
+      <div class="tile">
+        <div class="head"><span class="name">Fire Weather</span><span class="stamp src" id="fwStamp">Loading&hellip;</span></div>
+        <div class="fw-body" id="fwBody"></div>
       </div>
     </div>
 
@@ -485,6 +489,7 @@
       var r=condRank(p.shortForecast); if(r>rank){rank=r;sf=p.shortForecast;}});
     return {time:t0,temp:maxT,spd:maxSpd,gust:maxGust,pop:maxP<0?0:maxP,sf:sf,day:day};}
   function renderAggregate(good,flag){
+    try{ var _n=aggNow(good); FireWx.wx(_n); }catch(e){}
     var n=aggNow(good);
     document.getElementById("wxIcon").innerHTML=wxIcon(n.sf,n.day);
     document.getElementById("wxTemp").innerHTML=(n.temp!=null?n.temp:"\u2014")+"&deg;";
@@ -734,10 +739,11 @@
     function effective(med){
       if(!med||med.mode==="default") return {who:DEFAULT_MED, note:""};
       if(med.end && new Date() > new Date(med.end)) return {who:DEFAULT_MED, note:"auto-reverted"};   /* window passed */
-      if(med.mode==="alt") return {who:ALT_MED, note:med.end?("until "+fmtEnd(med.end)):""};
+      if(med.mode==="alternate"||med.mode==="alt") return {who:ALT_MED, note:med.end?("until "+fmtEnd(med.end)):""};
       if(med.mode==="custom" && med.custom && med.custom.name)
         return {who:{name:med.custom.name, role:"Acting Medical Direction", phone:med.custom.phone||""}, note:med.end?("until "+fmtEnd(med.end)):""};
-      return {who:DEFAULT_MED, note:""};
+      if(med.mode==="custom") return {who:DEFAULT_MED, note:""};          /* custom w/o a name -> default */
+      return {who:DEFAULT_MED, note:"unrecognized mode \u00b7 verify in control panel"};   /* fail loud, never silent */
     }
     function render(ok, st){
       var body=document.getElementById("medBody"), stamp=document.getElementById("medStamp");
@@ -804,11 +810,56 @@
      • low-water crossings: Bexar HALT / BexarFlood feed, the Program Manager's 8 named
        in-district crossings; statusTypeID 1 Closed / 2 Open / 3 Inactive(offline—NEVER safe) / 4 Caution.
      Fail-loud: band stays up with amber "unavailable" rows if a feed dies mid-event. ── */
+  /* ── FIRE WEATHER MODE — tile goes live when Red Flag is active. NWS status via the
+     firehawk-wx worker /redflag ({active,updated}, same consumer shape as Firehawk),
+     overridable by the officer (state.fire.redFlag: auto|on|off). District worst-case
+     RH/wind/temp piggyback the existing weather aggregate — no extra fetch.
+     Fail-loud: unknown NWS status shows amber "STATUS UNKNOWN" with the numbers still up. ── */
+  var FireWx=(function(){
+    var WX="https://firehawk-wx.usafsentinel-45e.workers.dev";
+    var nws=null, mode="auto", agg=null;
+    function cls(v,warn,bad,invert){ if(v==null)return "ok";
+      return invert ? (v<=bad?"bad":v<=warn?"warn":"ok") : (v>=bad?"bad":v>=warn?"warn":"ok"); }
+    function render(){
+      var body=document.getElementById("fwBody"), stamp=document.getElementById("fwStamp");
+      if(!body) return;
+      var active = mode==="on" ? true : mode==="off" ? false : (nws===true);
+      var unknown = mode==="auto" && nws===null;
+      if(!active && !unknown){
+        body.innerHTML='<div class="fw-idle">No Red Flag Warning · monitoring NWS</div>';
+        if(stamp) stamp.textContent = mode==="off" ? "officer: forced off" : "NWS auto";
+        return;
+      }
+      var flag = unknown ? '<div class="fw-flag unk">⚠ RED FLAG STATUS UNKNOWN</div>'
+                         : '<div class="fw-flag">🚩 RED FLAG — EXTREME FIRE WEATHER</div>';
+      var rh=agg&&agg.rh!=null?agg.rh:null, t=agg&&agg.temp!=null?agg.temp:null;
+      var w=agg&&agg.spd>=0?agg.spd:null, g=agg&&agg.gust!=null?agg.gust:null, wmax=(g!=null&&w!=null)?Math.max(w,g):(g!=null?g:w);
+      function box(k,val,c,unit){ return '<div class="fwv '+c+'"><span class="k">'+k+'</span><span class="v">'+(val!=null?val+(unit||""):"—")+'</span></div>'; }
+      body.innerHTML=flag+'<div class="fw-row">'+
+        box("RH", rh, cls(rh,25,15,true), "%")+
+        box("WIND", w!=null?(""+w+(g!=null?" G"+g:"")):null, cls(wmax,20,25), "")+
+        box("TEMP", t, cls(t,95,100), "°")+
+        '</div>';
+      if(stamp) stamp.textContent = (mode==="on"?"officer: forced on":"NWS")+" · worst of 5 stations";
+    }
+    function loadNws(){
+      if(typeof fetch!=="function"){ nws=null; render(); return; }
+      fetch(WX+"/redflag").then(function(r){ if(!r.ok) throw 0; return r.json(); })
+        .then(function(j){ nws=(j&&j.active===true)?true:(j&&j.active===false)?false:null; render(); })
+        .catch(function(){ nws=null; render(); });            /* unknown -> loud, never a silent all-clear */
+    }
+    loadNws(); setInterval(loadNws, 10*60*1000);
+    onBoardState(function(ok,st){ mode=(ok&&st&&st.fire&&st.fire.redFlag)||"auto"; render(); });
+    return { wx:function(n){ agg=n; render(); } };
+  })();
+
   var FloodOps=(function(){
     var WX="https://firehawk-wx.usafsentinel-45e.workers.dev";
     var CX_URL="https://api.bexarflood.org/api/sensors/GetAll";
     var WATCH={"2311":"D2","2325":"D2","2322":"D2","2321":"D2","2308":"D6","2561":"D6","2580":"D6","2377":"D6"};
     var POLL=5*60*1000, active=false, timer=null, evName="";
+    function tfetch(u,opt){ return Promise.race([ fetch(u,opt),
+      new Promise(function(_,rej){ setTimeout(function(){rej(new Error("timeout"));},12000); }) ]); }
     function esc(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
     function el(id){return document.getElementById(id);}
     function loadRain(){
@@ -816,7 +867,7 @@
         var geom=encodeURIComponent(JSON.stringify({x:st.lon,y:st.lat,spatialReference:{wkid:4326}}));
         var rule=encodeURIComponent(JSON.stringify({rasterFunction:"rft_6hr"}));
         var u="https://mapservices.weather.noaa.gov/raster/rest/services/obs/mrms_qpe/ImageServer/identify?geometry="+geom+"&geometryType=esriGeometryPoint&renderingRule="+rule+"&returnGeometry=false&f=json";
-        return fetch(WX+"/?url="+encodeURIComponent(u)+"&_cb="+Date.now(),{cache:"no-store"})
+        return tfetch(WX+"/?url="+encodeURIComponent(u)+"&_cb="+Date.now(),{cache:"no-store"})
           .then(function(r){ if(!r.ok) throw 0; return r.json(); })
           .then(function(j){ var v=(j&&j.value!=null)?parseFloat(j.value):(j&&j.values&&j.values.length?parseFloat(j.values[0]):NaN);
             return {name:"STA "+st.id, inches:(isFinite(v)&&v>=0)?v:null}; })   /* negative = no-data sentinel, never 0 */
@@ -832,7 +883,7 @@
       });
     }
     function loadCx(){
-      function grab(u){ return fetch(u).then(function(r){ if(!r.ok) throw 0; return r.json(); }); }
+      function grab(u){ return tfetch(u).then(function(r){ if(!r.ok) throw 0; return r.json(); }); }
       grab(WX+"/?url="+encodeURIComponent(CX_URL)+"&_cb="+Date.now())
         .catch(function(){ return grab(CX_URL); })            /* proxy first, direct fallback */
         .then(function(data){
