@@ -191,7 +191,7 @@
 
   <div class="wrap">
 
-    <div class="notice" id="lockNotice">🔒 Checking access&hellip;</div>
+    <div class="notice" id="lockNotice">🔒 Checking Access&hellip;</div>
 
     <!-- Shift & UAV — auto from Firehawk, not editable here -->
     <div class="card">
@@ -307,7 +307,7 @@
   function msg(txt, cls){ var m=$g('gateMsg'); if(m){ m.textContent=txt||''; m.className='gate-msg'+(cls?(' '+cls):''); } }
   function unlock(name){
     var g=$g('gate'); if(g) g.classList.add('hide');
-    var n=$g('lockNotice'); if(n) n.textContent='🔒 Officer access \u00b7 '+(name||'verified');
+    var n=$g('lockNotice'); if(n) n.textContent='🔒 Officer Access \u00b7 '+(name||'Verified');
   }
   function shake(){ var c=document.querySelector('.gate-card'); if(!c) return; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
   function verify(pin, silent){
@@ -338,7 +338,7 @@
     if(go) go.addEventListener('click', submit);
     if(pin) pin.addEventListener('keydown', function(e){ if(e.key==='Enter') submit(); });
     var saved=null; try{ saved=JSON.parse(sessionStorage.getItem(SKEY)||'null'); }catch(e){}
-    if(saved && saved.pin){ verify(saved.pin, true).then(function(ok){ if(!ok){ try{ sessionStorage.removeItem(SKEY); }catch(e){} msg('Session expired \u2014 enter PIN',''); } }); }
+    if(saved && saved.pin){ verify(saved.pin, true).then(function(ok){ if(!ok){ try{ sessionStorage.removeItem(SKEY); }catch(e){} msg('Session Expired \u2014 enter PIN',''); } }); }
     else msg('','');
   });
 })();
@@ -422,7 +422,7 @@ var HOSPITALS=[
     {id:'methodist', name:'Methodist', tags:'L3 \u00b7 PCI \u00b7 Resus:Comprehensive \u00b7 Stroke:Comprehensive \u00b7 OB'},
     {id:'methodist_childrens', name:'Methodist | Children\u2019s', tags:'Heart Alert \u00b7 Pediatric'},
     {id:'methodist_landmark', name:'Methodist | Landmark', tags:'Limited services'},
-    {id:'methodist_metro', name:'Methodist | Main', tags:'L4 \u00b7 PCI \u00b7 Stroke:Primary \u00b7 OB'},
+    {id:'methodist_metro', name:'Methodist | Metro', tags:'L4 \u00b7 PCI \u00b7 Stroke:Primary \u00b7 OB'},
     {id:'methodist_ne', name:'Methodist | Northeast', tags:'L3 \u00b7 PCI \u00b7 Stroke:Primary'},
     {id:'methodist_spec', name:'Methodist | Specialty & Transplant', tags:'L4'},
     {id:'methodist_stoneoak', name:'Methodist | Stone Oak', tags:'L3 \u00b7 PCI \u00b7 Stroke:Primary \u00b7 OB'},
