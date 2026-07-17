@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -243,7 +243,9 @@
   /* ── Phone (portrait) — board becomes a stacked, scrollable status page; wall TV unaffected ── */
   @media (max-width:740px){
     html,body{height:auto;overflow:auto}
-    body{height:auto;min-height:100vh;padding:10px;gap:8px}
+    body{height:auto;min-height:100vh;min-height:100dvh;padding:10px;gap:8px;
+      padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));
+      padding-bottom:max(10px,env(safe-area-inset-bottom))}
     header{flex-wrap:wrap;row-gap:8px}
     .id h1{font-size:22px}
     .clock{margin-left:auto}
@@ -251,13 +253,48 @@
     .hchip{min-width:96px;flex:1 1 auto}
     .quad{flex-direction:column}
     .lcol{flex:none;width:100%}
+    .lcol > .wxrow{flex:none;flex-direction:column}          /* stack Weather over Specialty Units */
+    .wxrow > .wx-tile,.wxrow > .teams-tile{flex:none;width:100%}
+    .teams-tile{min-height:120px}
     .wx-tile{flex:none;width:100%}
     .sched-tile{flex:none;min-height:80px}
     .wx-hours{flex:none;height:150px}
     .rcol{flex:none;width:100%}
+    .rcol > .rrow{flex:none;flex-direction:column}           /* stack Hospitals over Med Direction */
+    .rrow > .hosp-tile,.rrow > .med-tile{flex:none;width:100%}
     .rcol > .tile{flex:none;min-height:96px}
     .rcol > .hosp-tile{flex:none;min-height:150px}
+    .rrow > .med-tile{min-height:120px}
     .hosp-body{min-height:110px}
+    .lcol > .empty-tile,.rcol > .empty-tile{display:none}    /* open slots add nothing on a phone */
+  }
+
+  /* ── Tablet: iPad portrait & phone landscape (741–1180px) — stacked scroll, rows stay 2-up ── */
+  @media (min-width:741px) and (max-width:1180px){
+    html,body{height:auto;overflow:auto}
+    body{height:auto;min-height:100vh;min-height:100dvh;padding:12px;gap:10px;
+      padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));
+      padding-bottom:max(12px,env(safe-area-inset-bottom))}
+    .quad{flex-direction:column}
+    .lcol,.rcol{flex:none;width:100%}
+    .lcol > .wxrow,.rcol > .rrow{flex:none}
+    .wxrow > .tile,.rrow > .tile{min-height:170px}
+    .rcol > .tile{flex:none}
+    .rcol > .hosp-tile{min-height:170px}
+    .sched-tile{flex:none;min-height:120px}
+    .lcol > .calls-tile{flex:none;min-height:110px}
+    .wx-hours{flex:none;height:170px}
+    .lcol > .empty-tile,.rcol > .empty-tile{display:none}
+    .tile .head .name{font-size:18px}
+    .metric .k{font-size:12px}
+    .metric .v{font-size:19px}
+  }
+
+  /* ── iPad landscape (1181–1400px) — keep TV two-column, allow page scroll so tiles don't crush ── */
+  @media (min-width:1181px) and (max-width:1400px){
+    html,body{height:auto;overflow:auto}
+    body{height:auto;min-height:100vh;min-height:100dvh}
+    .quad{min-height:640px}
   }
 
   .ph-strip{border-style:dashed !important;border-left-color:var(--border) !important;opacity:.7}
@@ -480,7 +517,7 @@
     </div>
     <div class="tile empty-tile">
       <div class="head"><span class="name">Empty Tile</span></div>
-      <div class="empty-body">&mdash; open slot &mdash;</div>
+      <div class="empty-body">&mdash; Open slot &mdash;</div>
     </div>
     </div>
 
@@ -504,7 +541,7 @@
       </div>
       <div class="tile empty-tile">
         <div class="head"><span class="name">Empty Tile</span></div>
-        <div class="empty-body">&mdash; open slot &mdash;</div>
+        <div class="empty-body">&mdash; Open slot &mdash;</div>
       </div>
     </div>
 
@@ -927,7 +964,7 @@
         body.innerHTML='<div class="idle">DISPATCH FEED UNAVAILABLE'+(errDetail?(' \u2014 '+esc(errDetail)):'')+' \u00b7 verify via CAD / radio</div>';
         if(pg) pg.hidden=true; return; }
       body.className="calls-body";
-      if(!calls.length){ body.innerHTML='<div class="idle">\u2014 no active calls</div>'; if(pg) pg.hidden=true; return; }
+      if(!calls.length){ body.innerHTML='<div class="idle">\u2014 No active calls</div>'; if(pg) pg.hidden=true; return; }
       var rows=calls.map(function(c){
         var un=(c.units&&c.units.length)?c.units.join(" "):"";
         return '<div class="call-e"><span class="ct">'+esc(c.type||"CALL")+'</span>'+
@@ -1061,7 +1098,7 @@
       if(!list) return;
       stopRot();
       if(!ok){ list.className="sched-list err";
-        list.innerHTML='<div class="sched-e"><span class="ds">shift schedule unavailable \u2014 can\u2019t reach board state</span></div>';
+        list.innerHTML='<div class="sched-e"><span class="ds">SHIFT SCHEDULE UNAVAILABLE \u2014 can\u2019t reach board state</span></div>';
         if(pg) pg.hidden=true; return; }
       var now=new Date(), horizon=tourHorizon();
       var items=((st&&st.calendar)||[])
@@ -1071,7 +1108,7 @@
         .filter(function(r){ return !r.valid || r.startDT < horizon; })   /* only this 48h tour: day 1 sees tomorrow, day 2 doesn't */
         .sort(function(a,b){ return a.sortKey-b.sortKey; });
       list.className="sched-list";
-      if(!items.length){ list.innerHTML='<div class="idle">\u2014 nothing scheduled</div>'; if(pg) pg.hidden=true; return; }
+      if(!items.length){ list.innerHTML='<div class="idle">\u2014 Nothing scheduled</div>'; if(pg) pg.hidden=true; return; }
       var todayKey=new Date().toDateString();
       var rows=items.map(function(r){
         var e=r.e;
@@ -1180,7 +1217,7 @@
       Promise.all(jobs).then(function(rs){
         var box=el("fbRain"); if(!box||!active) return;
         var valid=rs.filter(function(r){return r.inches!=null;});
-        if(!valid.length){ box.className="fb-rain err"; box.textContent="⚠ station rain estimate unavailable (MRMS)"; return; }
+        if(!valid.length){ box.className="fb-rain err"; box.textContent="⚠ STATION RAIN ESTIMATE UNAVAILABLE (MRMS)"; return; }
         var top=valid.reduce(function(a,b){return b.inches>a.inches?b:a;});
         box.className="fb-rain";
         box.innerHTML='MOST RAIN · <span class="big">'+esc(top.name)+' — '+top.inches.toFixed(2)+'&#8221; / 6h</span> <span class="src">MRMS radar estimate · worst of 5 stations</span>';
@@ -1204,7 +1241,7 @@
           rows.sort(function(a,b){ return (b.bad?1:0)-(a.bad?1:0); });   /* problems first */
           box.innerHTML=rows.map(function(r){return r.html;}).join("");
         })
-        .catch(function(){ var box=el("fbCx"); if(box&&active) box.innerHTML='<span class="cx-err">⚠ HALT crossing feed unavailable — verify closures manually</span>'; });
+        .catch(function(){ var box=el("fbCx"); if(box&&active) box.innerHTML='<span class="cx-err">⚠ HALT CROSSING FEED UNAVAILABLE \u2014 verify closures manually</span>'; });
     }
     function poll(){ loadRain(); loadCx(); }
     return { update:function(warningTier, eventName){
