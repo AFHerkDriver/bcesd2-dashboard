@@ -48,14 +48,15 @@
   .shield{width:clamp(40px,3.6vw,66px);height:auto;flex:0 0 auto}
   .id h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.4vw,36px);letter-spacing:2px;line-height:1}
   .id .sub{font-size:clamp(8px,.78vw,12px);color:var(--dim);margin-top:2px}
-  .clock{margin-left:auto;text-align:right}
+  .clock{text-align:right}
+  .hdr-right{margin-left:auto}
   .clock .time{font-family:'Bebas Neue',sans-serif;font-size:clamp(26px,3.2vw,50px);letter-spacing:2px;line-height:1}
   .clock .date{font-size:clamp(9px,.85vw,14px);color:var(--dim)}
   .shiftbadge{text-align:center;border:2px solid var(--shiftA);border-radius:9px;
     padding:clamp(4px,.5vw,9px) clamp(9px,1vw,16px);background:rgba(255,59,48,.12)}
   .shiftbadge .lbl{font-size:clamp(7px,.65vw,10px);letter-spacing:2px;color:var(--dim)}
   .shiftbadge .val{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.2vw,34px);color:var(--shiftA);line-height:1}
-  /* UAV chip lives in the header */
+  /* (legacy header UAV chip styles retired — UAV status now lives in the Unit Status tile) */
   .uavchip{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
     border:2px solid var(--green);border-radius:9px;background:rgba(52,199,89,.10);
     padding:clamp(4px,.5vw,9px) clamp(9px,1vw,16px);cursor:pointer}
@@ -71,7 +72,11 @@
     border:1px solid var(--border);border-left:5px solid var(--amber);border-radius:9px;
     padding:clamp(5px,.55vw,10px) clamp(11px,1.2vw,18px);overflow:hidden}
   .banner .tag{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.1vw,17px);letter-spacing:1.5px;color:var(--amber);flex:0 0 auto}
-  .banner .note{font-size:clamp(10px,.95vw,15px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+  .banner .note{font-size:clamp(10px,.95vw,15px);white-space:nowrap;overflow:hidden;flex:1;min-width:0}
+  .tick-track{display:inline-flex;white-space:nowrap;will-change:transform;animation:tickscroll var(--tickdur,40s) linear infinite}
+  .tick-track .ti{padding-right:clamp(40px,4vw,72px)}
+  .tick-track .ti .tw{color:var(--dim);font-size:clamp(8px,.78vw,12px);margin-left:8px}
+  @keyframes tickscroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
   .banner .who{font-size:clamp(8px,.75vw,12px);color:var(--dim);flex:0 0 auto}
   .banner .note.idle{color:var(--dim);font-style:italic}
   .ann-page{font-family:'DM Mono',monospace;font-size:clamp(9px,.75vw,13px);color:var(--dim);letter-spacing:1px;flex:0 0 auto}
@@ -92,10 +97,13 @@
 
   /* ── 2×2 Quadrant grid (balanced, no scroll) ─ */
   .quad{flex:1 1 auto;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
-  .wx-tile{flex:.8 1 0;min-width:0}                   /* weather column narrowed so the dense right column gets more room */
-  .rcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .lcol{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .wx-tile{flex:1.4 1 0;min-width:0;min-height:0}     /* weather no longer full-height: shares the left column with the schedule */
+  .sched-tile{flex:1 1 0;min-height:0}
+  .rcol{flex:.85 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rcol > .tile{flex:1 1 0;min-height:0}
   .rcol > .hosp-tile{flex:1.35 1 0}                   /* hospital status gets the most room on the right */
+  .rcol > .teams-tile{flex:.6 1 0}                    /* unit chips are one short row */
   .tile{background:var(--panel);border:1px solid var(--border);border-radius:11px;
     padding:clamp(8px,.85vmin,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
   .tile .head{display:flex;align-items:baseline;gap:8px;margin-bottom:clamp(4px,.5vmin,9px);flex:0 0 auto}
@@ -223,7 +231,9 @@
     .clock .time{font-size:30px}
     .hchip{min-width:96px;flex:1 1 auto}
     .quad{flex-direction:column}
+    .lcol{flex:none;width:100%}
     .wx-tile{flex:none;width:100%}
+    .sched-tile{flex:none;min-height:80px}
     .wx-hours{flex:none;height:150px}
     .rcol{flex:none;width:100%}
     .rcol > .tile{flex:none;min-height:96px}
@@ -258,18 +268,6 @@
   .al-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
   .al-more{font-size:clamp(10px,.9vw,14px);color:var(--dim);text-align:center;letter-spacing:1px}
   /* Shift calendar — bottom strip (officer-set) */
-  .cal-strip{flex:0 0 auto;display:flex;align-items:center;gap:clamp(10px,1vw,18px);overflow:hidden;
-    border:1px solid var(--border);border-radius:11px;background:var(--panel);
-    padding:clamp(6px,.6vmin,11px) clamp(12px,1.2vmin,20px);margin-top:clamp(6px,.6vmin,10px)}
-  .cal-strip[hidden]{display:none}
-  .cal-strip.err{border-color:var(--amber)}
-  .cal-strip .cs-lbl{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vw,21px);letter-spacing:2px;color:var(--dim)}
-  .cal-strip .cs-list{flex:1 1 auto;min-width:0;display:flex;gap:clamp(14px,1.6vw,30px);overflow:hidden;white-space:nowrap}
-  .cal-strip .cs-e{display:flex;align-items:baseline;gap:clamp(5px,.5vw,9px);flex:0 0 auto}
-  .cal-strip .cs-e .tm{font-family:'Bebas Neue',sans-serif;color:var(--accent);letter-spacing:1px;font-size:clamp(14px,1.4vw,23px)}
-  .cal-strip .cs-e .ds{font-size:clamp(11px,1.05vw,17px);color:var(--text)}
-  .cal-strip .cs-e.err .ds{color:var(--amber)}
-  .cal-strip .cs-page{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px}
 
   /* Matched header status chips (shift + UAV, identical footprint) */
   .hchip{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
@@ -283,14 +281,6 @@
   .hchip.shift.sa{border-color:#FF3B30;background:rgba(255,59,48,.12)} .hchip.shift.sa .val{color:#FF3B30}
   .hchip.shift.sb{border-color:#4A90D9;background:rgba(74,144,217,.12)} .hchip.shift.sb .val{color:#4A90D9}
   .hchip.shift.sc{border-color:#34C759;background:rgba(52,199,89,.12)} .hchip.shift.sc .val{color:#34C759}
-  .hchip.uav.up{border-color:var(--green);background:rgba(52,199,89,.10)}
-  .hchip.uav.up .val{color:var(--green)}
-  .hchip.uav.off{border-color:var(--border)}
-  .hchip.uav.off .val{color:var(--dim)}
-  .hchip.uav.oos{border-color:var(--red);background:rgba(255,59,48,.12)}
-  .hchip.uav.oos .val{color:var(--red)}
-  .hchip.uav.unk{border-color:var(--amber);background:rgba(255,193,7,.12)}
-  .hchip.uav.unk .val{color:var(--amber)}
   .hchip.burn.on{border-color:var(--red);background:rgba(255,59,48,.12)} .hchip.burn.on .val{color:var(--red)}
   .hchip.burn.off{border-color:var(--border);background:var(--panel2)} .hchip.burn.off .val{color:var(--dim)}
   .hchip.burn.unk{border-color:var(--amber);background:rgba(255,193,7,.12)} .hchip.burn.unk .val{color:var(--amber)}
@@ -301,9 +291,22 @@
   .med-body .mphone{font-size:clamp(13px,1.3vmin,22px);color:var(--accent);letter-spacing:1px}
   .med-body .mnote{font-size:clamp(9px,.8vmin,13px);color:var(--dim)}
   .med-body.err .mname{color:var(--amber)}
-  /* Specialty Teams tile */
-  .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-wrap:wrap;align-content:center;gap:clamp(5px,.6vmin,10px)}
-  .tchip{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1 1 0;min-width:0;
+  /* Shift Schedule tile — vertical list (replaces the old bottom strip) */
+  .sched-list{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px)}
+  .sched-e{display:flex;align-items:baseline;gap:clamp(8px,.9vmin,16px);padding:clamp(2px,.3vmin,5px) 0;border-bottom:1px solid rgba(48,54,61,.5)}
+  .sched-e:last-child{border-bottom:0}
+  .sched-e .tm{font-family:'Bebas Neue',sans-serif;color:var(--accent);letter-spacing:1px;font-size:clamp(15px,1.5vmin,25px);flex:0 0 auto;min-width:clamp(48px,4.6vmin,80px)}
+  .sched-e .ds{font-size:clamp(11px,1.05vmin,17px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sched-list.compact .sched-e .tm{font-size:clamp(12px,1.15vmin,19px)}
+  .sched-list.compact .sched-e .ds{font-size:clamp(9px,.85vmin,14px)}
+  .sched-list .idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px)}
+  .sched-list.err .ds,.sched-list.err .idle{color:var(--amber)}
+  .sched-page{font-family:'DM Mono',monospace;font-size:clamp(9px,.8vmin,13px);color:var(--dim);letter-spacing:1px}
+  .sched-page[hidden]{display:none}
+
+  /* Unit Status tile (UAV live + officer-set teams) */
+  .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-wrap:wrap;align-content:flex-start;gap:clamp(5px,.6vmin,10px)}
+  .tchip{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:0 1 auto;padding-left:clamp(8px,.9vmin,16px);padding-right:clamp(8px,.9vmin,16px);
     border:1px solid var(--border);border-left:3px solid var(--border);border-radius:8px;background:var(--panel2);
     padding:clamp(4px,.5vmin,9px) clamp(6px,.6vmin,11px)}
   .tchip .tcn{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.15vmin,19px);letter-spacing:1px;line-height:1;white-space:nowrap}
@@ -311,6 +314,7 @@
   .tchip.on{border-color:var(--green);border-left-color:var(--green);background:rgba(52,199,89,.10)}
   .tchip.on .tcs{color:var(--green)}
   .teams-body.err .tchip .tcs{color:var(--amber)}
+  .tchip.err{border-color:var(--amber)} .tchip.err .tcs{color:var(--amber)}
   .trow{display:flex;align-items:center;gap:10px;border-left:3px solid var(--border);border-radius:6px;background:var(--panel2);padding:clamp(3px,.4vmin,7px) clamp(8px,.9vmin,14px)}
   .trow .tn{flex:1 1 auto;min-width:0;font-size:clamp(11px,1.05vmin,17px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .trow .ts{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;font-size:clamp(12px,1.1vmin,18px);color:var(--dim)}
@@ -364,21 +368,18 @@
       <h1>BC2FD STATION DASHBOARD</h1>
       <div class="sub">Bexar County Emergency Services District No. 2</div>
     </div>
+    <div class="hchip burn unk hdr-right" id="burnChip" title="Bexar County burn ban — TFS via firehawk-wx worker"><div class="lbl">BURN BAN</div><div class="val" id="burnVal">…</div></div>
     <div class="clock">
       <div class="time" id="clock">14:32:07</div>
       <div class="date" id="date">Wednesday · July 15, 2026</div>
     </div>
     <div class="hchip shift" id="shiftChip"><div class="lbl">ON DUTY</div><div class="val" id="shiftVal">A</div></div>
-    <div class="hchip uav unk" id="uavChip" title="On-duty UAV units — live from Firehawk schedule"><div class="lbl">UAV</div><div class="val" id="uavVal">…</div></div>
-    <div class="hchip burn unk" id="burnChip" title="Bexar County burn ban — TFS via firehawk-wx worker"><div class="lbl">BURN BAN</div><div class="val" id="burnVal">…</div></div>
   </header>
 
   <!-- Announcements ticker (officer-set, rotates) -->
   <div class="banner" id="annBanner">
     <span class="tag">ANNOUNCEMENTS</span>
-    <span class="note" id="annNote">&hellip;</span>
-    <span class="who" id="annBy"></span>
-    <span class="ann-page" id="annPage" hidden></span>
+    <div class="note" id="annNote">&hellip;</div>
   </div>
 
   <!-- NWS alert lane — live; hidden when zero active alerts, fail-loud if NWS unreachable -->
@@ -394,7 +395,8 @@
   <!-- 2×2 Quadrants -->
   <div class="quad">
 
-    <!-- District Weather — full-height left column (now + outlook) -->
+    <!-- Left column: District Weather (compact) over Shift Schedule -->
+    <div class="lcol">
     <div class="tile wx-tile">
       <div class="head"><span class="name">District Weather</span><span class="stamp src" id="wxStamp">Loading NWS&hellip;</span></div>
       <div class="wx-flag" id="wxFlag" hidden></div>
@@ -412,16 +414,22 @@
       </div>
       <div class="wx-hours" id="wxHours"></div>
     </div>
+    <!-- Shift schedule — officer-set via control.html; vertical list, auto-paging on overflow -->
+    <div class="tile sched-tile">
+      <div class="head"><span class="name">Shift Schedule</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
+      <div class="sched-list" id="schedList"></div>
+    </div>
+    </div>
 
-    <!-- Right column: Hospital (tall) · Medical · Fire Weather -->
+    <!-- Right column: Unit Status (top) · Hospital · Medical · Fire Weather -->
     <div class="rcol">
+      <div class="tile teams-tile">
+        <div class="head"><span class="name">Unit Status</span><span class="stamp src" id="teamsStamp">Loading&hellip;</span></div>
+        <div class="teams-body" id="teamsBody"></div>
+      </div>
       <div class="tile hosp-tile">
         <div class="head"><span class="name">Hospital Status</span><span class="stamp src" id="hospStamp">Loading&hellip;</span></div>
         <div class="hosp-body" id="hospBody"></div>
-      </div>
-      <div class="tile teams-tile">
-        <div class="head"><span class="name">Specialty Teams</span><span class="stamp src" id="teamsStamp">Loading&hellip;</span></div>
-        <div class="teams-body" id="teamsBody"></div>
       </div>
       <div class="tile med-tile">
         <div class="head"><span class="name">Medical Direction</span><span class="stamp src" id="medStamp">Loading&hellip;</span></div>
@@ -434,13 +442,6 @@
       </div>
     </div>
 
-  </div>
-
-  <!-- Shift calendar — bottom strip (officer-set via control.html). Hidden when empty; fail-loud if state unreachable. -->
-  <div class="cal-strip" id="calStrip" hidden>
-    <span class="cs-lbl">SHIFT</span>
-    <div class="cs-list" id="calStripList"></div>
-    <span class="cs-page" id="calStripPage" hidden></span>
   </div>
 
 <script>
@@ -582,17 +583,9 @@
       for(var k in days){ if(parseInt(String(k).replace(/^d/,"")) === d) return days[k]; }
       return null;
     }
-    function setChip(cls,val){
-      var chip = document.getElementById("uavChip"), v = document.getElementById("uavVal");
-      if(!chip||!v) return;
-      chip.className = "hchip uav " + cls; v.textContent = val;
-    }
     function render(s){                                       /* s: {ok:true,u121,u124} | {ok:false} */
-      if(!s.ok){ setChip("unk","?"); return; }                /* read failed → fail-loud amber, never green */
-      if(s.u121 && s.u124)      setChip("up","121 / 124");
-      else if(s.u121)           setChip("up","121");
-      else if(s.u124)           setChip("up","124");
-      else                      setChip("oos","OOS");         /* nobody staffed today */
+      window.UAV_STATE = s;                                   /* consumed by the Unit Status tile */
+      if(window.renderUnits) window.renderUnits();
     }
     function load(){
       var now = new Date(), y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
@@ -737,22 +730,26 @@
      a single post is static; none shows a dim idle line. Announcements aren't safety data,
      so a transient read failure keeps the last posts on screen rather than blanking. ── */
   (function(){
-    var ROT=7000;
-    var anns=[], idx=0, timer=null, note, by, page;
-    function show(i){
-      note=note||document.getElementById("annNote"); by=by||document.getElementById("annBy"); page=page||document.getElementById("annPage");
-      if(!note) return;
-      if(!anns.length){ note.className="note idle"; note.textContent="\u2014 none posted"; if(by)by.textContent=""; if(page){page.hidden=true;page.textContent="";} return; }
-      var a=anns[i%anns.length];
-      note.className="note"; note.textContent=a.text||"";
-      if(by) by.textContent=a.by?("\u2014 "+a.by):"";
-      if(page){ if(anns.length>1){ page.hidden=false; page.textContent=((i%anns.length)+1)+" / "+anns.length; } else { page.hidden=true; page.textContent=""; } }
-    }
+    var PXSEC=60;                                            /* scroll speed, px per second */
+    function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+    var lastKey=null;
     function setAnns(list){
-      anns=(list||[]).filter(function(a){ return a && a.text && String(a.text).trim(); });
-      idx=0; if(timer){ clearInterval(timer); timer=null; }
-      show(0);
-      if(anns.length>1) timer=setInterval(function(){ idx=(idx+1)%anns.length; show(idx); }, ROT);
+      var note=document.getElementById("annNote"); if(!note) return;
+      var anns=(list||[]).filter(function(a){ return a && a.text && String(a.text).trim(); });
+      var key=JSON.stringify(anns);
+      if(key===lastKey) return;                              /* unchanged — don't restart the scroll */
+      lastKey=key;
+      if(!anns.length){ note.className="note idle"; note.textContent="\u2014 none posted"; return; }
+      var seg=anns.map(function(a){
+        return '<span class="ti">'+esc(a.text)+(a.by?('<span class="tw">\u2014 '+esc(a.by)+'</span>'):'')+'</span>';
+      }).join("");
+      note.className="note";
+      note.innerHTML='<div class="tick-track">'+seg+seg+'</div>';   /* duplicate for a seamless loop */
+      var track=note.firstElementChild;
+      requestAnimationFrame(function(){                       /* duration from real content width = constant speed */
+        var half=track.scrollWidth/2;
+        if(half>0) track.style.setProperty("--tickdur", Math.max(12, half/PXSEC)+"s");
+      });
     }
     onBoardState(function(ok, st){ if(ok) setAnns((st&&st.announcements)||[]); /* fail -> keep last known */ });
   })();
@@ -793,25 +790,46 @@
     setInterval(function(){ if(lastOk!==null) render(lastOk,lastSt); }, 5*60*1000);   /* re-evaluate the revert window between polls */
   })();
 
-  /* ── Specialty Teams — subscribes to the state bus. Staffed/not, officer-set.
-     Fail-loud on read failure. ── */
+  /* ── Unit Status — UAV121/UAV124 are LIVE from the Firehawk schedule (never officer-set);
+     BC161 / BOAT124 / RESCUE124 are officer-set via control.html. Two independent sources,
+     each fails loud on its own: a Firehawk read failure ambers the UAV chips only, a board-state
+     failure ambers the officer chips only — never a green shown from a failed read. ── */
   (function(){
-    var TEAMS=[["boat124","BOAT124"],["rescue124","RESCUE124"],["bat161","BC161"]];
-    function render(ok, st, setAt){
+    var OFF=[["bat161","BC161"],["boat124","BOAT124"],["rescue124","RESCUE124"]];
+    var stOk=null, stSt=null;
+    function uavChip(label, key){
+      var s=window.UAV_STATE;
+      if(!s) return '<div class="tchip"><span class="tcn">'+label+'</span><span class="tcs">&hellip;</span></div>';
+      if(!s.ok) return '<div class="tchip err"><span class="tcn">'+label+'</span><span class="tcs">?</span></div>';
+      var on=!!s[key];
+      return '<div class="tchip'+(on?" on":"")+'"><span class="tcn">'+label+'</span><span class="tcs">'+(on?"ON DUTY":"\u2014")+'</span></div>';
+    }
+    function render(){
       var body=document.getElementById("teamsBody"), stamp=document.getElementById("teamsStamp");
       if(!body) return;
-      if(!ok){ body.className="teams-body err";
-        body.innerHTML=TEAMS.map(function(t){ return '<div class="tchip"><span class="tcn">'+t[1]+'</span><span class="tcs">?</span></div>'; }).join("");
-        if(stamp) stamp.textContent="UNAVAILABLE"; return; }
-      var tm=(st&&st.teams)||{};
-      body.className="teams-body";
-      body.innerHTML=TEAMS.map(function(t){
-        var on=!!tm[t[0]];
-        return '<div class="tchip'+(on?" on":"")+'"><span class="tcn">'+t[1]+'</span><span class="tcs">'+(on?"STAFFED":"\u2014")+'</span></div>';
-      }).join("");
-      if(stamp) stamp.textContent="officer-set";
+      var html=uavChip("UAV121","u121")+uavChip("UAV124","u124");
+      if(stOk===false){
+        body.className="teams-body err";
+        html+=OFF.map(function(t){ return '<div class="tchip err"><span class="tcn">'+t[1]+'</span><span class="tcs">?</span></div>'; }).join("");
+        if(stamp) stamp.textContent="OFFICER STATE UNAVAILABLE";
+      } else if(stOk===null){
+        body.className="teams-body";
+        html+=OFF.map(function(t){ return '<div class="tchip"><span class="tcn">'+t[1]+'</span><span class="tcs">&hellip;</span></div>'; }).join("");
+        if(stamp) stamp.textContent="Loading\u2026";
+      } else {
+        var tm=(stSt&&stSt.teams)||{};
+        body.className="teams-body";
+        html+=OFF.map(function(t){
+          var on=!!tm[t[0]];
+          return '<div class="tchip'+(on?" on":"")+'"><span class="tcn">'+t[1]+'</span><span class="tcs">'+(on?"STAFFED":"\u2014")+'</span></div>';
+        }).join("");
+        if(stamp) stamp.textContent="UAV live \u00b7 teams officer-set";
+      }
+      body.innerHTML=html;
     }
-    onBoardState(render);
+    window.renderUnits=render;
+    render();
+    onBoardState(function(ok,st){ stOk=ok; stSt=st; render(); });
   })();
 
   /* ── Strike Teams — relocated into the Fire Weather tile (fire-context red styling).
@@ -829,44 +847,26 @@
     onBoardState(render);
   })();
 
-  /* ── Shift calendar — bottom strip. Reads officer-set state.calendar:[{time,desc}].
-     Hidden when empty (nothing planned is legitimately blank, not a failure). Read failure → amber note,
-     never a silent drop. Horizontal auto-page if events overflow the strip ("page, don't marquee"). ── */
+  /* ── Shift Schedule — vertical tile in the left column (officer-set state.calendar:[{time,desc}]).
+     Empty is a legitimate idle state (dim line, tile stays for layout stability). Read failure →
+     amber fail-loud, never a silent drop. Vertical overflow pages via the shared autoRotate helper. ── */
   (function(){
     var rot=null;
-    var raf=(typeof requestAnimationFrame==="function")?requestAnimationFrame:function(f){return setTimeout(f,16);};
     function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
     function stopRot(){ if(rot){ rot(); rot=null; } }
-    function hpage(listEl, items, indEl, intervalMs){   /* horizontal analog of autoRotate */
-      if(!listEl) return function(){};
-      var timer=null, stopped=false;
-      function widthFits(){ return listEl.scrollWidth <= listEl.clientWidth + 1; }
-      raf(function(){
-        if(stopped) return;
-        listEl.innerHTML=items.join("");
-        if(widthFits()){ if(indEl){ indEl.hidden=true; indEl.textContent=""; } return; }
-        var per=items.length;                              /* shrink page until it fits the strip width */
-        while(per>1){ listEl.innerHTML=items.slice(0,per).join(""); if(widthFits()) break; per--; }
-        var pages=[]; for(var i=0;i<items.length;i+=per) pages.push(items.slice(i,i+per));
-        var idx=0;
-        function show(i){ listEl.innerHTML=pages[i].join(""); if(indEl){ indEl.hidden=false; indEl.textContent=(i+1)+" / "+pages.length; } }
-        show(0);
-        timer=setInterval(function(){ if(stopped)return; idx=(idx+1)%pages.length; show(idx); }, intervalMs);
-      });
-      return function(){ stopped=true; if(timer) clearInterval(timer); };
-    }
     function render(ok, st){
-      var strip=document.getElementById("calStrip"), list=document.getElementById("calStripList"), pg=document.getElementById("calStripPage");
-      if(!strip||!list) return;
+      var list=document.getElementById("schedList"), pg=document.getElementById("schedPage"), stamp=document.getElementById("schedStamp");
+      if(!list) return;
       stopRot();
-      if(!ok){ strip.hidden=false; strip.className="cal-strip err";
-        list.innerHTML='<div class="cs-e err"><span class="ds">shift calendar unavailable — can\u2019t reach board state</span></div>';
-        if(pg){ pg.hidden=true; } return; }
+      if(!ok){ list.className="sched-list err";
+        list.innerHTML='<div class="sched-e"><span class="ds">shift schedule unavailable \u2014 can\u2019t reach board state</span></div>';
+        if(pg) pg.hidden=true; if(stamp) stamp.textContent="UNAVAILABLE"; return; }
       var cal=((st&&st.calendar)||[]).filter(function(e){ return e && (e.time || e.desc); });
-      if(!cal.length){ strip.hidden=true; strip.className="cal-strip"; if(pg){ pg.hidden=true; } return; }   /* nothing planned */
-      strip.hidden=false; strip.className="cal-strip";
-      var items=cal.map(function(e){ return '<div class="cs-e"><span class="tm">'+esc(e.time||"\u2014")+'</span><span class="ds">'+esc(e.desc||"")+'</span></div>'; });
-      rot=hpage(list, items, pg, 7000);
+      list.className="sched-list";
+      if(stamp) stamp.textContent="officer-set";
+      if(!cal.length){ list.innerHTML='<div class="idle">\u2014 nothing scheduled</div>'; if(pg) pg.hidden=true; return; }
+      var rows=cal.map(function(e){ return '<div class="sched-e"><span class="tm">'+esc(e.time||"\u2014")+'</span><span class="ds">'+esc(e.desc||"")+'</span></div>'; });
+      rot=autoRotate(list, rows, pg, 7000);
     }
     onBoardState(render);
   })();
