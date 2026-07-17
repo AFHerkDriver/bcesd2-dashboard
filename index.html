@@ -81,7 +81,7 @@
   .banner .tag{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.1vw,17px);letter-spacing:1.5px;color:var(--amber);flex:0 0 auto}
   .banner .note{font-size:clamp(10px,.95vw,15px);white-space:nowrap;overflow:hidden;flex:1;min-width:0}
   .tick-track{display:inline-flex;white-space:nowrap;will-change:transform;animation:tickscroll var(--tickdur,40s) linear infinite}
-  .tick-track .ti{padding-right:clamp(40px,4vw,72px)}
+  .tick-track .ti{padding-right:clamp(80px,8vw,150px)}   /* wider gap between posts on the scroll */
   .tick-track .ti .tw{color:var(--dim);font-size:clamp(8px,.78vw,12px);margin-left:8px}
   @keyframes tickscroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
   .banner .who{font-size:clamp(8px,.75vw,12px);color:var(--dim);flex:0 0 auto}
@@ -161,9 +161,10 @@
     background:rgba(255,59,48,.12);margin-bottom:clamp(4px,.5vmin,9px);flex:0 0 auto}
   .redflag .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vmin,32px);color:var(--red);letter-spacing:2px;line-height:1}
   .strike{display:flex;gap:7px;margin-top:clamp(4px,.5vmin,9px);flex:0 0 auto}
-  .strike .s{flex:1;border:1px solid var(--border);border-radius:8px;padding:clamp(3px,.4vmin,8px);text-align:center;background:var(--panel2)}
+  .strike .s{flex:1;border:1px solid var(--border);border-radius:8px;padding:clamp(3px,.4vmin,8px);text-align:center;background:var(--panel2);display:flex;flex-direction:column;align-items:center;gap:clamp(1px,.2vmin,4px)}
   .strike .s .n{font-size:clamp(8px,.72vmin,11px);color:var(--dim);letter-spacing:1px}
   .strike .s .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.15vmin,18px);margin-top:1px;line-height:1}
+  .strike .s .p{font-family:'DM Mono',monospace;font-size:clamp(10px,1vmin,16px);color:var(--text);line-height:1}
   .strike .s.on{border-color:var(--red);background:rgba(255,59,48,.12)}
   .strike .s.on .v{color:var(--red)}
 
@@ -206,6 +207,19 @@
   .hcol .hp{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.2vmin,20px);color:var(--dim);letter-spacing:.5px}
   .hcol .hp.wet{color:var(--blue)}
   .hcol .hp.dry{color:var(--amber)}
+  /* sunrise / sunset / moon — fills the space the 12-col outlook used to occupy */
+  .wx-astro{flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:space-around;
+    gap:clamp(8px,1vmin,20px);border-top:1px solid var(--border);
+    margin-top:clamp(6px,.7vmin,14px);padding-top:clamp(6px,.7vmin,14px)}
+  .wx-astro .astro{display:flex;flex-direction:column;align-items:center;gap:clamp(2px,.3vmin,5px);text-align:center;min-width:0}
+  .wx-astro .k{font-size:clamp(9px,.85vmin,14px);letter-spacing:2px;color:var(--dim)}
+  .wx-astro .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.2vmin,38px);letter-spacing:1px;line-height:1}
+  .wx-astro .astro.moon .v{font-size:clamp(13px,1.35vmin,22px)}
+  .wx-astro .astro.moon.full .v{color:var(--amber)}
+  .wx-moonflag{flex:0 0 auto;text-align:center;background:rgba(255,193,7,.15);border:1px solid var(--amber);
+    color:var(--amber);border-radius:8px;padding:clamp(4px,.45vmin,9px);margin-top:clamp(5px,.6vmin,11px);
+    font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;font-size:clamp(13px,1.3vmin,22px)}
+  .wx-moonflag[hidden]{display:none}
 
   /* Compact medical block (shares Q4 with calendar) */
   .med-compact{flex:0 0 auto;justify-content:flex-start;margin-bottom:clamp(6px,.7vmin,12px)}
@@ -243,16 +257,20 @@
   /* ── Fire-weather hourly pills: RH · wind · temp per hour, tier-colored ── */
   .fw-pills{display:flex;flex-wrap:wrap;gap:clamp(4px,.5vmin,9px);justify-content:center;
     margin-top:clamp(5px,.6vmin,11px)}
-  .fwp{display:flex;align-items:baseline;gap:clamp(4px,.45vmin,8px);border:1px solid var(--border);
-    border-radius:8px;background:var(--panel2);padding:clamp(3px,.35vmin,6px) clamp(6px,.7vmin,12px);
-    font-family:'DM Mono',monospace;font-size:clamp(9px,.9vmin,14px);white-space:nowrap}
-  .fwp .ph{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--dim);font-size:clamp(11px,1.05vmin,17px)}
-  .fwp .pv{color:var(--text)}
-  .fwp.t0{border-color:var(--green)} .fwp.t0 .ph{color:var(--green)}
-  .fwp.t1{border-color:var(--amber);background:rgba(255,193,7,.08)} .fwp.t1 .ph{color:var(--amber)}
-  .fwp.t2{border-color:var(--accent);background:rgba(255,107,53,.10)} .fwp.t2 .ph{color:var(--accent)}
-  .fwp.t3{border-color:var(--red);background:rgba(255,59,48,.14)} .fwp.t3 .ph{color:var(--red)}
-  .fwp.t3 .pv{color:var(--red)}
+  .fwp{display:flex;flex-direction:column;align-items:center;gap:clamp(2px,.25vmin,5px);
+    border:1px solid var(--border);border-radius:8px;background:var(--panel2);
+    padding:clamp(4px,.45vmin,8px) clamp(6px,.7vmin,11px);
+    font-family:'DM Mono',monospace;line-height:1;white-space:nowrap}
+  .fwp .pt{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--dim);font-size:clamp(12px,1.2vmin,19px)}      /* time, gray, 2400 */
+  .fwp .pT{font-family:'Bebas Neue',sans-serif;font-weight:700;color:#fff;font-size:clamp(15px,1.6vmin,26px);letter-spacing:.5px}  /* temp, white bold */
+  .fwp .pR{font-weight:700;font-size:clamp(11px,1.05vmin,17px)}                                                          /* RH, color-coded */
+  .fwp .pR.rh0{color:var(--green)} .fwp .pR.rh1{color:var(--amber)} .fwp .pR.rh2{color:var(--accent)} .fwp .pR.rh3{color:var(--red)}
+  .fwp .pW{font-size:clamp(10px,.95vmin,15px);color:var(--dim)}                                                         /* wind: 10 mph SSE */
+  .fwp .pW i{font-style:normal;color:var(--amber)}                                                                      /* gust */
+  .fwp.t0{border-color:var(--green)}
+  .fwp.t1{border-color:var(--amber);background:rgba(255,193,7,.08)}
+  .fwp.t2{border-color:var(--accent);background:rgba(255,107,53,.10)}
+  .fwp.t3{border-color:var(--red);background:rgba(255,59,48,.14)}
 
   /* ── Drone stream overlay + badge ── */
   .drone-overlay{position:fixed;inset:0;z-index:900;background:#000;display:none;flex-direction:column}
@@ -281,7 +299,7 @@
     .calls-body .idle{font-size:clamp(15px,1.5vmin,24px)}
     .call-e .ct{font-size:clamp(20px,2.1vmin,36px)}
     .call-e .ca{font-size:clamp(16px,1.7vmin,28px)}
-    .call-e .cu{font-size:clamp(13px,1.4vmin,22px)}
+    .call-e .cu{font-size:clamp(20px,2.1vmin,36px)}   /* units sized to match the call TYPE on the wall */
     .call-e .cw{font-size:clamp(16px,1.7vmin,28px)}
     .call-e .ce{font-size:clamp(17px,1.8vmin,30px)}
     .sched-e .tm{font-size:clamp(24px,2.6vmin,44px)}
@@ -309,16 +327,20 @@
     .banner .note{font-size:clamp(16px,1.5vw,25px)}
     .tick-track .ti .tw{font-size:clamp(12px,1.1vw,18px)}
     .ann-page{font-size:clamp(12px,1.05vw,18px)}
-    /* district weather 12-hour outlook */
-    .hcol .hh{font-size:clamp(16px,1.7vmin,29px)}
-    .hcol .wic{width:clamp(28px,2.7vmin,46px);height:clamp(28px,2.7vmin,46px)}
-    .hcol .ht{font-size:clamp(19px,2.1vmin,35px)}
-    .hcol .hw{font-size:clamp(16px,1.7vmin,29px)}
-    .hcol .hp{font-size:clamp(15px,1.55vmin,26px)}
+    /* district weather — current conditions + sun/moon */
+    .wx-astro .k{font-size:clamp(11px,1.05vmin,17px)}
+    .wx-astro .v{font-size:clamp(28px,3vmin,52px)}
+    .wx-astro .astro.moon .v{font-size:clamp(17px,1.8vmin,30px)}
+    .wx-moonflag{font-size:clamp(18px,1.9vmin,32px)}
     .wx-ic .wic{width:clamp(36px,3.2vmin,56px);height:clamp(36px,3.2vmin,56px)}
     .tchip{font-size:clamp(14px,1.4vmin,23px)}
-    .fwp{font-size:clamp(12px,1.15vmin,19px)}
-    .fwp .ph{font-size:clamp(14px,1.35vmin,22px)}
+    .fwp .pt{font-size:clamp(15px,1.5vmin,26px)}
+    .fwp .pT{font-size:clamp(20px,2.1vmin,36px)}
+    .fwp .pR{font-size:clamp(15px,1.5vmin,25px)}
+    .fwp .pW{font-size:clamp(13px,1.25vmin,21px)}
+    .strike .s .n{font-size:clamp(11px,1.05vmin,17px)}
+    .strike .s .v{font-size:clamp(18px,1.9vmin,32px)}
+    .strike .s .p{font-size:clamp(15px,1.5vmin,25px)}
   }
 
   /* ── Phone (portrait) — board becomes a stacked, scrollable status page; wall TV unaffected ── */
@@ -418,10 +440,10 @@
   .hchip .val{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2vw,32px);letter-spacing:1px;line-height:1;margin-top:2px;white-space:nowrap}
   .hchip.shift{border-color:var(--shiftA);background:rgba(255,59,48,.12)}
   .hchip.shift .val{color:var(--shiftA)}
-  .hchip.shift.sa{border-color:#FF3B30;background:rgba(255,59,48,.12)} .hchip.shift.sa .val{color:#FF3B30}
-  .hchip.shift.sb{border-color:#4A90D9;background:rgba(74,144,217,.12)} .hchip.shift.sb .val{color:#4A90D9}
-  .hchip.shift.sc{border-color:#34C759;background:rgba(52,199,89,.12)} .hchip.shift.sc .val{color:#34C759}
-  .hchip.burn.on{border-color:var(--red);background:rgba(255,59,48,.12)} .hchip.burn.on .val{color:var(--red)}
+  .hchip.shift.sa{border-color:#FF3B30;background:#FF3B30} .hchip.shift.sa .val,.hchip.shift.sa .lbl{color:#0D1117}
+  .hchip.shift.sb{border-color:#4A90D9;background:#4A90D9} .hchip.shift.sb .val,.hchip.shift.sb .lbl{color:#0D1117}
+  .hchip.shift.sc{border-color:#34C759;background:#34C759} .hchip.shift.sc .val,.hchip.shift.sc .lbl{color:#0D1117}
+  .hchip.burn.on{border-color:var(--red);background:var(--red)} .hchip.burn.on .val,.hchip.burn.on .lbl{color:#0D1117}   /* inverse only when active — pops on the wall */
   .hchip.burn.off{border-color:var(--border);background:var(--panel2)} .hchip.burn.off .val{color:var(--dim)}
   .hchip.burn.unk{border-color:var(--amber);background:rgba(255,193,7,.12)} .hchip.burn.unk .val{color:var(--amber)}
   /* Medical Direction tile */
@@ -437,7 +459,7 @@
     border-left:4px solid var(--red);border-radius:7px;background:rgba(255,59,48,.10)}
   .call-e .ct{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,26px);letter-spacing:1px;color:var(--red);flex:0 0 auto;white-space:nowrap}
   .call-e .ca{font-size:clamp(12px,1.2vmin,19px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .call-e .cu{margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(10px,1.05vmin,17px);color:var(--green);flex:0 0 auto;white-space:nowrap}
+  .call-e .cu{margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--green);flex:0 0 auto;white-space:nowrap}   /* units sized to match the call TYPE */
   .call-e .cw{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.3vmin,21px);letter-spacing:1px;color:var(--text)}
   .call-e .ce{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vmin,22px);letter-spacing:1px;color:var(--accent)}
   /* ── new-call strobe: first 60s a call is on the board, alternate to inverse (solid class-color
@@ -605,11 +627,15 @@
         </div>
         <div class="wx-vitals">
           <div class="vit"><span class="k">FEELS</span><span class="v" id="wxFeels">&mdash;</span></div>
-          <div class="vit"><span class="k">RH</span><span class="v" id="wxRH">&mdash;</span></div>
           <div class="vit"><span class="k">WIND</span><span class="v" id="wxWind">&mdash;</span></div>
         </div>
       </div>
-      <div class="wx-hours" id="wxHours"></div>
+      <div class="wx-astro" id="wxAstro">
+        <div class="astro"><span class="k">SUNRISE</span><span class="v" id="wxRise">&mdash;</span></div>
+        <div class="astro"><span class="k">SUNSET</span><span class="v" id="wxSet">&mdash;</span></div>
+        <div class="astro moon" id="wxMoonCol"><span class="k">MOON</span><span class="v" id="wxMoon">&mdash;</span></div>
+      </div>
+      <div class="wx-moonflag" id="wxMoonFlag" hidden>&#127765; FULL MOON</div>
     </div>
     <div class="tile teams-tile">
       <div class="head"><span class="name">Specialty Units &amp; OOS</span><span class="stamp src" id="teamsStamp"></span></div>
@@ -739,6 +765,46 @@
       wxGridCache[st.id]=u; return gW(u);});}
   var WX_PROXY=function(u){return "https://firehawk-wx.usafsentinel-45e.workers.dev/?url="+encodeURIComponent(u);};
   var WX_REFRESH=10*60*1000, wxLastGood=null;
+  /* ── Sun/moon are computed locally (no network) for the District 2 centroid — NWS hourly
+     carries neither, and a purely-math source can't go stale or false-positive. ── */
+  var WX_LAT=29.465, WX_LNG=-98.730;
+  function sunTimes(dObj,lat,lng){                                   /* NOAA sunrise equation, ~1-min accuracy */
+    var n=Math.ceil((dObj.getTime()-Date.UTC(2000,0,1,12,0,0))/86400000 + 0.0008);
+    var Js=n - lng/360;
+    var M=(357.5291 + 0.98560028*Js)%360, Mr=M*Math.PI/180;
+    var C=1.9148*Math.sin(Mr)+0.02*Math.sin(2*Mr)+0.0003*Math.sin(3*Mr);
+    var lam=(M+C+180+102.9372)%360, lamR=lam*Math.PI/180;
+    var Jt=2451545.0 + Js + 0.0053*Math.sin(Mr) - 0.0069*Math.sin(2*lamR);
+    var sinDec=Math.sin(lamR)*Math.sin(23.4397*Math.PI/180), dec=Math.asin(sinDec);
+    var latR=lat*Math.PI/180;
+    var cosH=(Math.sin(-0.833*Math.PI/180)-Math.sin(latR)*sinDec)/(Math.cos(latR)*Math.cos(dec));
+    if(cosH>1) return {rise:null,set:null};                          /* sun never rises */
+    if(cosH<-1) return {rise:null,set:null};                         /* sun never sets */
+    var H=Math.acos(cosH)*180/Math.PI;
+    function jd(j){ return new Date((j-2440587.5)*86400000); }
+    return {rise:jd(Jt-H/360), set:jd(Jt+H/360)};
+  }
+  function moonInfo(dObj){
+    var syn=29.530588853, ref=Date.UTC(2000,0,6,18,14,0);
+    var age=(((dObj.getTime()-ref)/86400000)%syn+syn)%syn;
+    var illum=(1-Math.cos(2*Math.PI*age/syn))/2;
+    var name= age<1.85?"New" : age<5.54?"Wax Crescent" : age<9.23?"First Qtr" : age<12.91?"Wax Gibbous"
+            : age<16.61?"Full" : age<20.30?"Wan Gibbous" : age<23.99?"Last Qtr" : age<27.68?"Wan Crescent":"New";
+    var full = Math.abs(age-14.7655)<1.2 || illum>=0.98;            /* ~1 day either side of full */
+    return {age:age, illum:illum, name:name, full:full};
+  }
+  function hm24(d){ try{ return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return "\u2014"; } }
+  function renderAstro(){
+    try{
+      var now=new Date(), s=sunTimes(now,WX_LAT,WX_LNG), m=moonInfo(now);
+      var er=document.getElementById("wxRise"), es=document.getElementById("wxSet");
+      if(er) er.textContent = s.rise?hm24(s.rise):"\u2014";
+      if(es) es.textContent = s.set ?hm24(s.set) :"\u2014";
+      var mo=document.getElementById("wxMoon"); if(mo) mo.textContent=m.name+" "+Math.round(m.illum*100)+"%";
+      var col=document.getElementById("wxMoonCol"); if(col) col.className="astro moon"+(m.full?" full":"");
+      var fl=document.getElementById("wxMoonFlag"); if(fl) fl.hidden=!m.full;
+    }catch(e){}
+  }
   function wxTO(p,ms){return Promise.race([p,new Promise(function(_,r){setTimeout(function(){r(new Error("timeout"))},ms)})]);}
   function gW(u){ /* direct first, worker-proxy fallback (same pattern as Firehawk) */
     return wxTO(fetch(u),8000).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
@@ -780,15 +846,15 @@
       var r=condRank(n.shortForecast); if(r>rank){rank=r;sf=n.shortForecast;}
       var hiS=(n.temperature!=null&&rh!=null)?wxHI(n.temperature,rh):n.temperature; if(hiS!=null&&(maxHI==null||hiS>maxHI))maxHI=hiS;});
     return {temp:maxT,rh:minRH,spd:maxSpd,gust:maxGust,dir:dir,sf:sf,hi:maxHI,day:(good[0][0]?good[0][0].isDaytime:true)};}
-  function aggHour(good,i){var maxT=null,maxSpd=-1,maxGust=null,maxP=-1,minRH=null,sf="",rank=-1,t0=null,day=true;
+  function aggHour(good,i){var maxT=null,maxSpd=-1,maxGust=null,maxP=-1,minRH=null,sf="",rank=-1,t0=null,day=true,dir="";
     good.forEach(function(P){var p=P[i]; if(!p)return; if(!t0){t0=p.startTime;day=p.isDaytime;}
       if(p.temperature!=null&&(maxT==null||p.temperature>maxT))maxT=p.temperature;
-      var w=wxW(p); if(w.spd>maxSpd)maxSpd=w.spd; if(w.gust!=null&&(maxGust==null||w.gust>maxGust))maxGust=w.gust;
+      var w=wxW(p); if(w.spd>maxSpd){maxSpd=w.spd;dir=w.dir;} if(w.gust!=null&&(maxGust==null||w.gust>maxGust))maxGust=w.gust;
       var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
       if(rh!=null&&(minRH==null||rh<minRH))minRH=rh;                       /* driest across the 5 stations */
       var pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:0; if(pop>maxP)maxP=pop;
       var r=condRank(p.shortForecast); if(r>rank){rank=r;sf=p.shortForecast;}});
-    return {time:t0,temp:maxT,spd:maxSpd,gust:maxGust,pop:maxP<0?0:maxP,rh:minRH,sf:sf,day:day};}
+    return {time:t0,temp:maxT,spd:maxSpd,gust:maxGust,pop:maxP<0?0:maxP,rh:minRH,sf:sf,day:day,dir:dir};}
   function renderAggregate(good,flag){
     try{ var _n=aggNow(good); FireWx.wx(_n); }catch(e){}
     var n=aggNow(good);
@@ -796,18 +862,10 @@
     document.getElementById("wxTemp").innerHTML=(n.temp!=null?n.temp:"\u2014")+"&deg;";
     document.getElementById("wxCond").textContent=n.sf||"\u2014";
     document.getElementById("wxFeels").innerHTML=(n.hi!=null?n.hi:"\u2014")+"&deg;";
-    document.getElementById("wxRH").textContent=(n.rh!=null?n.rh+"%":"\u2014");
     document.getElementById("wxWind").innerHTML=(n.spd>=0?n.spd:"\u2014")+(n.gust!=null?(' <em>G'+n.gust+'</em>'):"")+(n.dir?" "+n.dir:"");
-    var html="";
-    for(var i=1;i<=12;i++){var a=aggHour(good,i); if(!a.time)break;
-      var wt=a.gust!=null?("G"+a.gust):(a.spd>=0?(""+a.spd):"\u2014");
-      var rhTxt=(a.rh!=null?a.rh+"%":"\u2014"), rhCls=(a.rh!=null&&a.rh<=25)?" dry":"";
-      html+='<div class="hcol"><div class="hh">'+wxHr(a.time)+'</div>'+wxIcon(a.sf,a.day)+
-        '<div class="ht">'+(a.temp!=null?a.temp:"\u2014")+'&deg;</div>'+
-        '<div class="hw'+(((a.gust&&a.gust>=25)||a.spd>=25)?" hot":"")+'">'+wt+'</div>'+
-        '<div class="hp'+rhCls+'">'+rhTxt+'</div></div>';}
-    document.getElementById("wxHours").innerHTML=html;
-    var fhrs=[]; for(var j=1;j<=12;j++){ var b=aggHour(good,j); if(!b.time)break; fhrs.push(b); }
+    renderAstro();                                          /* sunrise / sunset / moon — local math, no NWS dependency */
+    /* fire-weather pills now carry the 12-hour detail, starting at the CURRENT hour (index 0) */
+    var fhrs=[]; for(var j=0;j<12;j++){ var b=aggHour(good,j); if(!b.time)break; fhrs.push(b); }
     try{ FireWx.hours(fhrs); }catch(e){}
     var fl=document.getElementById("wxFlag"), st=document.getElementById("wxStamp");
     var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false});
@@ -1173,7 +1231,7 @@
         if(pg) pg.hidden=true; return; }
       body.className="calls-body";
       if(!calls.length){ body.innerHTML='<div class="idle">\u2014 No active calls</div>'; if(pg) pg.hidden=true; return; }
-      var FRESH_MS=60000;                                   /* new-call strobe: first 60s on the board */
+      var FRESH_MS=30000;                                   /* new-call strobe: first 30s on the board */
       var rows=calls.map(function(c){
         var un=displayUnits(c.units), ts=ageBasis(c);
         var age=ts?(Date.now()-new Date(ts).getTime()):NaN;
@@ -1183,8 +1241,7 @@
                '<span class="ct">'+esc(c.type||"CALL")+'</span>'+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
                (un?('<span class="cu">'+esc(un)+'</span>'):'')+
-               '<span class="cw">'+dropTime(ts)+'</span>'+
-               '<span class="ce">'+elapsed(ageBasis(c))+'</span></div>';
+               '<span class="cw">'+dropTime(ts)+'</span></div>';   /* elapsed chip removed — reads as call time only, not chute time */
       });
       rot=autoRotate(body, rows, pg, 7000);
     }
@@ -1444,16 +1501,18 @@
       if((rt===3||wt===3)&&t<2) t=2;
       return t;
     }
-    function hr24(iso){ try{ var x=new Date(iso).getHours(); return ("0"+x).slice(-2); }catch(e){ return "\u2014"; } }
+    function hhmm(iso){ try{ var d=new Date(iso); return ("0"+d.getHours()).slice(-2)+"00"; }catch(e){ return "\u2014"; } }   /* full 2400 style */
+    function rhCls(rh){ return rh==null?"" : rh>=40?"rh0" : rh>=30?"rh1" : rh>=25?"rh2" : "rh3"; }   /* matches fwTier RH breaks */
     function pills(){
       if(!hrs||!hrs.length) return "";
       return '<div class="fw-pills">'+hrs.map(function(a){
         var t=fwTier(a.rh,a.spd,a.gust,a.temp);
-        var w=(a.spd>=0?a.spd:"\u2014")+(a.gust!=null?"G"+a.gust:"");
-        return '<div class="fwp t'+t+'"><span class="ph">'+hr24(a.time)+'</span>'+
-               '<span class="pv">'+(a.rh!=null?a.rh+"%":"\u2014")+'</span>'+
-               '<span class="pv">'+w+'</span>'+
-               '<span class="pv">'+(a.temp!=null?a.temp+"\u00b0":"\u2014")+'</span></div>';
+        var wind=(a.spd>=0?a.spd:"\u2014")+" mph"+(a.dir?(" "+a.dir):"")+(a.gust!=null?(' <i>G'+a.gust+'</i>'):'');
+        return '<div class="fwp t'+t+'">'+
+               '<span class="pt">'+hhmm(a.time)+'</span>'+
+               '<span class="pT">'+(a.temp!=null?a.temp+"\u00b0":"\u2014")+'</span>'+
+               '<span class="pR '+rhCls(a.rh)+'">'+(a.rh!=null?a.rh+"%":"\u2014")+'</span>'+
+               '<span class="pW">'+wind+'</span></div>';
       }).join("")+'</div>';
     }
     function render(){
@@ -1468,14 +1527,7 @@
       }
       var flag = unknown ? '<div class="fw-flag unk">⚠ RED FLAG STATUS UNKNOWN</div>'
                          : '<div class="fw-flag">🚩 RED FLAG — EXTREME FIRE WEATHER</div>';
-      var rh=agg&&agg.rh!=null?agg.rh:null, t=agg&&agg.temp!=null?agg.temp:null;
-      var w=agg&&agg.spd>=0?agg.spd:null, g=agg&&agg.gust!=null?agg.gust:null, wmax=(g!=null&&w!=null)?Math.max(w,g):(g!=null?g:w);
-      function box(k,val,c,unit){ return '<div class="fwv '+c+'"><span class="k">'+k+'</span><span class="v">'+(val!=null?val+(unit||""):"—")+'</span></div>'; }
-      body.innerHTML=flag+'<div class="fw-row">'+
-        box("RH", rh, cls(rh,25,15,true), "%")+
-        box("WIND", w!=null?(""+w+(g!=null?" G"+g:"")):null, cls(wmax,20,25), "")+
-        box("TEMP", t, cls(t,95,100), "°")+
-        '</div>'+pills();
+      body.innerHTML=flag+pills();                          /* pills carry the 12h detail; no separate "current" box */
       if(stamp) stamp.textContent = (mode==="on"?"officer: forced on":"NWS")+" · worst of 5 stations";
     }
     function loadNws(){
@@ -1539,15 +1591,45 @@
         .catch(function(){ var box=el("fbCx"); if(box&&active) box.innerHTML='<span class="cx-err">⚠ HALT CROSSING FEED UNAVAILABLE \u2014 verify closures manually</span>'; });
     }
     function poll(){ loadRain(); loadCx(); }
-    return { update:function(warningTier, eventName){
+    var override="auto", lastWarn=false, lastName="";
+    function stampText(){ return override==="on" ? "officer: forced on"
+                        : (lastName ? (lastName+" active") : "officer view"); }
+    function apply(){
       var band=el("floodBand"); if(!band) return;
-      if(warningTier && !active){ active=true; evName=eventName||"";
-        var st=el("fbStamp"); if(st) st.textContent=evName?(evName+" active"):"";
+      var eff = override==="on" ? true : override==="off" ? false : lastWarn;   /* auto = NWS Warning-tier gate */
+      if(eff && !active){ active=true; evName=lastName;
+        var st=el("fbStamp"); if(st) st.textContent=stampText();
         band.hidden=false; poll(); timer=setInterval(poll, POLL);
-      } else if(!warningTier && active){ active=false; band.hidden=true; if(timer){clearInterval(timer);timer=null;} }
-      else if(warningTier && active && eventName && eventName!==evName){ evName=eventName;
-        var s2=el("fbStamp"); if(s2) s2.textContent=evName+" active"; }
-    }};
+      } else if(!eff && active){ active=false; band.hidden=true; if(timer){clearInterval(timer);timer=null;} }
+      else if(eff && active){ var s2=el("fbStamp"); if(s2) s2.textContent=stampText(); evName=lastName; }
+    }
+    onBoardState(function(ok,st){ override=(ok&&st&&st.flood&&st.flood.mode)||"auto"; apply(); });
+    return { update:function(warningTier, eventName){ lastWarn=!!warningTier; lastName=eventName||""; apply(); } };
+  })();
+
+
+  /* ── Strike Teams — officer-set (control.html). Each ACTIVE team shows name / callsign / phone,
+     stacked, in the NWS tile footer. Nothing active -> the row collapses. Falls back to the
+     legacy teams.west/east boolean when the richer strikes{} object isn't present yet. ── */
+  (function(){
+    function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+    var LBL={west:"STRIKE TEAM WEST", east:"STRIKE TEAM EAST"};
+    function render(ok,st){
+      var row=document.getElementById("strikeRow"); if(!row) return;
+      var S=(ok&&st&&st.strikes)||null, teams=(ok&&st&&st.teams)||{}, out=[];
+      ["west","east"].forEach(function(k){
+        var d=S&&S[k]?S[k]:null;
+        var active=d?!!d.active:!!teams[k];                 /* fall back to legacy flag */
+        if(!active) return;
+        var cs=d&&d.callsign?esc(d.callsign):"", ph=d&&d.phone?esc(d.phone):"";
+        out.push('<div class="s on"><span class="n">'+LBL[k]+'</span>'+
+                 '<span class="v">'+(cs||"\u2014")+'</span>'+
+                 (ph?('<span class="p">'+ph+'</span>'):'')+'</div>');
+      });
+      row.innerHTML=out.join("");
+      row.style.display=out.length?"":"none";
+    }
+    onBoardState(function(ok,st){ render(ok,st); });
   })();
 
   /* ── NWS alerts — live; lane hidden only on a verified zero, fail-loud on failure ── */

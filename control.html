@@ -265,13 +265,31 @@
       <button class="btn ghost" id="addWi" type="button">+ Add write-in unit</button>
     </div>
 
-    <!-- Strike Teams — feeds the NWS Alerts tile chips -->
+    <!-- Strike Teams — name / callsign / phone shown stacked in the NWS Alerts tile footer when staffed -->
     <div class="card">
       <h2>Strike Teams <span class="tag">OFFICER</span></h2>
-      <div class="hint">Deployment chips at the bottom of the NWS Alerts tile.</div>
+      <div class="hint">When staffed, the board shows the team name, its STEN callsign, and the phone number — stacked — in the NWS Alerts tile.</div>
+      <div class="field"><label>Strike Team West</label><div class="seg red useg" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
       <div class="row">
-        <div class="field"><label>West Strike Team</label><div class="seg red useg" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
-        <div class="field"><label>East Strike Team</label><div class="seg red useg" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+        <div class="field"><label>West Callsign</label><input type="text" id="stCsWest" placeholder="STEN124"></div>
+        <div class="field"><label>West Phone</label><input type="tel" id="stPhWest" placeholder="(210) 000-0000"></div>
+      </div>
+      <div class="field" style="margin-top:10px"><label>Strike Team East</label><div class="seg red useg" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+      <div class="row">
+        <div class="field"><label>East Callsign</label><input type="text" id="stCsEast" placeholder="STEN162"></div>
+        <div class="field"><label>East Phone</label><input type="tel" id="stPhEast" placeholder="(210) 000-0000"></div>
+      </div>
+    </div>
+
+    <!-- Flood Ops override — mirrors Fire Weather -->
+    <div class="card">
+      <h2>Flood Ops <span class="tag live">LIVE NWS</span> <span class="tag">OFFICER</span></h2>
+      <div class="hint">Low-water crossings + station rain accumulator. Auto shows the band on an NWS Flood / Flash-Flood Warning; force it on to watch conditions before a warning posts.</div>
+      <div class="field">
+        <label>Flood Band</label>
+        <div class="seg" id="segFlood">
+          <button data-v="auto">Auto (NWS)</button><button data-v="on">Force On</button><button data-v="off">Force Off</button>
+        </div>
       </div>
     </div>
 
@@ -396,6 +414,8 @@ function defaults(){
     hospitals:{},   /* id -> diversion status; absent = OPEN */
     drone:{ streams:[{url:'',label:''},{url:'',label:''}], bannerOnly:false },   /* OpsHub share links; board pops overlay */
     fire:{ redFlag:'auto' },
+    flood:{ mode:'auto' },
+    strikes:{ west:{active:false,callsign:'',phone:''}, east:{active:false,callsign:'',phone:''} },
     teams:{ b121:false, mac121:false, bat161:false, boat124:false, rescue124:false, west:false, east:false },
     apparatus:{ l123:false, ap124:false, l125:false },   /* true = OUT OF SERVICE */
     tExp:{}, aExp:{},                                    /* unit -> optional expiry (datetime-local); board auto-reverts past it */
@@ -532,8 +552,11 @@ function hydrate(){
   segSet('segBat161', state.teams.bat161?'on':'off');
   segSet('segBoat124', state.teams.boat124?'on':'off');
   segSet('segRescue124', state.teams.rescue124?'on':'off');
-  segSet('segWest', state.teams.west?'on':'off');
-  segSet('segEast', state.teams.east?'on':'off');
+  segSet('segWest', state.strikes.west.active?'on':'off');
+  segSet('segEast', state.strikes.east.active?'on':'off');
+  $('stCsWest').value=state.strikes.west.callsign||''; $('stPhWest').value=state.strikes.west.phone||'';
+  $('stCsEast').value=state.strikes.east.callsign||''; $('stPhEast').value=state.strikes.east.phone||'';
+  segSet('segFlood', state.flood.mode);
   segSet('segL123', state.apparatus.l123?'oos':'in');
   segSet('segAP124', state.apparatus.ap124?'oos':'in');
   segSet('segL125', state.apparatus.l125?'oos':'in');
@@ -561,8 +584,13 @@ segClick('segMac121', function(v){ state.teams.mac121=(v==='on'); updateExpVis()
 segClick('segBat161', function(v){ state.teams.bat161=(v==='on'); updateExpVis(); });
 segClick('segBoat124', function(v){ state.teams.boat124=(v==='on'); updateExpVis(); });
 segClick('segRescue124', function(v){ state.teams.rescue124=(v==='on'); updateExpVis(); });
-segClick('segWest', function(v){ state.teams.west=(v==='on'); });
-segClick('segEast', function(v){ state.teams.east=(v==='on'); });
+segClick('segWest', function(v){ state.strikes.west.active=(v==='on'); state.teams.west=state.strikes.west.active; });
+segClick('segEast', function(v){ state.strikes.east.active=(v==='on'); state.teams.east=state.strikes.east.active; });
+segClick('segFlood', function(v){ state.flood.mode=v; });
+$('stCsWest').addEventListener('input', function(){ state.strikes.west.callsign=this.value; });
+$('stPhWest').addEventListener('input', function(){ state.strikes.west.phone=this.value; });
+$('stCsEast').addEventListener('input', function(){ state.strikes.east.callsign=this.value; });
+$('stPhEast').addEventListener('input', function(){ state.strikes.east.phone=this.value; });
 segClick('segL123', function(v){ state.apparatus.l123=(v==='oos'); updateExpVis(); });
 segClick('segAP124', function(v){ state.apparatus.ap124=(v==='oos'); updateExpVis(); });
 segClick('segL125', function(v){ state.apparatus.l125=(v==='oos'); updateExpVis(); });
@@ -700,6 +728,10 @@ function ensureShape(s){ var d=defaults();
   if(s.announcements===undefined && s.banner && s.banner.text){ s.announcements=[{text:s.banner.text, by:s.banner.who||''}]; }  /* migrate old single note */
   if(s.teams===undefined){ s.teams={ bat161:false, boat124:false, rescue124:false,
     west:!!(s.fire&&s.fire.west), east:!!(s.fire&&s.fire.east) }; }                     /* migrate strike flags */
+  if(s.strikes===undefined){ s.strikes={                                               /* migrate legacy staffed flag -> rich strike record */
+    west:{active:!!(s.teams&&s.teams.west), callsign:'', phone:''},
+    east:{active:!!(s.teams&&s.teams.east), callsign:'', phone:''} }; }
+  ['west','east'].forEach(function(k){ if(!s.strikes[k]) s.strikes[k]={active:false,callsign:'',phone:''}; });
   for(var k in d){ if(s[k]===undefined) s[k]=d[k]; } if(!s.hospitals)s.hospitals={}; return s; }
 Store.get().then(function(s){ if(s) state=ensureShape(s); hydrate(); })
   .catch(function(){ hydrate(); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
