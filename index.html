@@ -1111,6 +1111,15 @@ if('serviceWorker' in navigator){
     }).catch(function(){});
   });
 }
+/* Kiosk resilience: one scheduled hard reload nightly at 04:07 — clears slow leaks,
+   recovers from any wedged state, and lands in the quietest hour. Once per day, guarded. */
+(function(){
+  var done="";
+  setInterval(function(){
+    var n=new Date(), key=n.toDateString();
+    if(n.getHours()===4 && n.getMinutes()===7 && done!==key){ done=key; location.reload(); }
+  }, 30000);
+})();
 </script>
 </body>
 </html>
