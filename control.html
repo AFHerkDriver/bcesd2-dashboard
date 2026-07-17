@@ -197,6 +197,19 @@
       </div>
     </div>
 
+    <!-- Heavy Apparatus OOS -->
+    <div class="card">
+      <h2>Heavy Apparatus <span class="tag">OFFICER</span></h2>
+      <div class="hint">Mark units OUT OF SERVICE — they appear red on the board only while OOS.</div>
+      <div class="row">
+        <div class="field"><label>Ladder 123</label><div class="seg red" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+        <div class="field"><label>Aerial Platform 124</label><div class="seg red" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Ladder 125</label><div class="seg red" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      </div>
+    </div>
+
     <div class="card">
       <h2>Fire Weather <span class="tag live">LIVE NWS</span> <span class="tag">OFFICER</span></h2>
       <div class="hint">RH / wind / temp come live from NWS. Red Flag defaults to the NWS feed; override only if needed.</div>
@@ -271,6 +284,7 @@ function defaults(){
     hospitals:{},   /* id -> diversion status; absent = OPEN */
     fire:{ redFlag:'auto' },
     teams:{ bat161:false, boat124:false, rescue124:false, west:false, east:false },
+    apparatus:{ l123:false, ap124:false, l125:false },   /* true = OUT OF SERVICE */
     announcements:[
       {text:'Water tender OOS until 1500 — cross-staff Engine 62.', by:'BC Alvarez'},
       {text:'Station 122 bay door repair 1300–1500 — stage apparatus outside.', by:'Station Officer'}
@@ -393,6 +407,9 @@ function hydrate(){
   segSet('segRescue124', state.teams.rescue124?'on':'off');
   segSet('segWest', state.teams.west?'on':'off');
   segSet('segEast', state.teams.east?'on':'off');
+  segSet('segL123', state.apparatus.l123?'oos':'in');
+  segSet('segAP124', state.apparatus.ap124?'oos':'in');
+  segSet('segL125', state.apparatus.l125?'oos':'in');
   renderAnn();
   renderCal();
   
@@ -412,6 +429,9 @@ segClick('segBoat124', function(v){ state.teams.boat124=(v==='on'); });
 segClick('segRescue124', function(v){ state.teams.rescue124=(v==='on'); });
 segClick('segWest', function(v){ state.teams.west=(v==='on'); });
 segClick('segEast', function(v){ state.teams.east=(v==='on'); });
+segClick('segL123', function(v){ state.apparatus.l123=(v==='oos'); });
+segClick('segAP124', function(v){ state.apparatus.ap124=(v==='oos'); });
+segClick('segL125', function(v){ state.apparatus.l125=(v==='oos'); });
 
 $('medName').addEventListener('input',function(){ state.med.custom.name=this.value;  });
 $('medPhone').addEventListener('input',function(){ state.med.custom.phone=this.value;  });
