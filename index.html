@@ -125,7 +125,7 @@
     padding:clamp(8px,.85vmin,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
   .tile .head{display:block;position:relative;text-align:center;background:var(--panel2);border-radius:8px;
     padding:clamp(3px,.4vmin,7px) 8px;margin-bottom:clamp(4px,.5vmin,9px);flex:0 0 auto}
-  .tile .head .name{font-family:'Bebas Neue',sans-serif;font-size:clamp(14px,1.35vmin,22px);letter-spacing:2px;color:var(--accent)}
+  .tile .head .name{font-family:'Bebas Neue',sans-serif;font-size:clamp(14px,1.35vmin,22px);letter-spacing:2px;color:var(--blue)}
   .tile .head .stamp{display:none}                    /* corner source notes retired — failures render in tile bodies */
   .metric{display:flex;align-items:baseline;justify-content:space-between;padding:clamp(2px,.35vmin,6px) 0;
     border-bottom:1px solid rgba(48,54,61,.5)}
@@ -139,7 +139,7 @@
   .med .now{font-size:clamp(9px,.8vmin,12px);letter-spacing:2px;color:var(--green)}
   .med-name{font-family:'Bebas Neue',sans-serif;font-size:clamp(22px,2.5vmin,42px);letter-spacing:1px;line-height:1}
   .med-role{font-size:clamp(10px,.9vmin,15px);color:var(--dim);margin:1px 0 4px}
-  .med-phone{font-family:'Bebas Neue',sans-serif;font-size:clamp(22px,2.4vmin,40px);color:var(--accent);letter-spacing:2px;line-height:1.05}
+  .med-phone{font-family:'Bebas Neue',sans-serif;font-size:clamp(22px,2.4vmin,40px);color:var(--blue);letter-spacing:2px;line-height:1.05}
   .med-bk{margin-top:clamp(6px,.7vmin,12px);padding-top:clamp(6px,.7vmin,12px);border-top:1px solid var(--border)}
   .med-bk .lbl{font-size:clamp(8px,.72vmin,11px);letter-spacing:2px;color:var(--dim)}
   .med-bk .nm{font-size:clamp(11px,1.05vmin,17px);margin-top:1px}
@@ -178,7 +178,7 @@
   .q4 .cal{flex:1;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--border);padding-top:clamp(4px,.5vmin,9px)}
   .cal-list{display:flex;flex-direction:column;gap:clamp(2px,.3vmin,6px);flex:1;justify-content:space-between}
   .cal-list .e{display:flex;gap:9px;align-items:baseline;font-size:clamp(10px,.9vmin,15px)}
-  .cal-list .e .tm{font-family:'Bebas Neue',sans-serif;color:var(--accent);letter-spacing:1px;flex:0 0 auto;min-width:52px}
+  .cal-list .e .tm{font-family:'Bebas Neue',sans-serif;color:var(--blue);letter-spacing:1px;flex:0 0 auto;min-width:52px}
   .cal-list .e span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* Q1 District Weather — now + next hours (big, glanceable) */
@@ -244,6 +244,7 @@
   @media (max-width:740px){
     html,body{height:auto;overflow:auto}
     body{height:auto;min-height:100vh;min-height:100dvh;padding:10px;gap:8px;
+      padding-top:max(10px,env(safe-area-inset-top));
       padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));
       padding-bottom:max(10px,env(safe-area-inset-bottom))}
     header{flex-wrap:wrap;row-gap:8px}
@@ -273,6 +274,7 @@
   @media (min-width:741px) and (max-width:1180px){
     html,body{height:auto;overflow:auto}
     body{height:auto;min-height:100vh;min-height:100dvh;padding:12px;gap:10px;
+      padding-top:max(12px,env(safe-area-inset-top));
       padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));
       padding-bottom:max(12px,env(safe-area-inset-bottom))}
     .quad{flex-direction:column}
@@ -345,7 +347,7 @@
   .med-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:clamp(2px,.3vmin,6px)}
   .med-body .mrole{font-size:clamp(10px,1vmin,16px);letter-spacing:2px;color:var(--dim);text-transform:uppercase}
   .med-body .mname{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2.1vmin,34px);letter-spacing:1px;line-height:1.05}
-  .med-body .mphone{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2.1vmin,34px);color:var(--accent);letter-spacing:2px}
+  .med-body .mphone{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2.1vmin,34px);color:var(--blue);letter-spacing:2px}
   .med-body .mnote{font-size:clamp(9px,.8vmin,13px);color:var(--dim)}
   .med-body.err .mname{color:var(--amber)}
   /* Active Calls tile */
@@ -365,13 +367,13 @@
   .sched-list{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px)}
   .sched-e{display:flex;align-items:baseline;gap:clamp(8px,.9vmin,16px);padding:clamp(2px,.3vmin,5px) 0;border-bottom:1px solid rgba(48,54,61,.5)}
   .sched-e:last-child{border-bottom:0}
-  .sched-e .tm{font-family:'Bebas Neue',sans-serif;color:var(--accent);letter-spacing:1px;font-size:clamp(19px,2.1vmin,34px);flex:0 0 auto;min-width:clamp(58px,5.4vmin,94px)}
-  .sched-e .tme{font-family:'Bebas Neue',sans-serif;color:var(--accent);opacity:.75;letter-spacing:1px;font-size:clamp(15px,1.6vmin,26px);flex:0 0 auto;margin-left:calc(-1*clamp(4px,.5vmin,9px))}
+  .sched-e .tm{font-family:'Bebas Neue',sans-serif;color:var(--blue);letter-spacing:1px;font-size:clamp(19px,2.1vmin,34px);flex:0 0 auto;min-width:clamp(58px,5.4vmin,94px)}
+  .sched-e .tme{font-family:'Bebas Neue',sans-serif;color:var(--blue);opacity:.75;letter-spacing:1px;font-size:clamp(15px,1.6vmin,26px);flex:0 0 auto;margin-left:calc(-1*clamp(4px,.5vmin,9px))}
   .sched-e .dt{font-family:'DM Mono',monospace;font-size:clamp(10px,.95vmin,15px);color:var(--dim);flex:0 0 auto}
   .sched-e .ds{font-size:clamp(14px,1.45vmin,23px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .sched-e.now{background:rgba(255,107,53,.14);border-left:3px solid var(--accent);border-radius:7px;
+  .sched-e.now{background:rgba(52,199,89,.14);border-left:3px solid var(--green);border-radius:7px;
     padding-left:clamp(7px,.8vmin,13px);border-bottom:0;margin:1px 0}
-  .sched-e.now .nowtag{margin-left:auto;flex:0 0 auto;font-family:'Bebas Neue',sans-serif;color:var(--accent);
+  .sched-e.now .nowtag{margin-left:auto;flex:0 0 auto;font-family:'Bebas Neue',sans-serif;color:var(--green);
     letter-spacing:2px;font-size:clamp(11px,1.1vmin,18px)}
   .sched-list.compact .sched-e .tm{font-size:clamp(15px,1.6vmin,26px)}
   .sched-list.compact .sched-e .ds{font-size:clamp(11px,1.1vmin,18px)}
@@ -381,7 +383,7 @@
   .sched-page[hidden]{display:none}
 
   /* Unit Status tile (UAV live + officer-set teams) */
-  .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-wrap:wrap;align-content:flex-start;gap:clamp(5px,.6vmin,10px)}
+  .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;gap:clamp(5px,.6vmin,10px)}
   .tchip{display:flex;align-items:center;justify-content:center;text-align:center;
     flex:0 0 auto;width:clamp(92px,9vmin,150px);height:clamp(30px,3.1vmin,50px);
     border:2px solid var(--border);border-radius:9px;background:var(--panel2);overflow:hidden}
@@ -1115,8 +1117,8 @@
         var isNow = r.valid && r.startDT<=now && now<=r.endDT && parseMin(e.time)!=null;
         var dtxt = (e.date && !(r.valid && r.startDT.toDateString()===todayKey && (parseMin(e.time)!=null)))
                    ? ((r.valid && r.startDT.toDateString()===todayKey) ? "" : '<span class="dt">'+esc(e.date)+'</span>') : "";
-        var endTxt = e.end ? ('<span class="tme">\u2013 '+esc(e.end)+'</span>') : "";
-        return '<div class="sched-e'+(isNow?" now":"")+'"><span class="tm">'+esc(e.time||"\u2014")+'</span>'+endTxt+dtxt+
+        var tmTxt = e.end ? (esc(e.time||"\u2014")+'\u2013'+esc(e.end)) : esc(e.time||"\u2014");
+        return '<div class="sched-e'+(isNow?" now":"")+'"><span class="tm">'+tmTxt+'</span>'+dtxt+
                '<span class="ds">'+esc(e.desc||"")+'</span>'+(isNow?'<span class="nowtag">NOW</span>':'')+'</div>';
       });
       rot=autoRotate(list, rows, pg, 7000);
