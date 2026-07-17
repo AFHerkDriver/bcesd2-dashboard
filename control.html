@@ -466,6 +466,7 @@ function renderHosp(){
       var row=document.createElement('div'); row.className='hosp-row'+(cur!=='OPEN'?' diverted':'');
       var opts=HSTATUS.map(function(x){return '<option'+(x===cur?' selected':'')+'>'+x+'</option>';}).join('');
       row.innerHTML='<div class="hn"><span class="nm">'+esc(o.name)+'</span><span class="tg">'+esc(o.tags)+'</span></div>'+
+        '<button type="button" class="hclear" data-hclear="'+o.id+'" title="Reset to OPEN" style="flex:0 0 auto;min-height:30px;font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:7px;background:var(--panel2);color:var(--dim)">CLEAR</button>'+
         '<select class="hstatus" data-hid="'+o.id+'" style="box-sizing:border-box;width:96px;min-width:96px;max-width:96px;flex:0 0 96px;font-size:12px;padding:3px 14px 3px 4px">'+opts+'</select>';
       box.appendChild(row);
     });
@@ -598,6 +599,10 @@ function renderWi(){
 }
 setInterval(expireSweep, 60000);                            /* live sweep while the panel is open */
 document.addEventListener('click', function(e){
+  var hc=e.target.closest&&e.target.closest('.hclear');
+  if(hc){ var hid=hc.getAttribute('data-hclear'); delete state.hospitals[hid];
+    var r=hc.closest('.hosp-row'); if(r){ r.classList.remove('diverted');
+      var sel=r.querySelector('select[data-hid]'); if(sel) sel.value='OPEN'; } return; }
   if(e.target.id==='addWi'){ state.writeins.push({name:'',mode:'on',exp:''}); renderWi(); return; }
   var wd=e.target.closest&&e.target.closest('.wdel'); if(wd){ state.writeins.splice(+wd.getAttribute('data-wi'),1); renderWi(); return; }
   var sb=e.target.closest&&e.target.closest('.wiseg button'); if(sb){ var seg=sb.parentElement, i=+seg.getAttribute('data-wi');

@@ -541,10 +541,6 @@
       <div class="head"><span class="name">Shift Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
       <div class="sched-list" id="schedList"></div>
     </div>
-    <div class="tile empty-tile">
-      <div class="head"><span class="name">Empty Tile</span></div>
-      <div class="empty-body">&mdash; Open slot &mdash;</div>
-    </div>
     </div>
 
     <!-- Right column: Hospital + Medical (top) · NWS Alerts · Empty -->
@@ -979,7 +975,8 @@
     function stopRot(){ if(rot){ rot(); rot=null; } }
     function elapsed(iso){ try{ var m=Math.floor((Date.now()-new Date(iso).getTime())/60000);
       if(!isFinite(m)||m<0) return ""; return m<60?(m+"m"):(Math.floor(m/60)+"h"+(m%60)+"m"); }catch(e){ return ""; } }
-    function show(tileOn){ var tl=document.getElementById("callsTile"); if(tl) tl.hidden=!tileOn; }
+    function show(tileOn){ var tl=document.getElementById("callsTile"); if(tl) tl.hidden=!tileOn;
+      if(tileOn){ var tr=document.getElementById("tallyRow"); if(tr) tr.hidden=false; } }   /* zeros beat invisible */
     /* advisory board, not CAD: rows age out after 10 min */
     var ADVISORY_MIN=10;
     function classify(t){ t=String(t||"").toUpperCase();
@@ -1045,6 +1042,7 @@
         .then(function(r){ return r.ok?r.json():null; })
         .then(function(j){
           if(!j||!j.ok||!Array.isArray(j.calls)) return;     /* leave last-known tally on transient errors */
+          tallyOk=true;
           var since=tourStart().getTime(), counts={};
           j.calls.forEach(function(c){
             if(c.started && new Date(c.started).getTime()<since) return;
@@ -1056,7 +1054,9 @@
         })
         .catch(function(){ /* keep last-known */ });
     }
+    var tallyOk=false;
     loadTally(); setInterval(loadTally, 5*60*1000);          /* 5-min cadence; tourStart recomputed each pass so 0700 reset lands */
+    var fastRetry=setInterval(function(){ if(tallyOk){ clearInterval(fastRetry); } else loadTally(); }, 30000);   /* PIN may land after first paint */
     function load(){
       fetch(URL_,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:window.BOARD_PIN?window.BOARD_PIN():""})})
         .then(function(r){
