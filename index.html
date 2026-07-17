@@ -112,8 +112,8 @@
   .rcol > .rrow{flex:.85 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rrow > .hosp-tile{flex:1.5 1 0;min-width:0}
   .rrow > .med-tile{flex:1 1 0;min-width:0}
-  .rcol > .calls-tile{flex:1 1 0}
-  .rcol > .calls-tile[hidden]{display:none}
+  .lcol > .calls-tile{flex:.7 1 0;min-height:0}
+  .lcol > .calls-tile[hidden]{display:none}
   .rcol > .teams-tile{flex:.32 1 0}                   /* one tight row of color-state chips */
   .tile{background:var(--panel);border:1px solid var(--border);border-radius:11px;
     padding:clamp(8px,.85vmin,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
@@ -338,8 +338,8 @@
   /* Unit Status tile (UAV live + officer-set teams) */
   .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-wrap:wrap;align-content:flex-start;gap:clamp(5px,.6vmin,10px)}
   .tchip{display:flex;align-items:center;justify-content:center;text-align:center;
-    flex:0 0 auto;width:clamp(72px,7vmin,116px);height:clamp(30px,3.1vmin,50px);
-    border:2px solid var(--border);border-radius:9px;background:var(--panel2)}
+    flex:0 0 auto;width:clamp(92px,9vmin,150px);height:clamp(30px,3.1vmin,50px);
+    border:2px solid var(--border);border-radius:9px;background:var(--panel2);overflow:hidden}
   .tchip .tcn{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.8vmin,29px);letter-spacing:1px;line-height:1;white-space:nowrap;color:var(--dim)}
   .tchip.on{border-color:var(--green);background:rgba(52,199,89,.14)}
   .tchip.on .tcn{color:var(--green)}
@@ -454,6 +454,12 @@
       </div>
       <div class="wx-hours" id="wxHours"></div>
     </div>
+    <!-- Active Calls — CAD via the bc2fd-dash-auth worker /dispatch relay. Hidden until the
+         relay is configured (no feed ≠ failure); amber when a configured feed can't be reached. -->
+    <div class="tile calls-tile" id="callsTile" hidden>
+      <div class="head"><span class="name">Active Calls</span><span class="sched-page" id="callsPage" hidden></span></div>
+      <div class="calls-body" id="callsBody"></div>
+    </div>
     <!-- Shift schedule — officer-set via control.html; vertical list, auto-paging on overflow -->
     <div class="tile sched-tile">
       <div class="head"><span class="name">Shift Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
@@ -466,12 +472,6 @@
       <div class="tile teams-tile">
         <div class="head"><span class="name">Unit Status</span><span class="stamp src" id="teamsStamp">Loading&hellip;</span></div>
         <div class="teams-body" id="teamsBody"></div>
-      </div>
-      <!-- Active Calls — CAD via the bc2fd-dash-auth worker /dispatch relay. Hidden until the
-           relay is configured (no feed ≠ failure); amber when a configured feed can't be reached. -->
-      <div class="tile calls-tile" id="callsTile" hidden>
-        <div class="head"><span class="name">Active Calls</span><span class="sched-page" id="callsPage" hidden></span></div>
-        <div class="calls-body" id="callsBody"></div>
       </div>
       <div class="rrow">
         <div class="tile hosp-tile">
