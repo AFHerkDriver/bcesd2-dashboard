@@ -219,7 +219,7 @@
     <!-- Calendar -->
     <div class="card">
       <h2>Shift Calendar <span class="tag">OFFICER</span></h2>
-      <div class="hint">Planned events for the shift.</div>
+      <div class="hint">Planned events. Date optional (MM/DD) &mdash; blank means today; board highlights the current item.</div>
       <div id="calList"></div>
       <button class="add" id="addCal">+ Add event</button>
     </div>
@@ -368,7 +368,8 @@ function renderCal(){
   var box=$('calList'); box.innerHTML='';
   state.calendar.forEach(function(e,i){
     var row=document.createElement('div'); row.className='list-row';
-    row.innerHTML='<input type="text" data-i="'+i+'" data-f="time" value="'+esc(e.time)+'" placeholder="09:00" style="flex:0 0 90px;min-width:0">'+
+    row.innerHTML='<input type="text" data-i="'+i+'" data-f="date" value="'+esc(e.date)+'" placeholder="MM/DD" style="flex:0 0 74px;min-width:0">'+
+      '<input type="text" data-i="'+i+'" data-f="time" value="'+esc(e.time)+'" placeholder="09:00" style="flex:0 0 82px;min-width:0">'+
       '<input type="text" data-i="'+i+'" data-f="desc" value="'+esc(e.desc)+'" placeholder="Event"><button class="del" data-i="'+i+'">✕</button>';
     box.appendChild(row);
   });
@@ -425,7 +426,7 @@ document.addEventListener('input', function(e){
   if(i==null||!f) return; i=+i;
   if(f==='anntext'){ state.announcements[i].text=t.value; }
   else if(f==='annby'){ state.announcements[i].by=t.value; }
-  else if(f==='time'||f==='desc'){ state.calendar[i][f]=t.value; }
+  else if(f==='time'||f==='desc'||f==='date'){ state.calendar[i][f]=t.value; }
 });
 document.addEventListener('change', function(e){
   var t=e.target, hid=t.getAttribute&&t.getAttribute('data-hid');
@@ -438,7 +439,7 @@ document.addEventListener('click', function(e){
   if(d.parentElement.parentElement.id==='annList'){ state.announcements.splice(i,1); renderAnn(); }
   else if(d.parentElement.parentElement.id==='calList'){ state.calendar.splice(i,1); renderCal(); }
 });
-$('addCal').addEventListener('click',function(){ state.calendar.push({time:'',desc:''}); renderCal(); });
+$('addCal').addEventListener('click',function(){ state.calendar.push({date:'',time:'',desc:''}); renderCal(); });
 $('addAnn').addEventListener('click',function(){ state.announcements.push({text:'',by:''}); renderAnn(); });
 
 function computeDiversions(){
