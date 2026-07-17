@@ -282,6 +282,7 @@
     .call-e .ct{font-size:clamp(20px,2.1vmin,36px)}
     .call-e .ca{font-size:clamp(16px,1.7vmin,28px)}
     .call-e .cu{font-size:clamp(13px,1.4vmin,22px)}
+    .call-e .cw{font-size:clamp(16px,1.7vmin,28px)}
     .call-e .ce{font-size:clamp(17px,1.8vmin,30px)}
     .sched-e .tm{font-size:clamp(24px,2.6vmin,44px)}
     .sched-e .ds{font-size:clamp(18px,1.9vmin,32px)}
@@ -437,7 +438,18 @@
   .call-e .ct{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,26px);letter-spacing:1px;color:var(--red);flex:0 0 auto;white-space:nowrap}
   .call-e .ca{font-size:clamp(12px,1.2vmin,19px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .call-e .cu{margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(10px,1.05vmin,17px);color:var(--green);flex:0 0 auto;white-space:nowrap}
+  .call-e .cw{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.3vmin,21px);letter-spacing:1px;color:var(--text)}
   .call-e .ce{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vmin,22px);letter-spacing:1px;color:var(--accent)}
+  /* ── new-call strobe: first 60s a call is on the board, alternate to inverse (solid class-color
+     bg, dark text) every 500ms. Driven by the .flashtick toggle, no keyframes = restart-proof. ── */
+  .call-e{--flash:var(--red)}
+  .call-e.k-alarm{--flash:var(--purple)} .call-e.k-mvc{--flash:var(--accent)}
+  .call-e.k-gen{--flash:var(--green)}   .call-e.k-fuel{--flash:var(--teal)}
+  .call-e.k-med{--flash:var(--amber)}   .call-e.k-assist{--flash:var(--blue)}
+  .calls-body.flashtick .call-e.fresh{background:var(--flash);border-left-color:#fff}
+  .calls-body.flashtick .call-e.fresh .ct,.calls-body.flashtick .call-e.fresh .ca,
+  .calls-body.flashtick .call-e.fresh .cu,.calls-body.flashtick .call-e.fresh .cw,
+  .calls-body.flashtick .call-e.fresh .ce{color:#0d1117}
   .calls-body.compact .call-e .ct{font-size:clamp(12px,1.25vmin,20px)}
   .calls-body.compact .call-e .ca{font-size:clamp(10px,1vmin,16px)}
   /* call-type color coding: med=yellow fire=red alarm=purple assist=blue mvc=orange (default red) */
@@ -1161,15 +1173,35 @@
         if(pg) pg.hidden=true; return; }
       body.className="calls-body";
       if(!calls.length){ body.innerHTML='<div class="idle">\u2014 No active calls</div>'; if(pg) pg.hidden=true; return; }
+      var FRESH_MS=60000;                                   /* new-call strobe: first 60s on the board */
       var rows=calls.map(function(c){
-        var un=displayUnits(c.units);
-        return '<div class="call-e '+classify(c.type)+'"><span class="ct">'+esc(c.type||"CALL")+'</span>'+
+        var un=displayUnits(c.units), ts=ageBasis(c);
+        var age=ts?(Date.now()-new Date(ts).getTime()):NaN;
+        var isFresh=isFinite(age)&&age>=-120000&&age<FRESH_MS;   /* small negative tolerance for clock skew */
+        var exp=isFresh?(Date.now()+Math.max(1000,FRESH_MS-Math.max(0,age))):0;
+        return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'">'+
+               '<span class="ct">'+esc(c.type||"CALL")+'</span>'+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
                (un?('<span class="cu">'+esc(un)+'</span>'):'')+
+               '<span class="cw">'+dropTime(ts)+'</span>'+
                '<span class="ce">'+elapsed(ageBasis(c))+'</span></div>';
       });
       rot=autoRotate(body, rows, pg, 7000);
     }
+    function dropTime(ts){ try{ if(!ts) return ""; var d=new Date(ts); if(isNaN(d.getTime())) return "";
+      return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return ""; } }
+    /* strobe engine: every 500ms purge expired fresh flags (survives page rotation re-inserts,
+       since the class+expiry live in the HTML), then toggle the inverse state while any remain */
+    setInterval(function(){
+      var b=document.getElementById("callsBody"); if(!b) return;
+      var frs=b.querySelectorAll(".call-e.fresh"), any=false;
+      for(var i=0;i<frs.length;i++){
+        var x=parseInt(frs[i].getAttribute("data-fx")||"0",10);
+        if(x && Date.now()>x) frs[i].classList.remove("fresh"); else any=true;
+      }
+      if(any) b.classList.toggle("flashtick");
+      else b.classList.remove("flashtick");
+    }, 500);
     /* ── District 2 tour tally: counts /calls log per station 121-125 since 0700 of tour day 1.
        M126 rides with Station 123. Same anchor/flip math as the shift chip and schedule. ── */
     var TALLY_URL=URL_.replace("/dispatch","/calls");
