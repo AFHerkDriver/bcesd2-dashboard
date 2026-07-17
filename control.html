@@ -104,6 +104,7 @@
   .hosp-row.diverted{border-left-color:var(--red);background:rgba(255,59,48,.09)}
   .hosp-row .hn{flex:1 1 auto;min-width:0}
   .hosp-row .hn .nm{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hosp-row select{flex:0 0 108px;width:108px;font-size:13px;min-height:32px;padding:4px 6px}
   .hosp-row .hn .tg{display:block;font-size:10px;color:var(--dim);letter-spacing:.3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hosp-row .hstatus{flex:0 0 auto;width:150px;min-width:150px}
   .hosp-row.diverted .hstatus{color:var(--red);border-color:var(--red)}
@@ -140,6 +141,9 @@
   @keyframes gateshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
   .gate-card.shake{animation:gateshake .3s ease}
   .uexp{margin-top:6px;width:100%;box-sizing:border-box}
+  input[type=datetime-local]{font-size:13px;min-height:32px;padding:4px 8px;color:var(--dim)}
+  input[type=datetime-local]:not(:placeholder-shown){color:var(--text)}
+  .uexp:focus,input[type=datetime-local]:focus{color:var(--text)}
   .card{overflow:hidden}
   .card > *{max-width:100%}
 </style>
@@ -463,8 +467,8 @@ function renderAnn(){
   state.announcements.forEach(function(a,i){
     var row=document.createElement('div'); row.className='list-row';
     row.innerHTML='<input type="text" data-i="'+i+'" data-f="anntext" value="'+esc(a.text)+'" placeholder="Announcement">'+
-      '<input type="text" data-i="'+i+'" data-f="annby" value="'+esc(a.by||'')+'" placeholder="By (opt)" style="flex:1 1 96px;min-width:0">'+
-      '<input type="datetime-local" data-i="'+i+'" data-f="annexp" value="'+esc(a.exp||'')+'" title="Expires (optional) — clears itself from the board" style="flex:1 1 200px;min-width:0">'+
+      '<input type="text" data-i="'+i+'" data-f="annby" value="'+esc(a.by||'')+'" placeholder="Posted by" style="flex:1 1 60%;min-width:0">'+
+      '<input type="datetime-local" data-i="'+i+'" data-f="annexp" value="'+esc(a.exp||'')+'" title="Expires (optional) — clears itself from the board" style="flex:1 1 100%;min-width:0">'+
       '<button class="del" data-i="'+i+'">✕</button>';
     box.appendChild(row);
   });
