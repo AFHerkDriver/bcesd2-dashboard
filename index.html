@@ -893,7 +893,7 @@
      -> visible amber (a dispatch feed that silently disappears is a false all-clear). ── */
   (function(){
     var URL_="https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/dispatch";
-    var REFRESH=30000, rot=null, everConfigured=false;
+    var REFRESH=30000, rot=null, everConfigured=false, errDetail="";
     function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
     function stopRot(){ if(rot){ rot(); rot=null; } }
     function elapsed(iso){ try{ var m=Math.floor((Date.now()-new Date(iso).getTime())/60000);
@@ -906,7 +906,7 @@
       if(state==="off"){ show(false); return; }             /* relay not built/configured */
       show(true);
       if(state==="err"){ body.className="calls-body err";
-        body.innerHTML='<div class="idle">DISPATCH FEED UNAVAILABLE \u2014 verify via CAD / radio</div>';
+        body.innerHTML='<div class="idle">DISPATCH FEED UNAVAILABLE'+(errDetail?(' \u2014 '+esc(errDetail)):'')+' \u00b7 verify via CAD / radio</div>';
         if(pg) pg.hidden=true; return; }
       body.className="calls-body";
       if(!calls.length){ body.innerHTML='<div class="idle">\u2014 no active calls</div>'; if(pg) pg.hidden=true; return; }
@@ -924,14 +924,16 @@
         .then(function(r){
           if(r.status===501||r.status===404){ render("off"); return null; }   /* feature off, not a failure */
           if(r.status===401){ render(everConfigured?"err":"off"); return null; } /* no valid PIN yet -> quiet until unlocked */
-          if(r.status===502){ everConfigured=true; render("err"); return null; } /* configured but broken -> loud, never hidden */
+          if(r.status===502){ everConfigured=true;
+            return r.json().then(function(j){ errDetail=(j&&j.error)||("HTTP 502"); render("err"); return null; })
+                           .catch(function(){ errDetail="HTTP 502"; render("err"); return null; }); }
           if(!r.ok) throw new Error("HTTP "+r.status);
           return r.json();
         })
         .then(function(j){
           if(j===null) return;
-          if(!j.ok || !Array.isArray(j.calls)) { render("err"); return; }
-          everConfigured=true;
+          if(!j.ok || !Array.isArray(j.calls)) { errDetail=(j&&j.error)||"bad response"; render("err"); return; }
+          everConfigured=true; errDetail="";
           render("ok", j.calls);
         })
         .catch(function(){ render(everConfigured?"err":"off"); });   /* never-configured + unreachable worker -> stay hidden */
