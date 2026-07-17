@@ -83,6 +83,11 @@
   .seg button.on{background:var(--accent);color:#000;font-weight:500}
   .seg.red button.on{background:var(--red);color:#fff}
   .seg.green button.on{background:var(--green);color:#000}
+  /* Unit segs (specialty, ladders, strikes, write-ins): color = meaning.
+     Staffed / In Service -> green · not staffed (—) -> gray · OOS -> red. */
+  .useg button.on[data-v="on"],.useg button.on[data-v="in"],.wiseg button.on[data-v="on"]{background:var(--green);color:#000}
+  .useg button.on[data-v="off"]{background:#4A5561;color:var(--text)}
+  .useg button.on[data-v="oos"],.wiseg button.on[data-v="oos"]{background:var(--red);color:#fff}
 
   /* Editable list rows */
   .list-row{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
@@ -104,10 +109,12 @@
   .hosp-row.diverted{border-left-color:var(--red);background:rgba(255,59,48,.09)}
   .hosp-row .hn{flex:1 1 auto;min-width:0}
   .hosp-row .hn .nm{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hosp-row select{flex:0 0 96px;width:96px;font-size:12px;min-height:30px;padding:3px 18px 3px 6px;
+  .hosp-row select{flex:0 0 96px;width:96px;min-width:0;max-width:96px;   /* min-width:0 defeats the flex intrinsic clamp */
+    font-size:12px;min-height:30px;padding:3px 16px 3px 4px;
     -webkit-appearance:none;appearance:none;text-align:center;text-align-last:center;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'><path d='M0 0l4 5 4-5z' fill='%238B949E'/></svg>");
-    background-repeat:no-repeat;background-position:right 6px center}
+    background-repeat:no-repeat;background-position:right 5px center}
   .hosp-row .hn .tg{display:block;font-size:10px;color:var(--dim);letter-spacing:.3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hosp-row .hstatus{flex:0 0 auto;width:150px;min-width:150px}
   .hosp-row.diverted .hstatus{color:var(--red);border-color:var(--red)}
@@ -147,7 +154,7 @@
   .ulabel{flex:0 0 128px;min-width:0;font-size:11px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .unit-row .useg{flex:1 1 150px;min-width:140px;max-width:230px}
-  .uexp{flex:1 1 165px;min-width:0;max-width:235px;box-sizing:border-box}
+  .uexp{flex:1 1 165px;min-width:0;max-width:235px;box-sizing:border-box;margin-left:auto;margin-right:auto;text-align:center}
   .uexp.off{display:none}
   input[type=datetime-local]{font-size:13px;min-height:32px;padding:4px 8px;color:var(--dim)}
   input[type=datetime-local]:not(:placeholder-shown){color:var(--text)}
@@ -252,8 +259,8 @@
       <h2>Strike Teams <span class="tag">OFFICER</span></h2>
       <div class="hint">Deployment chips at the bottom of the NWS Alerts tile.</div>
       <div class="row">
-        <div class="field"><label>West Strike Team</label><div class="seg red" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
-        <div class="field"><label>East Strike Team</label><div class="seg red" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+        <div class="field"><label>West Strike Team</label><div class="seg red useg" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+        <div class="field"><label>East Strike Team</label><div class="seg red useg" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
       </div>
     </div>
 
