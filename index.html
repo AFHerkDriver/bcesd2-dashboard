@@ -106,19 +106,23 @@
   .quad{flex:1 1 auto;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .lcol{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
   .wx-tile{flex:.75 1 0;min-width:0;min-height:0}     /* weather at half presence — dense, not dominant */
-  .sched-tile{flex:1.6 1 0;min-height:0}
+  .sched-tile{flex:1.35 1 0;min-height:0}
   .rcol{flex:.85 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rcol > .tile{flex:1 1 0;min-height:0}
   .rcol > .rrow{flex:.85 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rrow > .hosp-tile{flex:1.5 1 0;min-width:0}
   .rrow > .med-tile{flex:1 1 0;min-width:0}
-  .lcol > .calls-tile{flex:.7 1 0;min-height:0}
+  .lcol > .calls-tile{flex:1.05 1 0;min-height:0}
   .lcol > .calls-tile[hidden]{display:none}
-  .rcol > .teams-tile{flex:.32 1 0}                   /* one tight row of color-state chips */
+  .rcol > .rrow2{flex:.5 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .rrow2 > .tile{flex:1 1 0;min-width:0}
+  .empty-body{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;color:var(--dim);
+    font-size:clamp(11px,1vmin,16px);letter-spacing:1px}
   .tile{background:var(--panel);border:1px solid var(--border);border-radius:11px;
     padding:clamp(8px,.85vmin,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
-  .tile .head{display:flex;align-items:baseline;gap:8px;margin-bottom:clamp(4px,.5vmin,9px);flex:0 0 auto}
-  .tile .head .name{font-family:'Bebas Neue',sans-serif;font-size:clamp(14px,1.35vmin,22px);letter-spacing:1.5px}
+  .tile .head{display:block;position:relative;text-align:center;background:var(--panel2);border-radius:8px;
+    padding:clamp(3px,.4vmin,7px) 8px;margin-bottom:clamp(4px,.5vmin,9px);flex:0 0 auto}
+  .tile .head .name{font-family:'Bebas Neue',sans-serif;font-size:clamp(14px,1.35vmin,22px);letter-spacing:2px;color:var(--accent)}
   .tile .head .stamp{display:none}                    /* corner source notes retired — failures render in tile bodies */
   .metric{display:flex;align-items:baseline;justify-content:space-between;padding:clamp(2px,.35vmin,6px) 0;
     border-bottom:1px solid rgba(48,54,61,.5)}
@@ -258,7 +262,8 @@
   .ph-strip .note{color:var(--dim) !important;font-style:italic}
   .ph-chip{border-color:var(--border) !important;background:var(--panel2) !important}
   .ph-chip .st{color:var(--dim) !important}
-  .alert-lane{flex:0 0 auto;display:flex;flex-direction:column;gap:clamp(5px,.5vw,9px)}
+  .alert-lane{flex:0 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(4px,.4vw,8px)}
+  .alert-lane .al-none{color:var(--dim);font-size:clamp(11px,1vmin,16px);text-align:center;padding:clamp(2px,.3vmin,5px) 0}
   .alert-lane[hidden]{display:none}
   .al-band{display:flex;flex-direction:column;align-items:stretch;gap:clamp(3px,.35vw,7px);border:2px solid;border-radius:11px;
     padding:clamp(7px,.75vmin,13px) clamp(12px,1.4vmin,22px)}
@@ -297,7 +302,7 @@
   .hchip.burn.off{border-color:var(--border);background:var(--panel2)} .hchip.burn.off .val{color:var(--dim)}
   .hchip.burn.unk{border-color:var(--amber);background:rgba(255,193,7,.12)} .hchip.burn.unk .val{color:var(--amber)}
   /* Medical Direction tile */
-  .med-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;gap:clamp(2px,.3vmin,6px)}
+  .med-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:clamp(2px,.3vmin,6px)}
   .med-body .mrole{font-size:clamp(10px,1vmin,16px);letter-spacing:2px;color:var(--dim);text-transform:uppercase}
   .med-body .mname{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2.1vmin,34px);letter-spacing:1px;line-height:1.05}
   .med-body .mphone{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2.1vmin,34px);color:var(--accent);letter-spacing:2px}
@@ -332,7 +337,7 @@
   .sched-list.compact .sched-e .ds{font-size:clamp(11px,1.1vmin,18px)}
   .sched-list .idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px)}
   .sched-list.err .ds,.sched-list.err .idle{color:var(--amber)}
-  .sched-page{font-family:'DM Mono',monospace;font-size:clamp(9px,.8vmin,13px);color:var(--dim);letter-spacing:1px}
+  .sched-page{font-family:'DM Mono',monospace;font-size:clamp(9px,.8vmin,13px);color:var(--dim);letter-spacing:1px;position:absolute;right:10px;top:50%;transform:translateY(-50%)}
   .sched-page[hidden]{display:none}
 
   /* Unit Status tile (UAV live + officer-set teams) */
@@ -364,8 +369,8 @@
   .fwv .v{display:block;font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vmin,34px);letter-spacing:1px;margin-top:2px}
   .fwv.ok .v{color:var(--text)} .fwv.warn .v{color:var(--amber)} .fwv.bad .v{color:var(--red)}
   /* Hospital Status tile (live from shared board state) */
-  .hosp-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:clamp(3px,.4vmin,8px)}
-  .hosp-body.div{justify-content:flex-start}
+  .hosp-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:clamp(3px,.4vmin,8px)}
+  .hosp-body.div{justify-content:flex-start;align-items:stretch;text-align:left}
   .hosp-msg{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.4vmin,40px);letter-spacing:1px;line-height:1}
   .hosp-body.ok .hosp-msg{color:var(--green)}
   .hosp-body.err .hosp-msg{color:var(--amber)}
@@ -423,7 +428,6 @@
   </div>
 
   <!-- NWS alert lane — live; hidden when zero active alerts, fail-loud if NWS unreachable -->
-  <div class="alert-lane" id="alertLane" hidden></div>
 
   <!-- Flood ops band — appears only while a Warning-tier flood product is active -->
   <div class="floodband" id="floodBand" hidden>
@@ -469,9 +473,15 @@
 
     <!-- Right column: Unit Status (top) · Hospital · Medical · Fire Weather -->
     <div class="rcol">
-      <div class="tile teams-tile">
-        <div class="head"><span class="name">Unit Status</span><span class="stamp src" id="teamsStamp">Loading&hellip;</span></div>
-        <div class="teams-body" id="teamsBody"></div>
+      <div class="rrow2">
+        <div class="tile teams-tile">
+          <div class="head"><span class="name">Unit Status</span><span class="stamp src" id="teamsStamp"></span></div>
+          <div class="teams-body" id="teamsBody"></div>
+        </div>
+        <div class="tile empty-tile">
+          <div class="head"><span class="name">Empty Tile</span></div>
+          <div class="empty-body">&mdash; open slot &mdash;</div>
+        </div>
       </div>
       <div class="rrow">
         <div class="tile hosp-tile">
@@ -483,8 +493,9 @@
           <div class="med-body" id="medBody"></div>
         </div>
       </div>
-      <div class="tile">
-        <div class="head"><span class="name">Fire Weather</span><span class="stamp src" id="fwStamp">Loading&hellip;</span></div>
+      <div class="tile nws-tile">
+        <div class="head"><span class="name">National Weather Service Alerts</span><span class="stamp src" id="fwStamp"></span></div>
+        <div class="alert-lane" id="alertLane"></div>
         <div class="fw-body" id="fwBody"></div>
         <div class="strike" id="strikeRow"></div>
       </div>
@@ -1020,7 +1031,9 @@
       if(sMin==null){ startDT=new Date(d); endDT=new Date(d.getTime()+86400000-60000); }   /* no time: all-day */
       else{
         startDT=new Date(d.getTime()+sMin*60000);
-        if(eMin!=null){ endDT=new Date(d.getTime()+eMin*60000); if(eMin<sMin) endDT=new Date(endDT.getTime()+86400000); } /* past-midnight end */
+        if(eMin!=null && (eMin>=sMin || ((1440-sMin)+eMin)<=720)){   /* same-day end, or a sane (\u226412h) past-midnight run; end-before-start beyond that is a typo -> 1h block */
+          endDT=new Date(d.getTime()+eMin*60000); if(eMin<sMin) endDT=new Date(endDT.getTime()+86400000);
+        }
         else endDT=new Date(startDT.getTime()+3600000);     /* no end: one-hour block */
       }
       return { valid:true, startDT:startDT, endDT:endDT, sortKey:startDT.getTime() };
@@ -1099,7 +1112,7 @@
       var active = mode==="on" ? true : mode==="off" ? false : (nws===true);
       var unknown = mode==="auto" && nws===null;
       if(!active && !unknown){
-        body.innerHTML='<div class="fw-idle">No Red Flag Warning · monitoring NWS</div>';
+        body.innerHTML='<div class="fw-idle">No Red Flag Warning</div>';
         if(stamp) stamp.textContent = mode==="off" ? "officer: forced off" : "NWS auto";
         return;
       }
@@ -1213,7 +1226,7 @@
     if(err){ lane.hidden=false;
       lane.innerHTML='<div class="al-band sev-error"><div class="al-top"><span class="al-ev">NWS Alerts Unavailable</span>'+
         '<span class="al-meta">could not reach NWS \u00b7 verify active warnings manually</span></div></div>'; return; }
-    if(!alerts||!alerts.length){ lane.hidden=true; lane.innerHTML=""; return; }   /* verified zero -> hidden */
+    if(!alerts||!alerts.length){ lane.hidden=false; lane.innerHTML='<div class="al-none">No active NWS alerts \u00b7 monitoring</div>'; return; }   /* verified zero, said out loud */
     var rank={extreme:0,severe:1,moderate:2,minor:3,unknown:4};
     alerts.sort(function(a,b){return (rank[String(a.severity).toLowerCase()]==null?4:rank[String(a.severity).toLowerCase()])-(rank[String(b.severity).toLowerCase()]==null?4:rank[String(b.severity).toLowerCase()]);});
     function band(a){
