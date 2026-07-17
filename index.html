@@ -207,14 +207,15 @@
   .hcol .hp{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.2vmin,20px);color:var(--dim);letter-spacing:.5px}
   .hcol .hp.wet{color:var(--blue)}
   .hcol .hp.dry{color:var(--amber)}
-  /* sunrise / sunset / moon — fills the space the 12-col outlook used to occupy */
-  .wx-astro{flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:space-around;
+  .hcol .hf{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.2vmin,20px);color:var(--amber);letter-spacing:.5px;line-height:1}   /* feels-like */
+  /* sunrise / sunset / moon — compact strip above the 12-hour outlook */
+  .wx-astro{flex:0 0 auto;display:flex;align-items:center;justify-content:space-around;
     gap:clamp(8px,1vmin,20px);border-top:1px solid var(--border);
-    margin-top:clamp(6px,.7vmin,14px);padding-top:clamp(6px,.7vmin,14px)}
+    margin-top:clamp(5px,.55vmin,11px);padding-top:clamp(5px,.55vmin,11px)}
   .wx-astro .astro{display:flex;flex-direction:column;align-items:center;gap:clamp(2px,.3vmin,5px);text-align:center;min-width:0}
   .wx-astro .k{font-size:clamp(9px,.85vmin,14px);letter-spacing:2px;color:var(--dim)}
-  .wx-astro .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.2vmin,38px);letter-spacing:1px;line-height:1}
-  .wx-astro .astro.moon .v{font-size:clamp(13px,1.35vmin,22px)}
+  .wx-astro .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,27px);letter-spacing:1px;line-height:1}
+  .wx-astro .astro.moon .v{font-size:clamp(12px,1.25vmin,20px)}
   .wx-astro .astro.moon.full .v{color:var(--amber)}
   .wx-moonflag{flex:0 0 auto;text-align:center;background:rgba(255,193,7,.15);border:1px solid var(--amber);
     color:var(--amber);border-radius:8px;padding:clamp(4px,.45vmin,9px);margin-top:clamp(5px,.6vmin,11px);
@@ -327,11 +328,15 @@
     .banner .note{font-size:clamp(16px,1.5vw,25px)}
     .tick-track .ti .tw{font-size:clamp(12px,1.1vw,18px)}
     .ann-page{font-size:clamp(12px,1.05vw,18px)}
-    /* district weather — current conditions + sun/moon */
-    .wx-astro .k{font-size:clamp(11px,1.05vmin,17px)}
-    .wx-astro .v{font-size:clamp(28px,3vmin,52px)}
-    .wx-astro .astro.moon .v{font-size:clamp(17px,1.8vmin,30px)}
-    .wx-moonflag{font-size:clamp(18px,1.9vmin,32px)}
+    /* district weather — 12-hour outlook + compact sun/moon */
+    .hcol .hh{font-size:clamp(15px,1.55vmin,26px)}
+    .hcol .wic{width:clamp(26px,2.5vmin,42px);height:clamp(26px,2.5vmin,42px)}
+    .hcol .ht{font-size:clamp(19px,2vmin,33px)}
+    .hcol .hf{font-size:clamp(14px,1.4vmin,23px)}
+    .wx-astro .k{font-size:clamp(10px,.95vmin,15px)}
+    .wx-astro .v{font-size:clamp(19px,2vmin,32px)}
+    .wx-astro .astro.moon .v{font-size:clamp(15px,1.55vmin,25px)}
+    .wx-moonflag{font-size:clamp(16px,1.6vmin,27px)}
     .wx-ic .wic{width:clamp(36px,3.2vmin,56px);height:clamp(36px,3.2vmin,56px)}
     .tchip{font-size:clamp(14px,1.4vmin,23px)}
     .fwp .pt{font-size:clamp(15px,1.5vmin,26px)}
@@ -635,6 +640,7 @@
         <div class="astro"><span class="k">SUNSET</span><span class="v" id="wxSet">&mdash;</span></div>
         <div class="astro moon" id="wxMoonCol"><span class="k">MOON</span><span class="v" id="wxMoon">&mdash;</span></div>
       </div>
+      <div class="wx-hours" id="wxHours"></div>
       <div class="wx-moonflag" id="wxMoonFlag" hidden>&#127765; FULL MOON</div>
     </div>
     <div class="tile teams-tile">
@@ -846,15 +852,17 @@
       var r=condRank(n.shortForecast); if(r>rank){rank=r;sf=n.shortForecast;}
       var hiS=(n.temperature!=null&&rh!=null)?wxHI(n.temperature,rh):n.temperature; if(hiS!=null&&(maxHI==null||hiS>maxHI))maxHI=hiS;});
     return {temp:maxT,rh:minRH,spd:maxSpd,gust:maxGust,dir:dir,sf:sf,hi:maxHI,day:(good[0][0]?good[0][0].isDaytime:true)};}
-  function aggHour(good,i){var maxT=null,maxSpd=-1,maxGust=null,maxP=-1,minRH=null,sf="",rank=-1,t0=null,day=true,dir="";
+  function aggHour(good,i){var maxT=null,maxSpd=-1,maxGust=null,maxP=-1,minRH=null,sf="",rank=-1,t0=null,day=true,dir="",maxHI=null;
     good.forEach(function(P){var p=P[i]; if(!p)return; if(!t0){t0=p.startTime;day=p.isDaytime;}
       if(p.temperature!=null&&(maxT==null||p.temperature>maxT))maxT=p.temperature;
       var w=wxW(p); if(w.spd>maxSpd){maxSpd=w.spd;dir=w.dir;} if(w.gust!=null&&(maxGust==null||w.gust>maxGust))maxGust=w.gust;
       var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
       if(rh!=null&&(minRH==null||rh<minRH))minRH=rh;                       /* driest across the 5 stations */
+      var hiS=(p.temperature!=null&&rh!=null)?wxHI(p.temperature,rh):p.temperature;   /* feels-like per station, take the hottest */
+      if(hiS!=null&&(maxHI==null||hiS>maxHI))maxHI=hiS;
       var pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:0; if(pop>maxP)maxP=pop;
       var r=condRank(p.shortForecast); if(r>rank){rank=r;sf=p.shortForecast;}});
-    return {time:t0,temp:maxT,spd:maxSpd,gust:maxGust,pop:maxP<0?0:maxP,rh:minRH,sf:sf,day:day,dir:dir};}
+    return {time:t0,temp:maxT,spd:maxSpd,gust:maxGust,pop:maxP<0?0:maxP,rh:minRH,sf:sf,day:day,dir:dir,feels:maxHI};}
   function renderAggregate(good,flag){
     try{ var _n=aggNow(good); FireWx.wx(_n); }catch(e){}
     var n=aggNow(good);
@@ -864,8 +872,15 @@
     document.getElementById("wxFeels").innerHTML=(n.hi!=null?n.hi:"\u2014")+"&deg;";
     document.getElementById("wxWind").innerHTML=(n.spd>=0?n.spd:"\u2014")+(n.gust!=null?(' <em>G'+n.gust+'</em>'):"")+(n.dir?" "+n.dir:"");
     renderAstro();                                          /* sunrise / sunset / moon — local math, no NWS dependency */
-    /* fire-weather pills now carry the 12-hour detail, starting at the CURRENT hour (index 0) */
-    var fhrs=[]; for(var j=0;j<12;j++){ var b=aggHour(good,j); if(!b.time)break; fhrs.push(b); }
+    /* everyday 12-hour outlook (top-left): time · condition icon · temp · feels-like, from the current hour.
+       The same rows feed the fire-weather pills (RH/wind detail), which only surface on a Red Flag. */
+    var html="", fhrs=[];
+    for(var i=0;i<12;i++){ var a=aggHour(good,i); if(!a.time) break; fhrs.push(a);
+      var feels=(a.feels!=null&&a.temp!=null&&a.feels>a.temp)?('<div class="hf">'+a.feels+'&deg;</div>'):'';
+      html+='<div class="hcol"><div class="hh">'+wxHr(a.time)+'</div>'+wxIcon(a.sf,a.day)+
+        '<div class="ht">'+(a.temp!=null?a.temp:"\u2014")+'&deg;</div>'+feels+'</div>';
+    }
+    document.getElementById("wxHours").innerHTML=html;
     try{ FireWx.hours(fhrs); }catch(e){}
     var fl=document.getElementById("wxFlag"), st=document.getElementById("wxStamp");
     var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false});
@@ -1521,7 +1536,7 @@
       var active = mode==="on" ? true : mode==="off" ? false : (nws===true);
       var unknown = mode==="auto" && nws===null;
       if(!active && !unknown){
-        body.innerHTML='<div class="fw-idle">No Red Flag Warning</div>'+pills();
+        body.innerHTML='<div class="fw-idle">No Red Flag Warning</div>';   /* pills are fire-weather-only; everyday 12h lives in District Weather */
         if(stamp) stamp.textContent = mode==="off" ? "officer: forced off" : "NWS auto";
         return;
       }
