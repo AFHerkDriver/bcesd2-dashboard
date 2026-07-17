@@ -140,7 +140,7 @@
   .med-foot{font-size:clamp(8px,.75vmin,12px);color:var(--dim);margin-top:auto;padding-top:6px}
 
   /* Q2 Hospitals */
-  .hosp-list{display:flex;flex-direction:column;gap:clamp(2px,.3vmin,5px);flex:1;min-height:0;justify-content:space-between}
+  .hosp-list{display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);flex:1;min-height:0;justify-content:flex-start}
   .hrow{display:flex;align-items:center;gap:8px;padding:clamp(2px,.35vmin,6px) clamp(7px,.75vmin,11px);
     border-radius:7px;background:var(--panel2);border-left:4px solid var(--green)}
   .hrow.divert{border-left-color:var(--red)}
@@ -924,6 +924,7 @@
         .then(function(r){
           if(r.status===501||r.status===404){ render("off"); return null; }   /* feature off, not a failure */
           if(r.status===401){ render(everConfigured?"err":"off"); return null; } /* no valid PIN yet -> quiet until unlocked */
+          if(r.status===502){ everConfigured=true; render("err"); return null; } /* configured but broken -> loud, never hidden */
           if(!r.ok) throw new Error("HTTP "+r.status);
           return r.json();
         })
@@ -999,6 +1000,14 @@
       if(!m) return null; var h=+m[1], mi=+m[2];
       return (h>23||mi>59)?null:h*60+mi;
     }
+    var TOUR_ANCHOR=Date.UTC(2026,0,1);                     /* same anchor/flip as the header shift chip */
+    function tourHorizon(){                                  /* Date: this tour's end (0700 after day 2) */
+      var s=new Date(Date.now()-7*3600000);                  /* -7h holds the prior shift until 0700 */
+      var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-TOUR_ANCHOR)/86400000);
+      var day1=((d%6)+6)%6%2===0;                            /* even index in AABBCC = first day of the pair */
+      var end=new Date(s.getFullYear(),s.getMonth(),s.getDate()+(day1?2:1),7,0,0,0);
+      return end;
+    }
     function resolve(e){                                    /* -> {startDT,endDT,sortKey,valid} */
       var today=new Date(); today.setHours(0,0,0,0);
       var d = e.date ? parseDate(e.date) : new Date(today);
@@ -1021,11 +1030,12 @@
       if(!ok){ list.className="sched-list err";
         list.innerHTML='<div class="sched-e"><span class="ds">shift schedule unavailable \u2014 can\u2019t reach board state</span></div>';
         if(pg) pg.hidden=true; return; }
-      var now=new Date();
+      var now=new Date(), horizon=tourHorizon();
       var items=((st&&st.calendar)||[])
         .filter(function(e){ return e && (e.time || e.desc); })
         .map(function(e){ var r=resolve(e); r.e=e; return r; })
         .filter(function(r){ return !r.valid || now.getTime() <= r.endDT.getTime()+3600000; })   /* clear 1h after end */
+        .filter(function(r){ return !r.valid || r.startDT < horizon; })   /* only this 48h tour: day 1 sees tomorrow, day 2 doesn't */
         .sort(function(a,b){ return a.sortKey-b.sortKey; });
       list.className="sched-list";
       if(!items.length){ list.innerHTML='<div class="idle">\u2014 nothing scheduled</div>'; if(pg) pg.hidden=true; return; }
