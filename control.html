@@ -72,8 +72,9 @@
   input[type=text],input[type=tel],textarea{-webkit-appearance:none;appearance:none}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   textarea{resize:vertical;min-height:44px}
-  .row{display:flex;gap:10px;flex-wrap:wrap}
-  .row > *{flex:1;min-width:140px}
+  .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  @media(min-width:700px){ .row{grid-template-columns:repeat(3,minmax(0,1fr))} }
+  .row > *{min-width:0}
 
   /* Segmented toggle */
   .seg{display:flex;width:100%;border:1px solid var(--border);border-radius:8px;overflow:hidden}
@@ -84,8 +85,11 @@
   .seg.green button.on{background:var(--green);color:#000}
 
   /* Editable list rows */
-  .list-row{display:flex;gap:8px;align-items:center;margin:4px 0}
-  .list-row input{flex:1}
+  .list-row{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
+  .list-row input{flex:1;min-width:0;max-width:100%}
+  .list-row input[type=datetime-local]{flex:1 1 200px}
+  .list-row input[data-f="desc"],.list-row input[data-f="anntext"]{flex:1 1 100%;order:-1}  /* text first, full line; meta wraps below */
+
   .list-row .del,.list-row .wdel{flex:0 0 auto;min-width:0;background:transparent;border:1px solid var(--border);
     color:var(--dim);border-radius:7px;padding:6px 10px;min-height:34px;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none}
   .list-row .del:hover,.list-row .wdel:hover{border-color:var(--red);color:var(--red)}
@@ -136,6 +140,8 @@
   @keyframes gateshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
   .gate-card.shake{animation:gateshake .3s ease}
   .uexp{margin-top:6px;width:100%;box-sizing:border-box}
+  .card{overflow:hidden}
+  .card > *{max-width:100%}
 </style>
 </head>
 <body>
@@ -457,8 +463,8 @@ function renderAnn(){
   state.announcements.forEach(function(a,i){
     var row=document.createElement('div'); row.className='list-row';
     row.innerHTML='<input type="text" data-i="'+i+'" data-f="anntext" value="'+esc(a.text)+'" placeholder="Announcement">'+
-      '<input type="text" data-i="'+i+'" data-f="annby" value="'+esc(a.by||'')+'" placeholder="By (opt)" style="flex:0 0 108px;min-width:0">'+
-      '<input type="datetime-local" data-i="'+i+'" data-f="annexp" value="'+esc(a.exp||'')+'" title="Expires (optional) — clears itself from the board" style="flex:0 0 168px;min-width:0">'+
+      '<input type="text" data-i="'+i+'" data-f="annby" value="'+esc(a.by||'')+'" placeholder="By (opt)" style="flex:1 1 96px;min-width:0">'+
+      '<input type="datetime-local" data-i="'+i+'" data-f="annexp" value="'+esc(a.exp||'')+'" title="Expires (optional) — clears itself from the board" style="flex:1 1 200px;min-width:0">'+
       '<button class="del" data-i="'+i+'">✕</button>';
     box.appendChild(row);
   });
@@ -467,9 +473,9 @@ function renderCal(){
   var box=$('calList'); box.innerHTML='';
   state.calendar.forEach(function(e,i){
     var row=document.createElement('div'); row.className='list-row';
-    row.innerHTML='<input type="text" data-i="'+i+'" data-f="date" value="'+esc(e.date)+'" placeholder="MM/DD" style="flex:0 0 70px;min-width:0">'+
-      '<input type="text" data-i="'+i+'" data-f="time" value="'+esc(e.time)+'" placeholder="09:00" style="flex:0 0 76px;min-width:0">'+
-      '<input type="text" data-i="'+i+'" data-f="end" value="'+esc(e.end)+'" placeholder="End" style="flex:0 0 76px;min-width:0">'+
+    row.innerHTML='<input type="text" data-i="'+i+'" data-f="date" value="'+esc(e.date)+'" placeholder="MM/DD" style="flex:1 1 64px;min-width:0">'+
+      '<input type="text" data-i="'+i+'" data-f="time" value="'+esc(e.time)+'" placeholder="09:00" style="flex:1 1 70px;min-width:0">'+
+      '<input type="text" data-i="'+i+'" data-f="end" value="'+esc(e.end)+'" placeholder="End" style="flex:1 1 70px;min-width:0">'+
       '<input type="text" data-i="'+i+'" data-f="desc" value="'+esc(e.desc)+'" placeholder="Event"><button class="del" data-i="'+i+'">✕</button>';
     box.appendChild(row);
   });
@@ -546,9 +552,9 @@ function renderWi(){
   var box=$('wiList'); if(!box) return; box.innerHTML='';
   state.writeins.forEach(function(u,i){
     var row=document.createElement('div'); row.className='list-row';
-    row.innerHTML='<input type="text" data-wi="'+i+'" data-wf="name" value="'+esc(u.name||'')+'" placeholder="Callsign (e.g. E62)" style="flex:0 0 140px;min-width:0">'+
-      '<div class="seg red wiseg" data-wi="'+i+'"><button data-v="on"'+(u.mode!=='oos'?' class="on"':'')+'>Staffed</button><button data-v="oos"'+(u.mode==='oos'?' class="on"':'')+'>OOS</button></div>'+
-      '<input type="datetime-local" data-wi="'+i+'" data-wf="exp" value="'+esc(u.exp||'')+'" title="Expires (optional)" style="flex:0 0 168px;min-width:0">'+
+    row.innerHTML='<input type="text" data-wi="'+i+'" data-wf="name" value="'+esc(u.name||'')+'" placeholder="Callsign (e.g. E62)" style="flex:1 1 120px;min-width:0">'+
+      '<div class="seg red wiseg" style="flex:1 1 170px;min-width:150px;max-width:240px" data-wi="'+i+'"><button data-v="on"'+(u.mode!=='oos'?' class="on"':'')+'>Staffed</button><button data-v="oos"'+(u.mode==='oos'?' class="on"':'')+'>OOS</button></div>'+
+      '<input type="datetime-local" data-wi="'+i+'" data-wf="exp" value="'+esc(u.exp||'')+'" title="Expires (optional)" style="flex:1 1 200px;min-width:0">'+
       '<button class="wdel" data-wi="'+i+'">✕</button>';
     box.appendChild(row);
   });
