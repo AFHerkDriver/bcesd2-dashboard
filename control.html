@@ -104,7 +104,10 @@
   .hosp-row.diverted{border-left-color:var(--red);background:rgba(255,59,48,.09)}
   .hosp-row .hn{flex:1 1 auto;min-width:0}
   .hosp-row .hn .nm{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hosp-row select{flex:0 0 108px;width:108px;font-size:13px;min-height:32px;padding:4px 6px}
+  .hosp-row select{flex:0 0 96px;width:96px;font-size:12px;min-height:30px;padding:3px 18px 3px 6px;
+    -webkit-appearance:none;appearance:none;text-align:center;text-align-last:center;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'><path d='M0 0l4 5 4-5z' fill='%238B949E'/></svg>");
+    background-repeat:no-repeat;background-position:right 6px center}
   .hosp-row .hn .tg{display:block;font-size:10px;color:var(--dim);letter-spacing:.3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hosp-row .hstatus{flex:0 0 auto;width:150px;min-width:150px}
   .hosp-row.diverted .hstatus{color:var(--red);border-color:var(--red)}
@@ -140,7 +143,12 @@
   .gate-msg.warn{color:#FFC107}
   @keyframes gateshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
   .gate-card.shake{animation:gateshake .3s ease}
-  .uexp{margin-top:6px;width:100%;box-sizing:border-box}
+  .unit-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+  .ulabel{flex:0 0 128px;min-width:0;font-size:11px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .unit-row .useg{flex:1 1 150px;min-width:140px;max-width:230px}
+  .uexp{flex:1 1 165px;min-width:0;max-width:235px;box-sizing:border-box}
+  .uexp.off{display:none}
   input[type=datetime-local]{font-size:13px;min-height:32px;padding:4px 8px;color:var(--dim)}
   input[type=datetime-local]:not(:placeholder-shown){color:var(--text)}
   .uexp:focus,input[type=datetime-local]:focus{color:var(--text)}
@@ -226,20 +234,14 @@
     <div class="card">
       <h2>Specialty Units &amp; OOS <span class="tag">OFFICER</span></h2>
       <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on any unit — when it passes, the status reverts on its own (teams drop to —, ladders return to service).</div>
-      <div class="row">
-        <div class="field"><label>Brush 121</label><div class="seg red" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:b121" title="Expires (optional)"></div>
-        <div class="field"><label>MAC 121</label><div class="seg red" id="segMac121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:mac121" title="Expires (optional)"></div>
-        <div class="field"><label>Battalion 161</label><div class="seg red" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:bat161" title="Expires (optional)"></div>
-      </div>
-      <div class="row">
-        <div class="field"><label>Boat Team 124</label><div class="seg red" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:boat124" title="Expires (optional)"></div>
-        <div class="field"><label>Rescue Team 124</label><div class="seg red" id="segRescue124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:rescue124" title="Expires (optional)"></div>
-      </div>
-      <div class="row">
-        <div class="field"><label>Ladder 123</label><div class="seg red" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:l123" title="OOS expires (optional)"></div>
-        <div class="field"><label>Aerial Platform 124</label><div class="seg red" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:ap124" title="OOS expires (optional)"></div>
-        <div class="field"><label>Ladder 125</label><div class="seg red" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:l125" title="OOS expires (optional)"></div>
-      </div>
+      <div class="unit-row"><span class="ulabel">Brush 121</span><div class="seg red useg" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:b121" title="Expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">MAC 121</span><div class="seg red useg" id="segMac121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:mac121" title="Expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Battalion 161</span><div class="seg red useg" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:bat161" title="Expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Boat Team 124</span><div class="seg red useg" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:boat124" title="Expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Rescue Team 124</span><div class="seg red useg" id="segRescue124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:rescue124" title="Expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Ladder 123</span><div class="seg red useg" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:l123" title="OOS expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Aerial Platform 124</span><div class="seg red useg" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:ap124" title="OOS expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Ladder 125</span><div class="seg red useg" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:l125" title="OOS expires (optional)"></div>
       <div class="hint" style="margin-top:10px">Write-in units — anything not listed above (borrowed engine, task force, tender). Shows as a green (staffed) or red (OOS) pill.</div>
       <div id="wiList"></div>
       <button class="btn ghost" id="addWi" type="button">+ Add write-in unit</button>
@@ -510,6 +512,7 @@ function hydrate(){
   segSet('segL125', state.apparatus.l125?'oos':'in');
   document.querySelectorAll('.uexp').forEach(function(inp){ var ux=inp.getAttribute('data-ux').split(':');
     inp.value=((ux[0]==='t'?state.tExp:state.aExp)[ux[1]])||''; });
+  updateExpVis();
   renderWi();
   renderAnn();
   renderCal();
@@ -525,16 +528,16 @@ function segClick(wrapId, cb){
 }
 segClick('segMed', function(v){ state.med.mode=v; });
 segClick('segFlag', function(v){ state.fire.redFlag=v; });
-segClick('segB121', function(v){ state.teams.b121=(v==='on'); });
-segClick('segMac121', function(v){ state.teams.mac121=(v==='on'); });
-segClick('segBat161', function(v){ state.teams.bat161=(v==='on'); });
-segClick('segBoat124', function(v){ state.teams.boat124=(v==='on'); });
-segClick('segRescue124', function(v){ state.teams.rescue124=(v==='on'); });
+segClick('segB121', function(v){ state.teams.b121=(v==='on'); updateExpVis(); });
+segClick('segMac121', function(v){ state.teams.mac121=(v==='on'); updateExpVis(); });
+segClick('segBat161', function(v){ state.teams.bat161=(v==='on'); updateExpVis(); });
+segClick('segBoat124', function(v){ state.teams.boat124=(v==='on'); updateExpVis(); });
+segClick('segRescue124', function(v){ state.teams.rescue124=(v==='on'); updateExpVis(); });
 segClick('segWest', function(v){ state.teams.west=(v==='on'); });
 segClick('segEast', function(v){ state.teams.east=(v==='on'); });
-segClick('segL123', function(v){ state.apparatus.l123=(v==='oos'); });
-segClick('segAP124', function(v){ state.apparatus.ap124=(v==='oos'); });
-segClick('segL125', function(v){ state.apparatus.l125=(v==='oos'); });
+segClick('segL123', function(v){ state.apparatus.l123=(v==='oos'); updateExpVis(); });
+segClick('segAP124', function(v){ state.apparatus.ap124=(v==='oos'); updateExpVis(); });
+segClick('segL125', function(v){ state.apparatus.l125=(v==='oos'); updateExpVis(); });
 
 $('medName').addEventListener('input',function(){ state.med.custom.name=this.value;  });
 $('medPhone').addEventListener('input',function(){ state.med.custom.phone=this.value;  });
@@ -552,6 +555,13 @@ document.addEventListener('input', function(e){
   else if(f==='annexp'){ state.announcements[i].exp=t.value; }
   else if(f==='time'||f==='desc'||f==='date'||f==='end'){ state.calendar[i][f]=t.value; }
 });
+function updateExpVis(){                                    /* expiry picker shows ONLY while its unit is active */
+  document.querySelectorAll('.uexp').forEach(function(inp){
+    var p=inp.getAttribute('data-ux').split(':');
+    var active = p[0]==='t' ? !!state.teams[p[1]] : !!state.apparatus[p[1]];
+    inp.classList.toggle('off', !active);
+  });
+}
 function renderWi(){
   var box=$('wiList'); if(!box) return; box.innerHTML='';
   state.writeins.forEach(function(u,i){
