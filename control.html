@@ -109,7 +109,7 @@
   .hosp-row.diverted{border-left-color:var(--red);background:rgba(255,59,48,.09)}
   .hosp-row .hn{flex:1 1 auto;min-width:0}
   .hosp-row .hn .nm{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hosp-row select{flex:0 0 96px;width:96px;min-width:0;max-width:96px;   /* min-width:0 defeats the flex intrinsic clamp */
+  .hosp-row select{box-sizing:border-box;flex:0 0 96px;width:96px !important;min-width:0;max-width:96px !important;
     font-size:12px;min-height:30px;padding:3px 16px 3px 4px;
     -webkit-appearance:none;appearance:none;text-align:center;text-align-last:center;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -466,7 +466,7 @@ function renderHosp(){
       var row=document.createElement('div'); row.className='hosp-row'+(cur!=='OPEN'?' diverted':'');
       var opts=HSTATUS.map(function(x){return '<option'+(x===cur?' selected':'')+'>'+x+'</option>';}).join('');
       row.innerHTML='<div class="hn"><span class="nm">'+esc(o.name)+'</span><span class="tg">'+esc(o.tags)+'</span></div>'+
-        '<select class="hstatus" data-hid="'+o.id+'">'+opts+'</select>';
+        '<select class="hstatus" data-hid="'+o.id+'" style="box-sizing:border-box;width:96px;min-width:96px;max-width:96px;flex:0 0 96px;font-size:12px;padding:3px 14px 3px 4px">'+opts+'</select>';
       box.appendChild(row);
     });
   });
@@ -521,6 +521,7 @@ function hydrate(){
     inp.value=((ux[0]==='t'?state.tExp:state.aExp)[ux[1]])||''; });
   updateExpVis();
   renderWi();
+  expireSweep();
   renderAnn();
   renderCal();
   
@@ -562,6 +563,25 @@ document.addEventListener('input', function(e){
   else if(f==='annexp'){ state.announcements[i].exp=t.value; }
   else if(f==='time'||f==='desc'||f==='date'||f==='end'){ state.calendar[i][f]=t.value; }
 });
+function expireSweep(){                                     /* control mirrors the board: expired = reverted */
+  var now=new Date(), changed=false;
+  function past(x){ if(!x) return false; var d=new Date(x); return !isNaN(d.getTime()) && now>d; }
+  Object.keys(state.tExp||{}).forEach(function(k){
+    if(past(state.tExp[k])){ if(state.teams[k]){ state.teams[k]=false; changed=true; }
+      state.tExp[k]=''; var el=document.querySelector('.uexp[data-ux="t:'+k+'"]'); if(el) el.value='';
+      var seg=document.getElementById('seg'+k.charAt(0).toUpperCase()+k.slice(1)); if(seg) segSet(seg.id,'off'); }
+  });
+  Object.keys(state.aExp||{}).forEach(function(k){
+    if(past(state.aExp[k])){ if(state.apparatus[k]){ state.apparatus[k]=false; changed=true; }
+      state.aExp[k]=''; var el=document.querySelector('.uexp[data-ux="a:'+k+'"]'); if(el) el.value='';
+      var seg=document.getElementById('seg'+k.toUpperCase()); if(seg) segSet(seg.id,'in'); }
+  });
+  var before=state.writeins.length;
+  state.writeins=state.writeins.filter(function(u){ return !past(u.exp); });
+  if(state.writeins.length!==before){ renderWi(); changed=true; }
+  updateExpVis();
+  return changed;
+}
 function updateExpVis(){                                    /* expiry picker shows ONLY while its unit is active */
   document.querySelectorAll('.uexp').forEach(function(inp){
     var p=inp.getAttribute('data-ux').split(':');
@@ -580,6 +600,7 @@ function renderWi(){
     box.appendChild(row);
   });
 }
+setInterval(expireSweep, 60000);                            /* live sweep while the panel is open */
 document.addEventListener('click', function(e){
   if(e.target.id==='addWi'){ state.writeins.push({name:'',mode:'on',exp:''}); renderWi(); return; }
   var wd=e.target.closest&&e.target.closest('.wdel'); if(wd){ state.writeins.splice(+wd.getAttribute('data-wi'),1); renderWi(); return; }
