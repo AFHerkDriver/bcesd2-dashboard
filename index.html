@@ -604,12 +604,6 @@
   <!-- NWS alert lane — live; hidden when zero active alerts, fail-loud if NWS unreachable -->
 
   <!-- Flood ops band — appears only while a Warning-tier flood product is active -->
-  <div class="floodband" id="floodBand" hidden>
-    <div class="fb-head"><span class="fb-tag">🌊 FLOOD OPS</span><span class="fb-stamp src" id="fbStamp"></span></div>
-    <div class="fb-rain" id="fbRain">checking station rain (MRMS)…</div>
-    <div class="fb-cx" id="fbCx"></div>
-  </div>
-
   <!-- 2×2 Quadrants -->
   <!-- Drone stream overlay: TV full-screen; 2 live = 50/50 split; 30s grace on end -->
   <div class="drone-overlay" id="droneOverlay" hidden>
@@ -691,6 +685,11 @@
         <div class="head"><span class="name">National Weather Service Alerts</span><span class="stamp src" id="fwStamp"></span></div>
         <div class="alert-lane" id="alertLane"></div>
         <div class="fw-body" id="fwBody"></div>
+        <div class="floodband" id="floodBand" hidden>
+          <div class="fb-head"><span class="fb-tag">🌊 FLOOD OPS</span><span class="fb-stamp src" id="fbStamp"></span></div>
+          <div class="fb-rain" id="fbRain">checking station rain (MRMS)…</div>
+          <div class="fb-cx" id="fbCx"></div>
+        </div>
         <div class="strike" id="strikeRow"></div>
       </div>
       <div class="tile empty-tile">
@@ -1533,6 +1532,7 @@
     function render(){
       var body=document.getElementById("fwBody"), stamp=document.getElementById("fwStamp");
       if(!body) return;
+      if(window.FLOOD_ACTIVE){ body.innerHTML=""; if(stamp) stamp.textContent="flood ops active"; return; }   /* one slot: flood takes it */
       var active = mode==="on" ? true : mode==="off" ? false : (nws===true);
       var unknown = mode==="auto" && nws===null;
       if(!active && !unknown){
@@ -1553,7 +1553,7 @@
     }
     loadNws(); setInterval(loadNws, 10*60*1000);
     onBoardState(function(ok,st){ mode=(ok&&st&&st.fire&&st.fire.redFlag)||"auto"; render(); });
-    return { wx:function(n){ agg=n; render(); }, hours:function(a){ hrs=a; render(); } };
+    return { wx:function(n){ agg=n; render(); }, hours:function(a){ hrs=a; render(); }, refresh:render };
   })();
 
   var FloodOps=(function(){
@@ -1612,11 +1612,13 @@
     function apply(){
       var band=el("floodBand"); if(!band) return;
       var eff = override==="on" ? true : override==="off" ? false : lastWarn;   /* auto = NWS Warning-tier gate */
+      window.FLOOD_ACTIVE = eff;                                  /* fire weather yields the shared NWS-tile slot when flood is on */
       if(eff && !active){ active=true; evName=lastName;
         var st=el("fbStamp"); if(st) st.textContent=stampText();
         band.hidden=false; poll(); timer=setInterval(poll, POLL);
       } else if(!eff && active){ active=false; band.hidden=true; if(timer){clearInterval(timer);timer=null;} }
       else if(eff && active){ var s2=el("fbStamp"); if(s2) s2.textContent=stampText(); evName=lastName; }
+      try{ FireWx.refresh(); }catch(e){}                          /* re-render fire panel around the new flood state */
     }
     onBoardState(function(ok,st){ override=(ok&&st&&st.flood&&st.flood.mode)||"auto"; apply(); });
     return { update:function(warningTier, eventName){ lastWarn=!!warningTier; lastName=eventName||""; apply(); } };

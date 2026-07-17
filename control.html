@@ -578,7 +578,7 @@ function segClick(wrapId, cb){
   });
 }
 segClick('segMed', function(v){ state.med.mode=v; });
-segClick('segFlag', function(v){ state.fire.redFlag=v; });
+segClick('segFlag', function(v){ state.fire.redFlag=v; if(v==='on') state.flood.mode='off'; });   /* fire + flood share one slot — never both forced on */
 segClick('segB121', function(v){ state.teams.b121=(v==='on'); updateExpVis(); });
 segClick('segMac121', function(v){ state.teams.mac121=(v==='on'); updateExpVis(); });
 segClick('segBat161', function(v){ state.teams.bat161=(v==='on'); updateExpVis(); });
@@ -586,7 +586,7 @@ segClick('segBoat124', function(v){ state.teams.boat124=(v==='on'); updateExpVis
 segClick('segRescue124', function(v){ state.teams.rescue124=(v==='on'); updateExpVis(); });
 segClick('segWest', function(v){ state.strikes.west.active=(v==='on'); state.teams.west=state.strikes.west.active; });
 segClick('segEast', function(v){ state.strikes.east.active=(v==='on'); state.teams.east=state.strikes.east.active; });
-segClick('segFlood', function(v){ state.flood.mode=v; });
+segClick('segFlood', function(v){ state.flood.mode=v; if(v==='on') state.fire.redFlag='off'; });
 $('stCsWest').addEventListener('input', function(){ state.strikes.west.callsign=this.value; });
 $('stPhWest').addEventListener('input', function(){ state.strikes.west.phone=this.value; });
 $('stCsEast').addEventListener('input', function(){ state.strikes.east.callsign=this.value; });
