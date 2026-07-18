@@ -279,13 +279,16 @@
   .drone-overlay{position:fixed;inset:0;z-index:900;background:#000;display:none;flex-direction:column}
   .drone-overlay[hidden]{display:none}
   @media (min-width:1500px){ .drone-overlay:not([hidden]){display:flex} }   /* TV only auto-plays */
-  .dro-banner{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:10px 22px;
-    background:rgba(13,17,23,.92);border-bottom:2px solid var(--red);
-    font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.2vmin,38px);letter-spacing:2px;color:var(--red)}
-  .dro-banner.ending{border-bottom-color:var(--amber);color:var(--amber)}
-  .dro-dot{width:14px;height:14px;border-radius:50%;background:var(--red);animation:pulse 1.6s ease-in-out infinite}
+  .dro-banner{flex:0 0 auto;display:flex;align-items:center;gap:clamp(10px,1.4vw,22px);padding:clamp(8px,1vw,16px) clamp(16px,1.8vw,30px);
+    background:rgba(13,17,23,.94);border-bottom:3px solid var(--red)}
+  .dro-btext{display:flex;flex-direction:column;gap:clamp(1px,.3vw,5px);min-width:0}
+  .dro-mission{font-family:'Bebas Neue',sans-serif;letter-spacing:2px;color:var(--red);line-height:1;
+    font-size:clamp(24px,3vw,52px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* ~STATION DASHBOARD size */
+  .dro-cs{font-family:'DM Mono',monospace;letter-spacing:1px;color:var(--text);line-height:1;font-size:clamp(14px,1.6vw,28px)}
+  .dro-banner.ending{border-bottom-color:var(--amber)}
+  .dro-banner.ending .dro-mission{color:var(--amber)}
+  .dro-dot{width:clamp(12px,1vw,18px);height:clamp(12px,1vw,18px);flex:0 0 auto;border-radius:50%;background:var(--red);animation:pulse 1.6s ease-in-out infinite}
   .dro-banner.ending .dro-dot{background:var(--amber);animation:none}
-  .dro-lbls{margin-left:auto;font-family:'DM Mono',monospace;font-size:clamp(12px,1.2vmin,20px);letter-spacing:1px;color:var(--text)}
   .dro-frames{flex:1 1 auto;display:flex;min-height:0}
   .dro-frames iframe{flex:1 1 0;width:100%;height:100%;border:0;background:#000}
   .dro-frames .dro-link{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--text)}
@@ -619,7 +622,7 @@
   <!-- 2×2 Quadrants -->
   <!-- Drone stream overlay: TV full-screen; 2 live = 50/50 split; 30s grace on end -->
   <div class="drone-overlay" id="droneOverlay" hidden>
-    <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><span id="droTitle">DRONE LIVE</span><span class="dro-lbls" id="droLbls"></span></div>
+    <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><div class="dro-btext"><div class="dro-mission" id="droTitle">DRONE LIVE</div><div class="dro-cs" id="droLbls"></div></div></div>
     <div class="dro-frames" id="droFrames"></div>
   </div>
   <div class="quad">
@@ -1048,22 +1051,27 @@
     var STORE_PROJECT="firehawk-scheduler";
     var K="AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ";
     var DOC="https://firestore.googleapis.com/v1/projects/"+STORE_PROJECT+"/databases/(default)/documents/firehawk/dashboard_state";
-    var POLL=60*1000, subs=[], last=null;                    /* last = [ok, state, setAt] */
-    function notify(ok, st, setAt){ last=[ok,st,setAt]; subs.forEach(function(f){ try{ f(ok,st,setAt); }catch(e){} }); }
+    var POLL=10*1000, subs=[], last=null, lastKey=null, failCount=0;   /* fast poll so an officer Save lands on the wall in seconds */
+    function notify(ok, st, setAt, key){                      /* fire subscribers ONLY when the state actually changed — the fast poll must not churn tiles (e.g. reset the hospital rotation) */
+      var k=(ok?"1":"0")+"|"+(key==null?"":key);
+      var changed=(k!==lastKey); lastKey=k; last=[ok,st,setAt];
+      if(changed) subs.forEach(function(f){ try{ f(ok,st,setAt); }catch(e){} });
+    }
     function load(){
-      if(typeof fetch!=="function"){ notify(false,null,null); return; }
+      if(typeof fetch!=="function"){ notify(false,null,null,"fail"); return; }
       fetch(DOC+"?key="+K).then(function(r){
         if(r.status===404) return {__none:true};             /* no doc yet = clean empty state */
         if(!r.ok) throw new Error("HTTP "+r.status);
         return r.json();
       }).then(function(doc){
-        if(doc&&doc.__none){ notify(true,{},null); return; }
+        failCount=0;
+        if(doc&&doc.__none){ notify(true,{},null,"none"); return; }
         var f=doc&&doc.fields, dj=f&&f.stateJson&&f.stateJson.stringValue;
         var setAt=f&&f.updatedAt&&f.updatedAt.timestampValue;
-        if(!dj){ notify(true,{},setAt); return; }
-        var st; try{ st=JSON.parse(dj); }catch(e){ notify(false,null,null); return; }
-        notify(true,st,setAt);
-      }).catch(function(){ notify(false,null,null); });
+        if(!dj){ notify(true,{},setAt,"empty"); return; }
+        var st; try{ st=JSON.parse(dj); }catch(e){ notify(false,null,null,"parsefail"); return; }
+        notify(true,st,setAt,dj);                             /* key = raw stateJson: it only changes when an officer actually saved something */
+      }).catch(function(){ if(++failCount>=2) notify(false,null,null,"fail"); });   /* tolerate a single blip; fail-loud only on a sustained outage */
     }
     load(); setInterval(load, POLL);
     return function(fn){ subs.push(fn); if(last) fn(last[0],last[1],last[2]); };
@@ -1180,29 +1188,40 @@
      dashboard state. TV (>=1500px) auto-plays full-screen (2 live = split); smaller screens get a
      tappable header badge. Stream cleared in control -> 30s amber grace, then close. ── */
   (function(){
-    var graceT=null, lastKey="", lastStreams=[], lastBannerOnly=false;
+    var graceT=null, lastKey="", lastStreams=[], lastBannerOnly=false, curMission="";
     function escA(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
     function activeStreams(st){
       var d=st&&st.drone; if(!d||!Array.isArray(d.streams)) return [];
       return d.streams
         .filter(function(s){ return s && typeof s.url==="string" && /^https:\/\//i.test(s.url.trim()); })
         .slice(0,2)
-        .map(function(s){ return { url:s.url.trim(), label:String(s.label||"").trim() }; });
+        .map(function(s){ return { url:s.url.trim(), label:String(s.label||"").trim(), mission:"" }; });
+    }
+    /* Wall boards have no mouse. Browsers permit MUTED autoplay without a user gesture, so we hint
+       the DroneSense player to start muted+autoplaying. Params are appended safely (token untouched);
+       ignored by players that don't read them. The browser-side guarantee is the kiosk launch flag
+       --autoplay-policy=no-user-gesture-required. */
+    function autoplayify(u){
+      try{ if(/dronesense\.com/i.test(u)) return u + (u.indexOf("?")>=0?"&":"?") + "autoplay=1&muted=1&mute=1"; }catch(e){}
+      return u;
     }
     function buildFrames(streams, bannerOnly){
       var fr=document.getElementById("droFrames"); if(!fr) return;
       fr.innerHTML = streams.map(function(s){
         if(bannerOnly) return '<div class="dro-link"><div class="big">DRONE LIVE'+(s.label?(' \u2014 '+escA(s.label)):'')+'</div>'+
                               '<div class="url">'+escA(s.url)+'</div></div>';
-        return '<iframe src="'+escA(s.url)+'" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
+        return '<iframe src="'+escA(autoplayify(s.url))+'" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
       }).join("");
-      var lb=document.getElementById("droLbls");
+      var lb=document.getElementById("droLbls"), ti=document.getElementById("droTitle");
+      var missions=streams.map(function(s){ return s.mission; }).filter(Boolean);
+      curMission = missions.length ? missions.join("  \u00b7  ") : "";
+      if(ti) ti.textContent = curMission || "DRONE LIVE";
       if(lb) lb.textContent = streams.map(function(s){ return s.label; }).filter(Boolean).join("  \u00b7  ");
     }
     function setEnding(on){
       var b=document.getElementById("droBanner"), ttl=document.getElementById("droTitle");
       if(b) b.className="dro-banner"+(on?" ending":"");
-      if(ttl) ttl.textContent = on ? "STREAM ENDED \u2014 CLEARING" : "DRONE LIVE";
+      if(ttl) ttl.textContent = on ? "STREAM ENDED \u2014 CLEARING" : (curMission || "DRONE LIVE");
     }
     function render(streams, bannerOnly){
       var ov=document.getElementById("droneOverlay"), badge=document.getElementById("droneBadge");
@@ -1261,7 +1280,7 @@
             var next=j.drones
               .filter(function(d){ return d && typeof d.video_url==="string" && /^https:\/\//i.test(d.video_url); })
               .slice(0,2)
-              .map(function(d){ return { url:d.video_url, label:(d.callSign||d.model||"UAS") }; });
+              .map(function(d){ return { url:d.video_url, label:(d.callSign||d.model||"UAS"), mission:(d.mission||"") }; });
             setAuto(next);                                     /* authoritative (incl. empty = drone landed) */
           })
           .catch(function(){ /* network error: hold current auto view */ });
