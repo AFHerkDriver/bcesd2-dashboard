@@ -452,7 +452,7 @@
     .lcol > .calls-tile:has(.callsclear){display:none}       /* verified "No Active Calls" (keeps standby + fail-loud) */
     .sched-split{flex-direction:column;gap:10px}             /* phone: stack events over the run-type tally; the two halves split the tile height evenly */
     .rt-half{border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:8px}
-    .sched-tile:not(:has(.sched-list > *)):not(:has(.rt-row)){display:none}   /* hide only when there are no events AND no runs (keeps read-fail + any run tally) */
+    .sched-tile:not(:has(.sched-list > *)):not(:has(.rt-cell:not(.rt-zero))){display:none}   /* hide only when there are no events AND no logged runs (all keypad tiles zero) */
     .rrow > .nws-tile:not(:has(.alert-lane > *)):not(:has(.heat-band > *)):not(:has(.fw-body > *)):not(:has(.floodband:not([hidden]))):not(:has(.strike > *)){display:none}   /* no alerts / heat / red flag / flood / strike teams (keeps NWS-unavailable + red-flag-unknown) */
   }
 
@@ -631,14 +631,15 @@
   .sched-split{display:flex;gap:clamp(8px,1vmin,18px);flex:1 1 auto;min-height:0}
   .sched-half{flex:1 1 0;display:flex;flex-direction:column;min-width:0;min-height:0}
   .rt-half{border-left:1px solid var(--border);padding-left:clamp(8px,1vmin,18px)}
-  .rt-list{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:clamp(4px,.7vmin,12px)}
-  .rt-row{display:flex;align-items:center;gap:clamp(6px,.8vmin,14px)}
-  .rt-dot{flex:0 0 auto;width:clamp(9px,1vmin,16px);height:clamp(9px,1vmin,16px);border-radius:50%;background:var(--rc)}
-  .rt-name{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--rc);font-size:clamp(14px,1.6vmin,26px);line-height:1;white-space:nowrap}
-  .rt-ct{margin-left:auto;font-family:'Bebas Neue',sans-serif;color:var(--rc);font-size:clamp(16px,1.9vmin,30px);letter-spacing:.5px;line-height:1}
-  .rt-row.rt-lead .rt-name{font-size:clamp(18px,2.2vmin,34px)}
-  .rt-row.rt-lead .rt-ct{font-size:clamp(24px,2.8vmin,46px)}
-  .rt-idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px);text-align:center;margin:auto 0}
+  /* Runs by Type = a 3×3 keypad of color tiles, ranked by count (top-left = busiest, 1..9). */
+  .rt-list{flex:1 1 auto;min-height:0;overflow:hidden;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:clamp(3px,.45vmin,8px)}
+  .rt-cell{--rc:var(--dim);border:1px solid var(--rc);border-radius:8px;background:color-mix(in srgb, var(--rc) 14%, transparent);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:0;overflow:hidden;padding:2px;gap:1px}
+  .rt-cell.rt-lead{border-width:2px;background:color-mix(in srgb, var(--rc) 26%, transparent)}   /* busiest (rank 1, top-left) */
+  .rt-cell.rt-zero{border-color:var(--border);background:none}                                     /* no runs -> unlit (neutral); only lights up its color at a tally of 1+ */
+  .rt-cell.rt-zero .rt-cnm,.rt-cell.rt-zero .rt-cct{color:var(--dim)}
+  .rt-cnm{font-family:'Bebas Neue',sans-serif;letter-spacing:.5px;color:var(--rc);font-size:clamp(11px,1.25vmin,20px);line-height:1;white-space:nowrap}
+  .rt-cct{font-family:'Bebas Neue',sans-serif;color:var(--rc);font-size:clamp(17px,2.1vmin,34px);line-height:1.05}
 
   /* Unit Status tile (UAV live + officer-set teams) */
   .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:grid;grid-template-columns:repeat(3,1fr);align-content:center;gap:clamp(5px,.6vmin,10px)}
@@ -1680,17 +1681,20 @@
     var RT_META={"k-med":["EMS","var(--amber)"],"k-fire":["FIRE","var(--red)"],"k-mvc":["MVC","var(--accent)"],
       "k-rescue":["RESCUE","var(--pink)"],"k-haz":["HAZMAT","var(--lime)"],"k-fuel":["GAS/FUEL","var(--teal)"],
       "k-alarm":["ALARM","var(--purple)"],"k-assist":["ASSIST","var(--blue)"],"":["OTHER","var(--dim)"]};
-    function paintRunTypes(tc){
+    function paintRunTypes(tc){                                  /* 3×3 keypad: all 9 categories, sorted by count (top-left = busiest); ties break alphabetical for stability */
       var list=document.getElementById("rtList"); if(!list) return;
       var stamp=document.getElementById("rtStamp");
-      var rows=Object.keys(tc).map(function(k){ var m=RT_META[k]||RT_META[""]; return {label:m[0],color:m[1],n:tc[k]}; })
-        .filter(function(r){ return r.n>0; })
-        .sort(function(a,b){ return b.n-a.n || a.label.localeCompare(b.label); });
-      var total=rows.reduce(function(s,r){ return s+r.n; },0);
+      var cells=Object.keys(RT_META).map(function(k){ var m=RT_META[k]; return {label:m[0],color:m[1],n:(tc[k]||0)}; })
+        .sort(function(a,b){
+          var ao=(a.label==="OTHER"&&a.n===0), bo=(b.label==="OTHER"&&b.n===0);   /* a zero OTHER always parks in the last (9th) cell */
+          if(ao!==bo) return ao?1:-1;
+          return b.n-a.n || a.label.localeCompare(b.label);
+        });
+      var total=cells.reduce(function(s,c){ return s+c.n; },0);
       if(stamp) stamp.textContent=total?("this tour · "+total):"this tour";
-      if(!rows.length){ list.innerHTML='<div class="rt-idle">No runs logged this tour</div>'; return; }
-      list.innerHTML=rows.map(function(r,i){
-        return '<div class="rt-row'+(i===0?" rt-lead":"")+'" style="--rc:'+r.color+'"><span class="rt-dot"></span><span class="rt-name">'+r.label+'</span><span class="rt-ct">'+r.n+'</span></div>';
+      list.innerHTML=cells.map(function(c,i){
+        var cls="rt-cell"+(i===0&&c.n>0?" rt-lead":"")+(c.n===0?" rt-zero":"");
+        return '<div class="'+cls+'" style="--rc:'+c.color+'"><span class="rt-cnm">'+c.label+'</span><span class="rt-cct">'+c.n+'</span></div>';
       }).join("");
     }
     function loadTally(){
