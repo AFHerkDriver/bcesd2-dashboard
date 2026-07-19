@@ -448,7 +448,9 @@
        tile is never hidden — people expect it to load. :has() = iOS Safari 15.4+; older browsers
        ignore these rules and simply show every tile. */
     .lcol > .calls-tile:has(.callsclear){display:none}       /* verified "No Active Calls" (keeps standby + fail-loud) */
-    .sched-tile:has(.sched-list:empty){display:none}         /* nothing scheduled (keeps events + read-fail) */
+    .sched-split{flex-direction:column;gap:8px}              /* phone: stack events over the run-type tally */
+    .rt-half{border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:6px}
+    .sched-tile:not(:has(.sched-list > *)):not(:has(.rt-row)){display:none}   /* hide only when there are no events AND no runs (keeps read-fail + any run tally) */
     .rrow > .nws-tile:not(:has(.alert-lane > *)):not(:has(.fw-body > *)):not(:has(.floodband:not([hidden]))):not(:has(.strike > *)){display:none}   /* no alerts / red flag / flood / strike teams (keeps NWS-unavailable + red-flag-unknown) */
   }
 
@@ -616,6 +618,18 @@
   .sched-list.err .ds,.sched-list.err .idle{color:var(--amber)}
   .sched-page{font-family:'DM Mono',monospace;font-size:clamp(9px,.8vmin,13px);color:var(--dim);letter-spacing:1px;position:absolute;right:10px;top:50%;transform:translateY(-50%)}
   .sched-page[hidden]{display:none}
+  /* Sched tile split: scheduled events (left) + call-type run tally (right) */
+  .sched-split{display:flex;gap:clamp(8px,1vmin,18px);flex:1 1 auto;min-height:0}
+  .sched-half{flex:1 1 0;display:flex;flex-direction:column;min-width:0;min-height:0}
+  .rt-half{border-left:1px solid var(--border);padding-left:clamp(8px,1vmin,18px)}
+  .rt-list{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:clamp(4px,.7vmin,12px)}
+  .rt-row{display:flex;align-items:center;gap:clamp(6px,.8vmin,14px)}
+  .rt-dot{flex:0 0 auto;width:clamp(9px,1vmin,16px);height:clamp(9px,1vmin,16px);border-radius:50%;background:var(--rc)}
+  .rt-name{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--rc);font-size:clamp(14px,1.6vmin,26px);line-height:1;white-space:nowrap}
+  .rt-ct{margin-left:auto;font-family:'Bebas Neue',sans-serif;color:var(--rc);font-size:clamp(16px,1.9vmin,30px);letter-spacing:.5px;line-height:1}
+  .rt-row.rt-lead .rt-name{font-size:clamp(18px,2.2vmin,34px)}
+  .rt-row.rt-lead .rt-ct{font-size:clamp(24px,2.8vmin,46px)}
+  .rt-idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px);text-align:center;margin:auto 0}
 
   /* Unit Status tile (UAV live + officer-set teams) */
   .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:grid;grid-template-columns:repeat(3,1fr);align-content:center;gap:clamp(5px,.6vmin,10px)}
@@ -760,8 +774,16 @@
     </div>
     <!-- Shift schedule — officer-set via control.html; vertical list, auto-paging on overflow -->
     <div class="tile sched-tile">
-      <div class="head"><span class="name">Shift Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
-      <div class="sched-list" id="schedList"></div>
+      <div class="sched-split">
+        <div class="sched-half">
+          <div class="head"><span class="name">Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
+          <div class="sched-list" id="schedList"></div>
+        </div>
+        <div class="sched-half rt-half">
+          <div class="head"><span class="name">Runs by Type</span><span class="stamp src" id="rtStamp"></span></div>
+          <div class="rt-list" id="rtList"></div>
+        </div>
+      </div>
     </div>
     </div>
 
@@ -872,8 +894,8 @@
     var STATIONS=[
       {n:"120",lat:29.392122,lng:-98.709906},{n:"121",lat:29.454183,lng:-98.755111},
       {n:"122",lat:29.505141,lng:-98.782267},{n:"123",lat:29.405115,lng:-98.701876},
-      {n:"124",lat:29.413373,lng:-98.785885},{n:"125",lat:29.495450,lng:-98.743302},
-      {n:"161",lat:29.219397,lng:-98.458088},{n:"162",lat:29.178697,lng:-98.430572}
+      {n:"124",lat:29.413373,lng:-98.785885},{n:"125",lat:29.49202,lng:-98.74346},
+      {n:"161",lat:29.21967,lng:-98.45806},{n:"162",lat:29.17785,lng:-98.42410}
     ];
     var idlePts=[];
     var stationLayer=L.layerGroup().addTo(map);
@@ -1625,6 +1647,25 @@
         el.className=cls;
       });
     }
+    /* ── Runs-by-type tally (right half of the sched tile): count this tour's /calls log by call
+       type, color-coded, ordered high->low, leading type emphasized. GENERAL is an announcement,
+       not a run, so classify()=="k-gen" is dropped upstream. ── */
+    var RT_META={"k-med":["EMS","var(--amber)"],"k-fire":["FIRE","var(--red)"],"k-mvc":["MVC","var(--accent)"],
+      "k-rescue":["RESCUE","var(--pink)"],"k-haz":["HAZMAT","var(--lime)"],"k-fuel":["GAS/FUEL","var(--teal)"],
+      "k-alarm":["ALARM","var(--purple)"],"k-assist":["ASSIST","var(--blue)"],"":["OTHER","var(--dim)"]};
+    function paintRunTypes(tc){
+      var list=document.getElementById("rtList"); if(!list) return;
+      var stamp=document.getElementById("rtStamp");
+      var rows=Object.keys(tc).map(function(k){ var m=RT_META[k]||RT_META[""]; return {label:m[0],color:m[1],n:tc[k]}; })
+        .filter(function(r){ return r.n>0; })
+        .sort(function(a,b){ return b.n-a.n || a.label.localeCompare(b.label); });
+      var total=rows.reduce(function(s,r){ return s+r.n; },0);
+      if(stamp) stamp.textContent=total?("this tour · "+total):"this tour";
+      if(!rows.length){ list.innerHTML='<div class="rt-idle">No runs logged this tour</div>'; return; }
+      list.innerHTML=rows.map(function(r,i){
+        return '<div class="rt-row'+(i===0?" rt-lead":"")+'" style="--rc:'+r.color+'"><span class="rt-dot"></span><span class="rt-name">'+r.label+'</span><span class="rt-ct">'+r.n+'</span></div>';
+      }).join("");
+    }
     function loadTally(){
       var pin=window.BOARD_PIN?window.BOARD_PIN():"";
       if(!pin) return;
@@ -1633,15 +1674,17 @@
         .then(function(j){
           if(!j||!j.ok||!Array.isArray(j.calls)) return;     /* leave last-known tally on transient errors */
           tallyOk=true;
-          var since=tourStart().getTime(), counts={};
+          var since=tourStart().getTime(), counts={}, typeCounts={};
           j.calls.forEach(function(c){
             var ts=c.logged||c.started;
             if(ts && new Date(ts).getTime()<since) return;
             var sts=(c.stations||[]).map(function(s){ return s==="126"?"123":s; });   /* M126 -> Station 123 */
             var seen={};
             sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
+            var cls=classify(c.type);                            /* per-type run tally; GENERAL is an announcement, not a run */
+            if(cls!=="k-gen") typeCounts[cls]=(typeCounts[cls]||0)+1;
           });
-          paintTally(counts);
+          paintTally(counts); paintRunTypes(typeCounts);
         })
         .catch(function(){ /* keep last-known */ });
     }
