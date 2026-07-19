@@ -427,8 +427,10 @@
     .wxrow > .wx-tile,.wxrow > .teams-tile{flex:none;width:100%}
     .teams-tile{min-height:120px}
     .wx-tile{flex:none;width:100%}
-    .sched-tile{flex:none;min-height:80px}
+    .sched-tile{flex:none;min-height:300px}                  /* room for the two stacked halves (was 80 — too short for the split) */
     .lcol > .calls-tile{flex:none;min-height:120px}          /* was collapsing to 0 on the phone */
+    .tally{flex-wrap:wrap;justify-content:center}            /* phone: 7 station chips wrap instead of overflowing off the right edge */
+    .tally .tchip2{flex:0 0 auto}
     .wx-hours{flex:none;height:150px}
     .rcol{flex:none;width:100%}
     .rcol > .rrow{flex:none;flex-direction:column}           /* stack NWS over Hospital */
@@ -448,10 +450,10 @@
        tile is never hidden — people expect it to load. :has() = iOS Safari 15.4+; older browsers
        ignore these rules and simply show every tile. */
     .lcol > .calls-tile:has(.callsclear){display:none}       /* verified "No Active Calls" (keeps standby + fail-loud) */
-    .sched-split{flex-direction:column;gap:8px}              /* phone: stack events over the run-type tally */
-    .rt-half{border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:6px}
+    .sched-split{flex-direction:column;gap:10px}             /* phone: stack events over the run-type tally; the two halves split the tile height evenly */
+    .rt-half{border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:8px}
     .sched-tile:not(:has(.sched-list > *)):not(:has(.rt-row)){display:none}   /* hide only when there are no events AND no runs (keeps read-fail + any run tally) */
-    .rrow > .nws-tile:not(:has(.alert-lane > *)):not(:has(.fw-body > *)):not(:has(.floodband:not([hidden]))):not(:has(.strike > *)){display:none}   /* no alerts / red flag / flood / strike teams (keeps NWS-unavailable + red-flag-unknown) */
+    .rrow > .nws-tile:not(:has(.alert-lane > *)):not(:has(.heat-band > *)):not(:has(.fw-body > *)):not(:has(.floodband:not([hidden]))):not(:has(.strike > *)){display:none}   /* no alerts / heat / red flag / flood / strike teams (keeps NWS-unavailable + red-flag-unknown) */
   }
 
   /* ── Tablet: iPad portrait & phone landscape (741–1180px) — stacked scroll, rows stay 2-up ── */
@@ -468,7 +470,7 @@
     .rcol > .tile{flex:none}
     .rcol > .drone-tile{min-height:300px}
     .drone-idle img{object-fit:contain}            /* iPad box is wide too — contain shows the whole shield, not a 48%-cropped slice */
-    .sched-tile{flex:none;min-height:120px}
+    .sched-tile{flex:none;min-height:180px}                  /* room for the side-by-side events + run-type split */
     .lcol > .calls-tile{flex:none;min-height:110px}
     .wx-hours{flex:none;height:170px}
     .lcol > .empty-tile,.rcol > .empty-tile{display:none}
@@ -512,6 +514,13 @@
   .al-band.al-watch .al-ev{color:#F59E0B}
   .al-band.sev-error{border-color:rgba(255,59,48,.5);background:linear-gradient(135deg,rgba(255,59,48,.18),rgba(150,0,0,.10))}
   .al-band.sev-error .al-ev{color:var(--red)}
+  /* Excessive-heat advisory bands (heat index): caution = amber, danger = hot orange + pulse */
+  .heat-band[hidden]{display:none}
+  .heat-band{margin-top:clamp(4px,.4vw,8px)}
+  .al-band.al-heat-caution{border-color:rgba(245,158,11,.5);background:linear-gradient(135deg,rgba(245,158,11,.20),rgba(180,90,0,.10))}
+  .al-band.al-heat-caution .al-ev{color:#F59E0B}
+  .al-band.al-heat-danger{border-color:rgba(255,107,53,.6);background:linear-gradient(135deg,rgba(255,107,53,.24),rgba(200,40,0,.13));animation:pulse 3s ease-in-out infinite}
+  .al-band.al-heat-danger .al-ev{color:#FF6B35}
   .al-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
   .al-more{font-size:clamp(10px,.9vw,14px);color:var(--dim);text-align:center;letter-spacing:1px}
   /* Shift calendar — bottom strip (officer-set) */
@@ -794,6 +803,7 @@
         <div class="tile nws-tile">
           <div class="head"><span class="name">National Weather Service Alerts</span><span class="stamp src" id="fwStamp"></span></div>
           <div class="alert-lane" id="alertLane"></div>
+          <div class="heat-band" id="heatBand" hidden></div>
           <div class="fw-body" id="fwBody"></div>
           <div class="floodband" id="floodBand" hidden>
             <div class="fb-head"><span class="fb-stamp src" id="fbStamp"></span></div>
@@ -1113,6 +1123,7 @@
     document.getElementById("wxTemp").innerHTML=(n.temp!=null?n.temp:"\u2014")+"&deg;";
     document.getElementById("wxCond").textContent=n.sf||"\u2014";
     document.getElementById("wxFeels").innerHTML=(n.hi!=null?n.hi:"\u2014")+"&deg;";
+    try{ if(window.updateHeatFlag) window.updateHeatFlag(n.hi); }catch(e){}   /* excessive-heat advisory in the NWS banner stack */
     document.getElementById("wxWind").innerHTML=(n.spd>=0?n.spd:"\u2014")+(n.gust!=null?(' <em>G'+n.gust+'</em>'):"")+(n.dir?" "+n.dir:"");
     renderAstro();                                          /* sunrise / sunset / moon — local math, no NWS dependency */
     /* everyday 12-hour outlook (top-left): time · condition icon · temp · feels-like, from the current hour.
@@ -1130,6 +1141,22 @@
     var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false});
     if(!flag){fl.hidden=true; st.textContent="NWS \u00b7 5-sta worst-case \u00b7 "+tm;}
     else{fl.hidden=false; fl.textContent=flag; st.textContent=/SAMPLE/.test(flag)?"NWS unavailable":("NWS \u00b7 "+tm);}}
+  /* \u2500\u2500 Excessive-heat advisory \u2014 a banner in the NWS Alerts stack, styled like the alert bands.
+     Keyed off the district heat index (feels-like, worst of the 5 stations): CAUTION >= 90\u00b0F,
+     DANGER >= 103\u00b0F (NWS Heat Index bands). Adjust the two constants to tune. \u2500\u2500 */
+  window.updateHeatFlag=(function(){
+    var CAUTION=90, DANGER=103;
+    return function(hi){
+      var el=document.getElementById("heatBand"); if(!el) return;
+      var v=(hi==null||isNaN(hi))?null:Math.round(hi);
+      if(v==null || v<CAUTION){ el.hidden=true; el.innerHTML=""; return; }
+      var danger=v>=DANGER;
+      el.hidden=false;
+      el.innerHTML=danger
+        ? '<div class="al-band al-heat-danger"><span class="al-icon">\ud83c\udf21\ufe0f</span><div class="al-body"><div class="al-ev">EXCESSIVE HEAT \u2014 DANGER</div><div class="al-sub">Heat index '+v+'\u00b0F \u00b7 limit exertion \u00b7 mandatory rehab</div></div><span class="al-src">FEELS-LIKE</span></div>'
+        : '<div class="al-band al-heat-caution"><span class="al-icon">\ud83c\udf21\ufe0f</span><div class="al-body"><div class="al-ev">EXCESSIVE HEAT \u2014 CAUTION</div><div class="al-sub">Heat index '+v+'\u00b0F \u00b7 hydrate \u00b7 plan rehab</div></div><span class="al-src">FEELS-LIKE</span></div>';
+    };
+  })();
   function wxSample(){var b=Date.now();
     function P(i,t,rh,ws,wg,wd,sf,day,pop){return {startTime:new Date(b+i*3600000).toISOString(),temperature:t,relativeHumidity:{value:rh},windSpeed:ws+" mph",windGust:{value:wg,unitCode:"wmoUnit:mph"},windDirection:wd,shortForecast:sf,isDaytime:day,probabilityOfPrecipitation:{value:pop}};}
     return [P(0,98,14,"22",35,"WSW","Sunny",true,0),P(1,99,13,"22",32,"WSW","Sunny",true,0),P(2,100,12,"20",35,"W","Sunny",true,10),
@@ -1534,7 +1561,7 @@
     /* advisory board, not CAD: rows age out after 10 min */
     var ADVISORY_MIN=15;
     function classify(t){ t=String(t||"").toUpperCase();
-      if(/GENERAL/.test(t)) return "k-gen";
+      if(/GENERAL|BURNING RECOMMENDATION|BURN BAN/.test(t)) return "k-gen";   /* advisories, not runs — dropped from the run-type tally */
       if(/ALARM/.test(t)) return "k-alarm";
       if(/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "k-mvc";
       if(/FIRE|STRUCTURE|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "k-fire";
@@ -1734,29 +1761,31 @@
     function render(){
       var body=document.getElementById("teamsBody");
       if(!body) return;
-      var html=uavChip("UAV121","u121")+uavChip("UAV124","u124");
+      var items=[], s=window.UAV_STATE;                            /* collect {label, cls} for every visible pill, then sort A–Z */
+      items.push({label:"UAV121", cls: !s?"":(!s.ok?"err":(s.u121?"on":""))});
+      items.push({label:"UAV124", cls: !s?"":(!s.ok?"err":(s.u124?"on":""))});
       if(stOk===false){
         body.className="teams-body err";
-        html+=OFF.map(function(t){ return chip(t[1],"err"); }).join("");
         /* apparatus unknown on read-fail: hiding them would read as "all in service" — a false all-clear */
-        html+=APP.map(function(a){ return chip(a[1],"err"); }).join("");
+        OFF.forEach(function(t){ items.push({label:t[1],cls:"err"}); });
+        APP.forEach(function(a){ items.push({label:a[1],cls:"err"}); });
       } else if(stOk===null){
         body.className="teams-body";
-        html+=OFF.map(function(t){ return chip(t[1],""); }).join("");
+        OFF.forEach(function(t){ items.push({label:t[1],cls:""}); });
       } else {
         var tm=(stSt&&stSt.teams)||{}, ap=(stSt&&stSt.apparatus)||{};
         var tx=(stSt&&stSt.tExp)||{}, ax=(stSt&&stSt.aExp)||{};
         body.className="teams-body";
-        html+=OFF.map(function(t){ var on=!!tm[t[0]] && !expired(tx[t[0]]);          /* expiry passed -> quietly off */
-          return chip(t[1], on?"on":""); }).join("");
-        html+=APP.filter(function(a){ return !!ap[a[0]] && !expired(ax[a[0]]); })    /* expiry passed -> back in service */
-          .map(function(a){ return chip(a[1],"oos"); }).join("");
+        OFF.forEach(function(t){ var on=!!tm[t[0]] && !expired(tx[t[0]]); items.push({label:t[1],cls:on?"on":""}); });   /* expiry passed -> quietly off */
+        APP.forEach(function(a){ if(!!ap[a[0]] && !expired(ax[a[0]])) items.push({label:a[1],cls:"oos"}); });            /* apparatus only while OOS */
         ((stSt&&stSt.writeins)||[]).forEach(function(u){                              /* ad-hoc write-ins */
           if(!u || !u.name || !String(u.name).trim() || expired(u.exp)) return;
-          html+=chip(esc2(String(u.name).trim().toUpperCase()), u.mode==="oos"?"oos":"on");
+          items.push({label:esc2(String(u.name).trim().toUpperCase()), cls:u.mode==="oos"?"oos":"on"});
         });
       }
-      body.innerHTML=html;
+      var PILL_ORDER={"BC161":"B0"};                             /* manual tweak: Battalion 161 (BC161) sorts just ahead of B121 (Brush), rest alphabetical */
+      items.sort(function(a,b){ return String(PILL_ORDER[a.label]||a.label).localeCompare(String(PILL_ORDER[b.label]||b.label), undefined, {numeric:true}); });   /* alphabetize the pills */
+      body.innerHTML=items.map(function(it){ return chip(it.label, it.cls); }).join("");
     }
     window.renderUnits=render;
     render();

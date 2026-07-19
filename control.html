@@ -84,6 +84,13 @@
   .seg.red button.on{background:var(--red);color:#fff}
   .seg.green button.on{background:var(--green);color:#000}
   .seg.blue button.on{background:var(--blue);color:#fff}
+  /* Medical Direction: Director = blue · Asst Chief = green · Custom = yellow (when selected) */
+  #segMed button[data-v="default"].on{background:var(--blue);color:#fff}
+  #segMed button[data-v="alternate"].on{background:var(--green);color:#0D1117}
+  #segMed button[data-v="custom"].on{background:var(--amber);color:#0D1117}
+  /* Display toggle: On = blue · Off = dark blue */
+  #segPxShift button[data-v="on"].on{background:var(--blue);color:#fff}
+  #segPxShift button[data-v="off"].on{background:#1E40AF;color:#fff}
   /* Unit segs (specialty, ladders, strikes, write-ins): color = meaning.
      Staffed / In Service -> green · not staffed (—) -> gray · OOS -> red. */
   .useg button.on[data-v="on"],.useg button.on[data-v="in"],.wiseg button.on[data-v="on"]{background:var(--green);color:#000}
@@ -157,7 +164,7 @@
   @keyframes gateshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
   .gate-card.shake{animation:gateshake .3s ease}
   .unit-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
-  .ulabel{flex:0 0 128px;min-width:0;font-size:11px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;
+  .ulabel{flex:0 0 158px;min-width:0;font-size:11px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .unit-row .useg{flex:1 1 150px;min-width:140px;max-width:230px}
   .uexp{flex:1 1 165px;min-width:0;max-width:235px;box-sizing:border-box;margin-left:auto;margin-right:auto;text-align:center}
@@ -209,9 +216,42 @@
       </div>
     </div>
 
+    <!-- Announcements (top ticker) -->
+    <div class="card">
+      <h2>Announcements <span class="tag live">TICKER</span></h2>
+      <div class="hint">Rotate on the board ticker. Optional expiration — an expired post clears itself from the board.</div>
+      <div id="annList"></div>
+      <button class="add" id="addAnn">+ Add announcement</button>
+    </div>
+
+    <!-- Calendar -->
+    <div class="card">
+      <h2>Shift Calendar</h2>
+      <div class="hint">Date optional (MM/DD, blank = today). End time optional. Sorted automatically on the board; events clear themselves one hour after they end.</div>
+      <div id="calList"></div>
+      <button class="add" id="addCal">+ Add event</button>
+    </div>
+
+    <!-- Specialty Units — alphabetized -->
+    <div class="card">
+      <h2>Specialty Units &amp; OOS</h2>
+      <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on team staffing — when it passes, the team drops to — on its own. Ladders/AP have no dates: maintenance returns are unknown; flip them back In Service manually.</div>
+      <div class="unit-row"><span class="ulabel">Aerial Platform 124</span><div class="seg red useg" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      <div class="unit-row"><span class="ulabel">Battalion 161</span><div class="seg red useg" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:bat161" title="Expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Boat Team 124</span><div class="seg red useg" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:boat124" title="Expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Brush 121</span><div class="seg red useg" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:b121" title="Expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Ladder 123</span><div class="seg red useg" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      <div class="unit-row"><span class="ulabel">Ladder 125</span><div class="seg red useg" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      <div class="unit-row"><span class="ulabel">MAC 121</span><div class="seg red useg" id="segMac121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:mac121" title="Expires (optional)"></div>
+      <div class="unit-row"><span class="ulabel">Rescue Team 124</span><div class="seg red useg" id="segRescue124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:rescue124" title="Expires (optional)"></div>
+      <div class="hint" style="margin-top:10px">Write-in units — extra staffing OR maintenance OOS for any apparatus not listed above (E121, T124, B162…). Green = staffed up · Red = out of service. Leave the date blank for unknown maintenance returns; delete the row when the unit is back.</div>
+      <div id="wiList"></div>
+      <button class="btn ghost" id="addWi" type="button">+ Add write-in unit</button>
+    </div>
+
     <!-- Medical Direction -->
     <div class="card">
-      <h2>Medical Direction <span class="tag">OFFICER</span></h2>
+      <h2>Medical Direction</h2>
       <div class="hint">Defaults to the Medical Director. Hold to an alternate for a time window; it auto-reverts when the window ends.</div>
       <div class="field">
         <label>On Call Now</label>
@@ -237,30 +277,37 @@
 
     <!-- Hospitals -->
     <div class="card">
-      <h2>Hospital Status <span class="tag">OFFICER</span></h2>
+      <h2>Hospital Status</h2>
       <div class="hint">Real facilities per STRAC Hospital Selection Guide (Aug 2025). Diversion is not a public feed — set it here from EMResource / MEDCOM.</div>
       <div id="hospList"></div>
     </div>
 
+    <!-- Flood Ops override — mirrors Fire Weather -->
     <div class="card">
-      <h2>Specialty Units &amp; OOS <span class="tag">OFFICER</span></h2>
-      <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on team staffing — when it passes, the team drops to — on its own. Ladders/AP have no dates: maintenance returns are unknown; flip them back In Service manually.</div>
-      <div class="unit-row"><span class="ulabel">Brush 121</span><div class="seg red useg" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:b121" title="Expires (optional)"></div>
-      <div class="unit-row"><span class="ulabel">MAC 121</span><div class="seg red useg" id="segMac121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:mac121" title="Expires (optional)"></div>
-      <div class="unit-row"><span class="ulabel">Battalion 161</span><div class="seg red useg" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:bat161" title="Expires (optional)"></div>
-      <div class="unit-row"><span class="ulabel">Boat Team 124</span><div class="seg red useg" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:boat124" title="Expires (optional)"></div>
-      <div class="unit-row"><span class="ulabel">Rescue Team 124</span><div class="seg red useg" id="segRescue124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:rescue124" title="Expires (optional)"></div>
-      <div class="unit-row"><span class="ulabel">Ladder 123</span><div class="seg red useg" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
-      <div class="unit-row"><span class="ulabel">Aerial Platform 124</span><div class="seg red useg" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
-      <div class="unit-row"><span class="ulabel">Ladder 125</span><div class="seg red useg" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
-      <div class="hint" style="margin-top:10px">Write-in units — extra staffing OR maintenance OOS for any apparatus not listed above (E121, T124, B162…). Green = staffed up · Red = out of service. Leave the date blank for unknown maintenance returns; delete the row when the unit is back.</div>
-      <div id="wiList"></div>
-      <button class="btn ghost" id="addWi" type="button">+ Add write-in unit</button>
+      <h2>Flood Ops <span class="tag live">LIVE NWS</span></h2>
+      <div class="hint">Low-water crossings + station rain accumulator. Auto shows the band on an NWS Flood / Flash-Flood Warning; force it on to watch conditions before a warning posts.</div>
+      <div class="field">
+        <label>Flood Band</label>
+        <div class="seg blue" id="segFlood">
+          <button data-v="auto">Auto (NWS)</button><button data-v="on">Force On</button><button data-v="off">Force Off</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Fire Weather <span class="tag live">LIVE NWS</span></h2>
+      <div class="hint">RH / wind / temp come live from NWS. Red Flag defaults to the NWS feed; override only if needed.</div>
+      <div class="field">
+        <label>Red Flag</label>
+        <div class="seg red" id="segFlag">
+          <button data-v="auto">Auto (NWS)</button><button data-v="on">Force On</button><button data-v="off">Force Off</button>
+        </div>
+      </div>
     </div>
 
     <!-- Strike Teams — name / callsign / phone shown stacked in the NWS Alerts tile footer when staffed -->
     <div class="card">
-      <h2>Strike Teams <span class="tag">OFFICER</span></h2>
+      <h2>Strike Teams</h2>
       <div class="hint">When staffed, the board shows the team name, its STEN callsign, and the phone number — stacked — in the NWS Alerts tile.</div>
       <div class="field"><label>Strike Team West</label><div class="seg red useg" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
       <div class="row">
@@ -274,48 +321,9 @@
       </div>
     </div>
 
-    <!-- Flood Ops override — mirrors Fire Weather -->
-    <div class="card">
-      <h2>Flood Ops <span class="tag live">LIVE NWS</span> <span class="tag">OFFICER</span></h2>
-      <div class="hint">Low-water crossings + station rain accumulator. Auto shows the band on an NWS Flood / Flash-Flood Warning; force it on to watch conditions before a warning posts.</div>
-      <div class="field">
-        <label>Flood Band</label>
-        <div class="seg blue" id="segFlood">
-          <button data-v="auto">Auto (NWS)</button><button data-v="on">Force On</button><button data-v="off">Force Off</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Fire Weather <span class="tag live">LIVE NWS</span> <span class="tag">OFFICER</span></h2>
-      <div class="hint">RH / wind / temp come live from NWS. Red Flag defaults to the NWS feed; override only if needed.</div>
-      <div class="field">
-        <label>Red Flag</label>
-        <div class="seg red" id="segFlag">
-          <button data-v="auto">Auto (NWS)</button><button data-v="on">Force On</button><button data-v="off">Force Off</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Announcements (top ticker) -->
-    <div class="card">
-      <h2>Announcements <span class="tag">OFFICER</span> <span class="tag live">TICKER</span></h2>
-      <div class="hint">Rotate on the board ticker. Optional expiration — an expired post clears itself from the board.</div>
-      <div id="annList"></div>
-      <button class="add" id="addAnn">+ Add announcement</button>
-    </div>
-
-    <!-- Calendar -->
-    <div class="card">
-      <h2>Shift Calendar <span class="tag">OFFICER</span></h2>
-      <div class="hint">Date optional (MM/DD, blank = today). End time optional. Sorted automatically on the board; events clear themselves one hour after they end.</div>
-      <div id="calList"></div>
-      <button class="add" id="addCal">+ Add event</button>
-    </div>
-
     <!-- Display — wall-TV burn-in guard -->
     <div class="card">
-      <h2>Display <span class="tag">OFFICER</span></h2>
+      <h2>Display</h2>
       <div class="hint">Pixel Shift nudges the whole wall board a few pixels on a slow cycle so no static element sits on the same pixels for hours — the standard burn-in guard for always-on TVs. Invisible across the room; only affects the big-screen wall view, not phones or tablets. Leave On unless you&rsquo;re troubleshooting.</div>
       <div class="field">
         <label>Pixel Shift (Burn-in Guard)</label>
@@ -460,13 +468,13 @@ var HOSPITALS=[
     {id:'stlukes', name:"St. Luke's Baptist", tags:'L4 \u00b7 PCI \u00b7 Stroke:Comprehensive \u00b7 OB'},
     {id:'whb', name:'Westover Hills Baptist', tags:'PCI \u00b7 OB \u00b7 WEST'}
   ]},
-  {sys:'CHRISTUS Health', list:[
-    {id:'christus_childrens', name:"CHRISTUS Children's", tags:'L3 \u00b7 Pediatric'},
-    {id:'csr_nb', name:'CHRISTUS Santa Rosa New Braunfels', tags:'L4 \u00b7 PCI \u00b7 Resus:Primary \u00b7 Stroke:Primary \u00b7 OB'},
-    {id:'csr_wh', name:'CHRISTUS Santa Rosa Westover Hills', tags:'L4 \u00b7 PCI \u00b7 Resus:Primary \u00b7 Stroke:Primary \u00b7 OB \u00b7 WEST'}
+  {sys:'Christus Health', list:[
+    {id:'christus_childrens', name:"Christus Children's", tags:'L3 \u00b7 Pediatric'},
+    {id:'csr_nb', name:'Christus Santa Rosa New Braunfels', tags:'L4 \u00b7 PCI \u00b7 Resus:Primary \u00b7 Stroke:Primary \u00b7 OB'},
+    {id:'csr_wh', name:'Christus Santa Rosa Westover Hills', tags:'L4 \u00b7 PCI \u00b7 Resus:Primary \u00b7 Stroke:Primary \u00b7 OB \u00b7 WEST'}
   ]},
   {sys:'Methodist Healthcare System', list:[
-    {id:'methodist', name:'Methodist', tags:'L3 \u00b7 PCI \u00b7 Resus:Comprehensive \u00b7 Stroke:Comprehensive \u00b7 OB'},
+    {id:'methodist', name:'Methodist | Main', tags:'L3 \u00b7 PCI \u00b7 Resus:Comprehensive \u00b7 Stroke:Comprehensive \u00b7 OB'},
     {id:'methodist_childrens', name:'Methodist | Children\u2019s', tags:'Heart Alert \u00b7 Pediatric'},
     {id:'methodist_landmark', name:'Methodist | Landmark', tags:'Limited services'},
     {id:'methodist_metro', name:'Methodist | Metro', tags:'L4 \u00b7 PCI \u00b7 Stroke:Primary \u00b7 OB'},
@@ -478,7 +486,7 @@ var HOSPITALS=[
   ]},
   {sys:'Other Bexar / Guadalupe / Comal', list:[
     {id:'guadalupe', name:'Guadalupe Regional Medical Center', tags:'L4 \u00b7 OB'},
-    {id:'sammc', name:'SAMMC (San Antonio Military)', tags:'L1 \u00b7 PCI \u00b7 OB \u00b7 TriCare only'},
+    {id:'sammc', name:'SAMMC (S.A. Military Med Ctr)', tags:'L1 \u00b7 PCI \u00b7 OB \u00b7 TriCare only'},
     {id:'va', name:"South Texas Veteran's HCC", tags:'VA beneficiaries only'},
     {id:'university', name:'University', tags:'L1 \u00b7 PCI \u00b7 Resus:Comprehensive \u00b7 Stroke:Comprehensive \u00b7 OB'},
     {id:'university_childrens', name:"University Children's", tags:'L1 \u00b7 Pediatric \u00b7 Stroke'}
