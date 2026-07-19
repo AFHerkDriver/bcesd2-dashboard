@@ -437,7 +437,8 @@
     .rcol > .tile{flex:none}
     .rcol > .drone-tile{min-height:300px}                    /* feed + map need room */
     .drone-split{flex-direction:column}                      /* phone: stack the feed over the map */
-    .drone-video{flex:none;min-height:130px}
+    .drone-video{flex:none;min-height:210px}
+    .drone-idle img{object-fit:contain}            /* phone box is wide+short — contain shows the whole shield, not a cropped slice */
     .drone-map{flex:none;min-height:150px}
     .hosp-body{min-height:110px}
     .lcol > .empty-tile,.rcol > .empty-tile{display:none}    /* open slots add nothing on a phone */
@@ -456,6 +457,7 @@
     .wxrow > .tile,.rrow > .tile{min-height:170px}
     .rcol > .tile{flex:none}
     .rcol > .drone-tile{min-height:300px}
+    .drone-idle img{object-fit:contain}            /* iPad box is wide too — contain shows the whole shield, not a 48%-cropped slice */
     .sched-tile{flex:none;min-height:120px}
     .lcol > .calls-tile{flex:none;min-height:110px}
     .wx-hours{flex:none;height:170px}
