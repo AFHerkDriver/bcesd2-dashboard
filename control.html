@@ -60,15 +60,44 @@
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin:10px 0}
   .card > h2{font-size:17px;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px}
   .card > .hint{font-size:11px;color:var(--dim);margin-bottom:8px}
+  /* Access Log (admin PIN only) — control-panel activity grouped by person, expandable */
+  #accCard{display:none}
+  .acc-body{max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+  .acc-grp{border-bottom:1px solid var(--border)}
+  .acc-grp:last-child{border-bottom:none}
+  .acc-hd{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;color:var(--text);
+    font-family:'DM Mono',monospace;font-size:13px;text-align:left;padding:9px 11px;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .acc-hd:hover{background:var(--panel2)}
+  .acc-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--green)}
+  .acc-grp.unknown .acc-dot{background:var(--red)}
+  .acc-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px}
+  .acc-grp.unknown .acc-name{color:var(--red)}
+  .acc-meta{flex:0 0 auto;color:var(--dim);font-size:11px}
+  .acc-caret{flex:0 0 auto;color:var(--dim);font-size:11px;transition:transform .12s ease}
+  .acc-grp.open .acc-caret{transform:rotate(90deg)}
+  .acc-items{padding:2px 11px 8px 28px}
+  .acc-items[hidden]{display:none}
+  .acc-line{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:12px;border-top:1px solid rgba(48,54,61,.5)}
+  .acc-line:first-child{border-top:none}
+  .acc-ico{flex:0 0 auto;width:16px;text-align:center;font-size:11px}
+  .acc-t{flex:0 0 auto;color:var(--dim);font-size:11px;min-width:70px}
+  .acc-txt{flex:1 1 auto;color:var(--text);overflow:hidden;text-overflow:ellipsis}
+  .acc-line.bad .acc-txt{color:var(--red)}
+  .acc-line .acc-ip{flex:0 0 auto;color:var(--dim);font-size:10px}
+  .acc-empty{padding:12px 10px;color:var(--dim);font-size:12px;text-align:center}
+  .acc-empty.err{color:var(--amber)}
   .tag{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--accent);
     color:var(--accent);background:rgba(255,107,53,.1)}
   .tag.live{border-color:var(--blue);color:var(--blue);background:rgba(59,130,246,.1)}
 
   .field{margin:10px 0}
   .field > label{display:block;font-size:11px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin-bottom:5px}
-  input[type=text],input[type=tel],input[type=datetime-local],select,textarea{
+  input[type=text],input[type=tel],input[type=datetime-local],input[type=date],input[type=time],select,textarea{
     width:100%;font-family:'DM Mono',monospace;font-size:16px;color:var(--text);   /* 16px stays — smaller makes iOS zoom on focus */
     background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;min-height:36px}
+  input[type=date],input[type=time]{-webkit-appearance:none;appearance:none}       /* kill iOS's white native pill so date/time match the dark theme */
+  input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:center;color:var(--text)}
+  input[type=date]:focus,input[type=time]:focus{color:var(--text)}
   input[type=text],input[type=tel],textarea{-webkit-appearance:none;appearance:none}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   textarea{resize:vertical;min-height:44px}
@@ -171,6 +200,7 @@
   .uexp.off{display:none}
   input[type=datetime-local]{font-size:13px;min-height:32px;padding:4px 8px;color:var(--dim)}
   input[type=datetime-local]:not(:placeholder-shown){color:var(--text)}
+  input[type=date],input[type=time]{font-size:13px;min-height:32px;padding:4px 8px}   /* compact like datetime-local; date/time open a picker so no keyboard-zoom concern */
   .uexp:focus,input[type=datetime-local]:focus{color:var(--text)}
   .card{overflow:hidden}
   .card > *{max-width:100%}
@@ -219,7 +249,7 @@
     <!-- Announcements (top ticker) -->
     <div class="card">
       <h2>Announcements <span class="tag live">TICKER</span></h2>
-      <div class="hint">Rotate on the board ticker. Optional expiration — an expired post clears itself from the board.</div>
+      <div class="hint">Rotate on the board ticker. Auto-signed with your name from your login. Optional expiration — an expired post clears itself from the board.</div>
       <div id="annList"></div>
       <button class="add" id="addAnn">+ Add announcement</button>
     </div>
@@ -333,6 +363,13 @@
       </div>
     </div>
 
+    <!-- Access Log — admin PIN only; who opened (or tried to open) this control panel -->
+    <div class="card" id="accCard">
+      <h2>Access Log</h2>
+      <div class="hint">Who&rsquo;s opened this control panel and what they changed &mdash; grouped by person, most-recently-active first. Tap a name to expand their logins (🔑) and board edits (✏️). Rejected PINs bucket under &ldquo;Unknown / failed.&rdquo; Admin PIN only.</div>
+      <div class="acc-body" id="accBody"><div class="acc-empty">Loading&hellip;</div></div>
+    </div>
+
   </div>
 
   <div class="saved" id="savedToast">✓ Saved</div>
@@ -347,9 +384,76 @@
   var SKEY='bc2fd_ctl_auth';
   function $g(id){ return document.getElementById(id); }
   function msg(txt, cls){ var m=$g('gateMsg'); if(m){ m.textContent=txt||''; m.className='gate-msg'+(cls?(' '+cls):''); } }
-  function unlock(name){
+  function unlock(name, tier, pin){
+    if(tier==='admin') loadAccessLog(pin);   /* access log is yours alone — admin PIN only */
     var g=$g('gate'); if(g) g.classList.add('hide');
     var n=$g('lockNotice'); if(n) n.textContent='🔒 Officer Access \u00b7 '+(name||'Verified');
+  }
+  function accEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function accWhen(t){ try{ return new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+  function accTime(t){ try{ return new Date(t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+  var ACC_REASON={ 'bad-pin':'malformed PIN', 'unknown-pin':'unknown PIN', 'display-only':'display-only PIN' };
+  function accLine(e){
+    var isAction=(e.kind==='action'), bad=!isAction&&!e.ok, ip='', txt;
+    if(isAction){ txt=e.action||'updated board state'; }
+    else if(e.ok){ txt='Signed in'+(e.tier&&e.tier!=='officer'?(' ('+e.tier+')'):''); }
+    else { txt='Rejected — '+(ACC_REASON[e.reason]||'denied'); ip=e.ip||''; }
+    return '<div class="acc-line'+(bad?' bad':'')+'">'+
+           '<span class="acc-ico">'+(isAction?'✏️':'🔑')+'</span>'+
+           '<span class="acc-t">'+accEsc(accTime(e.t))+'</span>'+
+           '<span class="acc-txt">'+accEsc(txt)+'</span>'+
+           (ip?'<span class="acc-ip">'+accEsc(ip)+'</span>':'')+'</div>';
+  }
+  function loadAccessLog(pin){
+    var card=$g('accCard'), body=$g('accBody'); if(!card||!body) return;
+    card.style.display='block';
+    body.innerHTML='<div class="acc-empty">Loading…</div>';
+    fetch(AUTH_URL+'/accesslog?pin='+encodeURIComponent(pin)+'&n=200')
+      .then(function(r){ return r.json().then(function(j){ return {status:r.status, j:j}; }); })
+      .then(function(res){
+        if(!res.j || !res.j.ok){
+          body.innerHTML='<div class="acc-empty err">'+
+            (res.status===403 ? 'Access log is admin-only.'
+             : (res.status===404||res.status===405) ? 'Access log isn’t enabled on the worker yet.'
+             : 'Couldn’t load the access log.')+'</div>';
+          return;
+        }
+        var entries=res.j.entries||[];
+        if(!entries.length){ body.innerHTML='<div class="acc-empty">No access on record yet.</div>'; return; }
+        /* group by person; unknown/failed logins (no name) get their own bucket */
+        var groups={}, order=[];
+        for(var i=0;i<entries.length;i++){
+          var e=entries[i]||{}, key=e.name?('n:'+e.name):' unknown';
+          if(!groups[key]){ groups[key]={name:e.name||'Unknown / failed', items:[], last:0, unknown:!e.name}; order.push(key); }
+          var g=groups[key]; g.items.push(e); if((e.t||0)>g.last) g.last=e.t||0;
+        }
+        var arr=order.map(function(k){ return groups[k]; }), HOUR=3600000, nowms=Date.now();
+        arr.sort(function(a,b){
+          var ar=a.unknown&&a.last>(nowms-HOUR), br=b.unknown&&b.last>(nowms-HOUR);
+          if(ar!==br) return ar?-1:1;                        /* recent failed attempts float to the top */
+          if(a.unknown!==b.unknown) return a.unknown?1:-1;    /* otherwise the unknown bucket sits last */
+          return b.last-a.last;                               /* most-recently-active person first */
+        });
+        var html='';
+        for(var j=0;j<arr.length;j++){
+          var grp=arr[j], lines='';
+          for(var m=0;m<grp.items.length;m++) lines+=accLine(grp.items[m]);
+          html+='<div class="acc-grp'+(grp.unknown?' unknown':'')+'">'+
+                '<button type="button" class="acc-hd">'+
+                  '<span class="acc-dot"></span>'+
+                  '<span class="acc-name">'+accEsc(grp.name)+'</span>'+
+                  '<span class="acc-meta">'+grp.items.length+' event'+(grp.items.length===1?'':'s')+' · '+accEsc(accWhen(grp.last))+'</span>'+
+                  '<span class="acc-caret">▸</span>'+
+                '</button><div class="acc-items" hidden>'+lines+'</div></div>';
+        }
+        body.innerHTML=html;
+        var hds=body.querySelectorAll('.acc-hd');
+        for(var h=0;h<hds.length;h++){ hds[h].addEventListener('click', function(){
+          var grp=this.parentNode, items=grp.querySelector('.acc-items');
+          var open=grp.classList.toggle('open'); if(items) items.hidden=!open;
+        }); }
+      })
+      .catch(function(){ body.innerHTML='<div class="acc-empty err">Access log unreachable.</div>'; });
   }
   function shake(){ var c=document.querySelector('.gate-card'); if(!c) return; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
   function verify(pin, silent){
@@ -361,7 +465,7 @@
         if(go) go.disabled=false;
         if(res.j && res.j.ok){
           try{ sessionStorage.setItem(SKEY, JSON.stringify({pin:pin, name:res.j.name})); }catch(e){}
-          unlock(res.j.name); return true;
+          unlock(res.j.name, res.j.tier, pin); return true;
         }
         if(res.status===403){ msg('That PIN is display-only \u2014 it can\u2019t open the control panel','bad'); shake(); }
         else if(res.status===429){ msg('Too many attempts \u2014 wait 5 minutes','warn'); }
@@ -379,9 +483,10 @@
     var go=$g('gateGo'), pin=$g('gatePin');
     if(go) go.addEventListener('click', submit);
     if(pin) pin.addEventListener('keydown', function(e){ if(e.key==='Enter') submit(); });
-    var saved=null; try{ saved=JSON.parse(sessionStorage.getItem(SKEY)||'null'); }catch(e){}
-    if(saved && saved.pin){ verify(saved.pin, true).then(function(ok){ if(!ok){ try{ sessionStorage.removeItem(SKEY); }catch(e){} msg('Session Expired \u2014 enter PIN',''); } }); }
-    else msg('','');
+    /* Always require the PIN on every visit \u2014 never auto-unlock from a saved session.
+       Clear any lingering token so an unattended/reopened tab can't be walked into. */
+    try{ sessionStorage.removeItem(SKEY); }catch(e){}
+    msg('','');
   });
 })();
 
@@ -411,7 +516,7 @@ var Store={
       var dj=doc&&doc.fields&&doc.fields.stateJson&&doc.fields.stateJson.stringValue;
       if(!dj) return null; try{ return JSON.parse(dj); }catch(e){ return null; }
     }); },
-  set:function(s){
+  set:function(s, action){
     var pin=""; try{ var a=JSON.parse(sessionStorage.getItem('bc2fd_ctl_auth')||"null"); pin=(a&&a.pin)||""; }catch(e){}
     var stateJson=JSON.stringify(s);
     function direct(){   /* LEGACY fallback — only until the worker /state route is live + Firestore rules are locked, then delete */
@@ -420,7 +525,7 @@ var Store={
     }
     if(!pin) return direct();
     /* Secure path: worker verifies the control PIN, then writes to Firestore server-side. */
-    return fetch(CTL_AUTH+'/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin,scope:'control',stateJson:stateJson})})
+    return fetch(CTL_AUTH+'/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin,scope:'control',stateJson:stateJson,action:action||''})})
       .then(function(r){ if(r.ok) return true; return direct(); })   /* worker OK -> done; ANY worker failure (401/403/404/5xx) -> direct write (rules still open) so a post never silently fails */
       .catch(function(){ return direct(); });
   }
@@ -532,7 +637,6 @@ function renderAnn(){
   state.announcements.forEach(function(a,i){
     var row=document.createElement('div'); row.className='list-row';
     row.innerHTML='<input type="text" data-i="'+i+'" data-f="anntext" value="'+esc(a.text)+'" placeholder="Announcement">'+
-      '<input type="text" data-i="'+i+'" data-f="annby" value="'+esc(a.by||'')+'" placeholder="Posted by" style="flex:1 1 60%;min-width:0">'+
       '<input type="datetime-local" data-i="'+i+'" data-f="annexp" value="'+esc(a.exp||'')+'" title="Expires (optional) — clears itself from the board" style="flex:1 1 100%;min-width:0">'+
       '<button class="del" data-i="'+i+'">✕</button>';
     box.appendChild(row);
@@ -636,7 +740,6 @@ document.addEventListener('input', function(e){
   var t=e.target, i=t.getAttribute&&t.getAttribute('data-i'), f=t.getAttribute&&t.getAttribute('data-f');
   if(i==null||!f) return; i=+i;
   if(f==='anntext'){ state.announcements[i].text=t.value; }
-  else if(f==='annby'){ state.announcements[i].by=t.value; }
   else if(f==='annexp'){ state.announcements[i].exp=t.value; }
   else if(f==='time'||f==='desc'||f==='date'||f==='end'){ state.calendar[i][f]=t.value; }
 });
@@ -706,19 +809,54 @@ document.addEventListener('click', function(e){
   else if(d.parentElement.parentElement.id==='calList'){ state.calendar.splice(i,1); renderCal(); }
 });
 $('addCal').addEventListener('click',function(){ state.calendar.push({date:'',time:'',end:'',desc:''}); renderCal(); });
-$('addAnn').addEventListener('click',function(){ state.announcements.push({text:'',by:'',exp:''}); renderAnn(); });
+/* Announcements are auto-signed with the logged-in officer — no manual "posted by" field. */
+function currentOfficer(){ try{ var a=JSON.parse(sessionStorage.getItem('bc2fd_ctl_auth')||'null'); return (a&&a.name)||''; }catch(e){ return ''; } }
+$('addAnn').addEventListener('click',function(){ state.announcements.push({text:'',by:currentOfficer(),exp:''}); renderAnn(); });
 
 function computeDiversions(){
   var out=[]; HOSPITALS.forEach(function(g){ g.list.forEach(function(o){
     var st=state.hospitals[o.id]; if(st && st!=='OPEN') out.push({name:o.name,status:st});
   }); }); state.diversions=out;   /* board reads this — no hospital table needed on the wall */
 }
-var saving=false;
+/* ── ACTION LABEL — describe what a Save changed, for the worker access log (kind:"action").
+   Best-effort: diffs the last-saved snapshot against the current state and names the change(s).
+   Anything unrecognized falls back to '' → the worker logs a plain "updated board state". ── */
+var TEAM_LBL={b121:'Brush 121',mac121:'MAC 121',bat161:'Battalion 161',boat124:'Boat Team 124',rescue124:'Rescue Team 124'};
+var APP_LBL={l123:'Ladder 123',ap124:'Aerial Platform 124',l125:'Ladder 125'};
+var MED_LBL={'default':'Medical Director','alternate':'Asst Chief','custom':'Custom'};
+function hospName(id){ for(var i=0;i<HOSPITALS.length;i++){ var L=HOSPITALS[i].list; for(var j=0;j<L.length;j++) if(L[j].id===id) return L[j].name; } return id; }
+function clone(o){ try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return null; } }
+function describeChange(a,b){
+  a=a||{}; b=b||{}; var ch=[], k;
+  var ah=a.hospitals||{}, bh=b.hospitals||{}, seen={};
+  for(k in ah) seen[k]=1; for(k in bh) seen[k]=1;
+  for(k in seen){ var hv=bh[k]||'OPEN'; if((ah[k]||'OPEN')!==hv) ch.push(hospName(k)+' → '+hv); }
+  for(k in TEAM_LBL){ var ta=!!(a.teams&&a.teams[k]), tb=!!(b.teams&&b.teams[k]); if(ta!==tb) ch.push(TEAM_LBL[k]+(tb?' staffed':' cleared')); }
+  for(k in APP_LBL){ var pa=!!(a.apparatus&&a.apparatus[k]), pb=!!(b.apparatus&&b.apparatus[k]); if(pa!==pb) ch.push(APP_LBL[k]+(pb?' out of service':' back in service')); }
+  ['west','east'].forEach(function(s){ var sa=!!(a.strikes&&a.strikes[s]&&a.strikes[s].active), sb=!!(b.strikes&&b.strikes[s]&&b.strikes[s].active); if(sa!==sb) ch.push((s==='west'?'West':'East')+' strike team '+(sb?'activated':'stood down')); });
+  if(b.med && (a.med&&a.med.mode)!==b.med.mode) ch.push('Medical direction → '+(MED_LBL[b.med.mode]||b.med.mode));
+  if(b.fire && (a.fire&&a.fire.redFlag)!==b.fire.redFlag) ch.push('Red flag → '+b.fire.redFlag);
+  if(b.flood && (a.flood&&a.flood.mode)!==b.flood.mode) ch.push('Flood ops → '+b.flood.mode);
+  if(!!(a.display&&a.display.pixelShift)!==!!(b.display&&b.display.pixelShift)) ch.push('Pixel shift '+((b.display&&b.display.pixelShift)?'ON':'OFF'));
+  if(JSON.stringify(a.announcements||[])!==JSON.stringify(b.announcements||[])){ var a1=(a.announcements||[]).length, b1=(b.announcements||[]).length; ch.push(b1>a1?'Announcement added':b1<a1?'Announcement removed':'Announcement edited'); }
+  if(JSON.stringify(a.calendar||[])!==JSON.stringify(b.calendar||[])){ var a2=(a.calendar||[]).length, b2=(b.calendar||[]).length; ch.push(b2>a2?'Shift event added':b2<a2?'Shift event removed':'Shift event edited'); }
+  if(JSON.stringify(a.writeins||[])!==JSON.stringify(b.writeins||[])){ var a3=(a.writeins||[]).length, b3=(b.writeins||[]).length; ch.push(b3>a3?'Ad-hoc unit added':b3<a3?'Ad-hoc unit removed':'Ad-hoc unit edited'); }
+  if(JSON.stringify(a.drone||{})!==JSON.stringify(b.drone||{})) ch.push('Drone streams updated');
+  if(!ch.length) return '';
+  var label=ch.join('; ');
+  if(label.length>118) label=ch.length+' changes: '+ch.slice(0,2).join('; ');
+  if(label.length>120) label=label.slice(0,119)+'…';
+  return label;
+}
+var saving=false, lastSaved=null;
 function save(){
-  if(saving) return; saving=true; computeDiversions();
+  if(saving) return; saving=true;
+  var _who=currentOfficer(); if(_who)(state.announcements||[]).forEach(function(a){ if(a&&!a.by) a.by=_who; });   /* auto-sign any unsigned post */
+  computeDiversions();
+  var action = lastSaved ? describeChange(lastSaved, state) : '';   /* what changed, for the access log */
   var t=$('savedToast');
-  Store.set(state).then(function(ok){ saving=false;
-    if(ok){ setDirty(false); t.textContent='✓ Saved to board'; t.classList.remove('err'); t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},1600); }
+  Store.set(state, action).then(function(ok){ saving=false;
+    if(ok){ lastSaved=clone(state); setDirty(false); t.textContent='✓ Saved to board'; t.classList.remove('err'); t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},1600); }
     else { t.textContent='✕ Save failed — not on board'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},2800); }
   });
 }
@@ -764,8 +902,8 @@ function inForm(el){ return el && el.closest && !el.closest('#gate'); }
 document.addEventListener('click',function(e){ var t=(e.target&&e.target.closest)?e.target.closest('button'):null; if(uiReady && t && t.id!=='saveTop' && inForm(t)) setDirty(true); },true);
 window.addEventListener('beforeunload',function(e){ if(uiDirty){ e.preventDefault(); e.returnValue=''; return ''; } });
 setTimeout(function(){ uiReady=true; },2500);   /* backstop: activate the guard even if the initial load errored */
-Store.get().then(function(s){ if(s) state=ensureShape(s); hydrate(); uiReady=true; setDirty(false); })
-  .catch(function(){ hydrate(); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
+Store.get().then(function(s){ if(s) state=ensureShape(s); hydrate(); uiReady=true; setDirty(false); lastSaved=clone(state); })
+  .catch(function(){ hydrate(); lastSaved=clone(state); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
 </script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
