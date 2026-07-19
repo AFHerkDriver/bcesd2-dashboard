@@ -442,6 +442,13 @@
     .drone-map{flex:none;min-height:150px}
     .hosp-body{min-height:110px}
     .lcol > .empty-tile,.rcol > .empty-tile{display:none}    /* open slots add nothing on a phone */
+    /* iPhone declutter: hide tiles that render genuinely empty so the page distills to what's
+       active. Error / loading / "unknown" states render content and stay (fail-loud). The drone
+       tile is never hidden — people expect it to load. :has() = iOS Safari 15.4+; older browsers
+       ignore these rules and simply show every tile. */
+    .lcol > .calls-tile:has(.callsclear){display:none}       /* verified "No Active Calls" (keeps standby + fail-loud) */
+    .sched-tile:has(.sched-list:empty){display:none}         /* nothing scheduled (keeps events + read-fail) */
+    .rrow > .nws-tile:not(:has(.alert-lane > *)):not(:has(.fw-body > *)):not(:has(.floodband:not([hidden]))):not(:has(.strike > *)){display:none}   /* no alerts / red flag / flood / strike teams (keeps NWS-unavailable + red-flag-unknown) */
   }
 
   /* ── Tablet: iPad portrait & phone landscape (741–1180px) — stacked scroll, rows stay 2-up ── */
@@ -784,7 +791,7 @@
       <!-- Drone Video — dedicated section (was the NWS slot). Stream fills the whole tile.
            Overlay show/hide + 30s grace handled by the drone module. -->
       <div class="tile drone-tile">
-        <div class="head"><span class="name">Drone Video</span><span class="stamp src" id="droneStamp"></span></div>
+        <div class="head"><span class="name">Drone Live Feed</span><span class="stamp src" id="droneStamp"></span></div>
         <div class="drone-split">
           <div class="drone-video">
             <div class="drone-idle" id="droneIdle"><img src="drone-idle.png" alt="No active drone feed" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="idle-fallback" hidden>NO ACTIVE FEED</span></div>
