@@ -425,13 +425,18 @@
     .teams-tile{min-height:120px}
     .wx-tile{flex:none;width:100%}
     .sched-tile{flex:none;min-height:80px}
+    .lcol > .calls-tile{flex:none;min-height:120px}          /* was collapsing to 0 on the phone */
     .wx-hours{flex:none;height:150px}
     .rcol{flex:none;width:100%}
-    .rcol > .rrow{flex:none;flex-direction:column}           /* stack Hospitals over Med Direction */
-    .rrow > .hosp-tile,.rrow > .med-tile{flex:none;width:100%}
-    .rcol > .tile{flex:none;min-height:96px}
-    .rcol > .hosp-tile{flex:none;min-height:150px}
-    .rrow > .med-tile{min-height:120px}
+    .rcol > .rrow{flex:none;flex-direction:column}           /* stack NWS over Hospital */
+    .rrow > .tile{flex:none;width:100%}                      /* NWS + Hospital both full-width */
+    .rrow > .nws-tile{min-height:150px}                      /* was collapsing to 0 on the phone */
+    .rrow > .hosp-tile{min-height:150px}
+    .rcol > .tile{flex:none}
+    .rcol > .drone-tile{min-height:300px}                    /* feed + map need room */
+    .drone-split{flex-direction:column}                      /* phone: stack the feed over the map */
+    .drone-video{flex:none;min-height:130px}
+    .drone-map{flex:none;min-height:150px}
     .hosp-body{min-height:110px}
     .lcol > .empty-tile,.rcol > .empty-tile{display:none}    /* open slots add nothing on a phone */
   }
@@ -448,7 +453,7 @@
     .lcol > .wxrow,.rcol > .rrow{flex:none}
     .wxrow > .tile,.rrow > .tile{min-height:170px}
     .rcol > .tile{flex:none}
-    .rcol > .hosp-tile{min-height:170px}
+    .rcol > .drone-tile{min-height:300px}
     .sched-tile{flex:none;min-height:120px}
     .lcol > .calls-tile{flex:none;min-height:110px}
     .wx-hours{flex:none;height:170px}
