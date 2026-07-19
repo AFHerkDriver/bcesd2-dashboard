@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════
    BC2FD STATION DASHBOARD — SERVICE WORKER
-   CACHE: bc2fd-dash-v66   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
+   CACHE: bc2fd-dash-v68   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
    The bump is what makes the wall TV self-update: new bytes here →
    browser installs the new SW → skipWaiting/claim → the board's
    controllerchange listener silently reloads. No hands on the TV.
@@ -12,7 +12,7 @@
    own fail-loud semantics.
    ═══════════════════════════════════════════════════════════════════ */
 
-var CACHE = 'bc2fd-dash-v66';
+var CACHE = 'bc2fd-dash-v68';
 var SHELL = ['./', 'index.html', 'control.html'];
 
 self.addEventListener('install', function (e) {

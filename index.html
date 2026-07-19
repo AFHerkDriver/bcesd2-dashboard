@@ -109,18 +109,18 @@
   /* ── 2×2 Quadrant grid (balanced, no scroll) ─ */
   .quad{flex:1 1 auto;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .lcol{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
-  .lcol > .wxrow{flex:1.1 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .lcol > .wxrow{flex:0.9 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .wxrow > .tile{min-width:0;min-height:0}
   .wxrow > .wx-tile{flex:1.6 1 0}
   .wxrow > .teams-tile{flex:.55 1 0}
-  .sched-tile{flex:.5 1 0;min-height:0}
+  .sched-tile{flex:.68 1 0;min-height:0}
   .rcol{flex:.85 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rcol > .tile{flex:1.2 1 0;min-height:0}          /* now the Drone Video tile */
   .rcol > .rrow{flex:1 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rrow > .nws-tile{flex:1 1 0;min-width:0}         /* NWS left half */
   .rrow > .hosp-tile{flex:1 1 0;min-width:0}        /* Hospital right half */
   .rrow > .med-tile{flex:1 1 0;min-width:0}
-  .lcol > .calls-tile{flex:1.25 1 0;min-height:0}
+  .lcol > .calls-tile{flex:1.34 1 0;min-height:0}
   .lcol > .calls-tile[hidden]{display:none}
   .tile{background:var(--panel);border:1px solid var(--border);border-radius:11px;
     padding:clamp(8px,.85vmin,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
@@ -198,7 +198,7 @@
   .wx-vitals .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.7vmin,27px);letter-spacing:1px;display:block}
   .wx-vitals .v em{font-style:normal;color:var(--amber)}
   .wx-hours{flex:1 1 0;min-height:0;overflow:hidden;display:flex;gap:clamp(4px,.6vmin,12px);border-top:1px solid var(--border);padding-top:clamp(6px,.7vmin,14px)}
-  .hcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+  .hcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(3px,.5vmin,9px);
     background:var(--panel2);border-radius:10px;padding:clamp(4px,.45vmin,9px) clamp(2px,.3vmin,6px)}
   .hcol .hh{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.3vmin,22px);color:var(--dim);letter-spacing:1px}
   .hcol .wic{width:clamp(22px,2vmin,36px);height:clamp(22px,2vmin,36px);margin:clamp(1px,.2vmin,4px) 0}
@@ -316,11 +316,13 @@
   .drone-map .leaflet-tooltip::before{display:none}
   .drone-map .leaflet-control-attribution{background:rgba(13,17,23,.45);color:#5A626C;font-size:8px;line-height:1.4;padding:0 4px}
   .drone-map .leaflet-control-attribution a{color:#5A626C}
-  .drone-idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;
+  .drone-idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;background:#000;
     color:var(--dim);font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:clamp(14px,1.6vmin,26px)}
-  .drone-overlay{position:absolute;inset:0;z-index:5;background:#000;display:none;flex-direction:column;border-radius:inherit;overflow:hidden}
+  .drone-idle img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}  /* Fire Hawk placeholder; image already carries the NO ACTIVE FEED text */
+  .drone-idle .idle-fallback[hidden]{display:none}   /* fail-loud: shown only if the placeholder PNG fails to load */
+  .drone-overlay{position:absolute;inset:0;z-index:5;background:#000;display:flex;flex-direction:column;border-radius:inherit;overflow:hidden}
   .drone-overlay[hidden]{display:none}
-  @media (min-width:1500px){ .drone-overlay:not([hidden]){display:flex} }   /* TV only auto-plays */
+  /* overlay now shows on all sizes when a stream is live; iOS/small taps the player to start it */
   .dro-banner{flex:0 0 auto;display:flex;align-items:center;gap:clamp(8px,1vmin,16px);padding:clamp(6px,.8vmin,12px) clamp(10px,1.2vmin,18px);
     background:rgba(13,17,23,.94);border-bottom:3px solid var(--red)}
   .dro-btext{display:flex;flex-direction:column;gap:clamp(1px,.3vmin,4px);min-width:0}
@@ -368,9 +370,9 @@
     .shield{width:clamp(56px,4.8vw,94px)}
     .id h1{font-size:clamp(28px,3.1vw,54px)}
     .id .sub{font-size:clamp(11px,1.05vw,17px)}
-    .clock .time{font-size:clamp(40px,4.4vw,76px)}
+    .clock .time{font-size:clamp(36px,3.9vw,64px)}
     .clock .date{font-size:clamp(12px,1.15vw,19px)}
-    .hchip .lbl{font-size:clamp(10px,.9vw,15px)}
+    .hchip .lbl{font-size:clamp(12px,1.05vw,18px)}
     .hchip .val{font-size:clamp(26px,2.7vw,46px)}
     .hchip{min-width:clamp(104px,9.6vw,164px)}
     /* announcements ticker (now bottom of screen) */
@@ -506,7 +508,7 @@
   .hchip{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
     border:2px solid var(--border);border-radius:10px;background:var(--panel2);
     padding:clamp(5px,.6vmin,11px) clamp(10px,1.1vmin,18px);min-width:clamp(60px,6vmin,94px)}
-  .hchip .lbl{font-size:clamp(7px,.65vw,10px);letter-spacing:2px;color:var(--dim);line-height:1}
+  .hchip .lbl{font-size:clamp(7px,.65vw,10px);letter-spacing:2px;color:var(--dim);line-height:1;font-weight:700}
   .hchip{min-width:clamp(78px,7.4vw,124px)}
   .hchip .val{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2vw,32px);letter-spacing:1px;line-height:1;margin-top:2px;white-space:nowrap}
   .hchip.shift{border-color:var(--shiftA);background:rgba(255,59,48,.12)}
@@ -783,7 +785,7 @@
         <div class="head"><span class="name">Drone Video</span><span class="stamp src" id="droneStamp"></span></div>
         <div class="drone-split">
           <div class="drone-video">
-            <div class="drone-idle" id="droneIdle">NO ACTIVE FEED</div>
+            <div class="drone-idle" id="droneIdle"><img src="drone-idle.png" alt="No active drone feed" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="idle-fallback" hidden>NO ACTIVE FEED</span></div>
             <div class="drone-overlay" id="droneOverlay" hidden>
               <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><div class="dro-btext"><div class="dro-mission" id="droTitle">DRONE LIVE</div><div class="dro-cs" id="droLbls"></div></div></div>
               <div class="dro-frames" id="droFrames"></div>
@@ -1366,7 +1368,7 @@
       fr.innerHTML = streams.map(function(s){
         if(bannerOnly) return '<div class="dro-link"><div class="big">DRONE LIVE'+(s.label?(' \u2014 '+escA(s.label)):'')+'</div>'+
                               '<div class="url">'+escA(s.url)+'</div></div>';
-        return '<iframe src="'+escA(autoplayify(s.url))+'" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
+        return '<iframe src="'+escA(autoplayify(s.url))+'" scrolling="no" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
       }).join("");
       var lb=document.getElementById("droLbls"), ti=document.getElementById("droTitle");
       var missions=streams.map(function(s){ return s.mission; }).filter(Boolean);
