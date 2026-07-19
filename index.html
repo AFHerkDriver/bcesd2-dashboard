@@ -432,6 +432,8 @@
     .tally{flex-wrap:wrap;justify-content:center}            /* phone: 7 station chips wrap instead of overflowing off the right edge */
     .tally .tchip2{flex:0 0 auto}
     .wx-hours{flex:none;height:150px}
+    .rcol,.rcol > .rrow{display:contents}                    /* iPhone: flatten the right column so its tiles join the single stack and can be reordered */
+    .nws-tile{order:-1}                                      /* iPhone: NWS Alerts to the very top, above District Weather */
     .rcol{flex:none;width:100%}
     .rcol > .rrow{flex:none;flex-direction:column}           /* stack NWS over Hospital */
     .rrow > .tile{flex:none;width:100%}                      /* NWS + Hospital both full-width */
