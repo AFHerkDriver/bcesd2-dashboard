@@ -11,11 +11,14 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>BC2FD Station Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+<!-- Leaflet (drone location map) — keyless. Degrades to a placeholder pane if the CDN is unreachable. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
   :root{
     --bg:#0D1117; --panel:#161B22; --panel2:#1C2230; --border:#30363D;
     --text:#E6EDF3; --dim:#8B949E; --accent:#FF6B35; --blue:#3B82F6;
-    --green:#34C759; --amber:#FFC107; --red:#FF3B30; --shiftA:#FF3B30; --purple:#AF52DE; --teal:#2DD4BF;
+    --green:#34C759; --amber:#FFC107; --red:#FF3B30; --shiftA:#FF3B30; --purple:#AF52DE; --teal:#2DD4BF; --lime:#B2FF59; --pink:#FF4FA3;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;height:100%;overflow:hidden}
@@ -88,6 +91,7 @@
   .banner .note.idle{color:var(--dim);font-style:italic}
   .ann-page{font-family:'DM Mono',monospace;font-size:clamp(9px,.75vw,13px);color:var(--dim);letter-spacing:1px;flex:0 0 auto}
   .ann-page[hidden]{display:none}
+  .banner[hidden]{display:none}                     /* author display:flex beats the hidden attr without this */
 
   .alert{flex:0 0 auto;display:flex;align-items:center;gap:clamp(9px,1vw,18px);
     background:linear-gradient(90deg,rgba(255,59,48,.22),rgba(255,107,53,.12));
@@ -105,22 +109,19 @@
   /* ── 2×2 Quadrant grid (balanced, no scroll) ─ */
   .quad{flex:1 1 auto;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .lcol{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
-  .lcol > .wxrow{flex:.8 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .lcol > .wxrow{flex:1.1 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .wxrow > .tile{min-width:0;min-height:0}
   .wxrow > .wx-tile{flex:1.6 1 0}
   .wxrow > .teams-tile{flex:.55 1 0}
-  .sched-tile{flex:.6 1 0;min-height:0}
+  .sched-tile{flex:.5 1 0;min-height:0}
   .rcol{flex:.85 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
-  .rcol > .tile{flex:1 1 0;min-height:0}
-  .rcol > .rrow{flex:.8 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
-  .rrow > .hosp-tile{flex:1.5 1 0;min-width:0}
+  .rcol > .tile{flex:1.2 1 0;min-height:0}          /* now the Drone Video tile */
+  .rcol > .rrow{flex:1 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .rrow > .nws-tile{flex:1 1 0;min-width:0}         /* NWS left half */
+  .rrow > .hosp-tile{flex:1 1 0;min-width:0}        /* Hospital right half */
   .rrow > .med-tile{flex:1 1 0;min-width:0}
-  .lcol > .calls-tile{flex:1.7 1 0;min-height:0}
+  .lcol > .calls-tile{flex:1.25 1 0;min-height:0}
   .lcol > .calls-tile[hidden]{display:none}
-  .empty-body{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;color:var(--dim);
-    font-size:clamp(11px,1vmin,16px);letter-spacing:1px}
-  .lcol > .empty-tile{flex:.4 1 0;min-height:0}
-  .rcol > .empty-tile{flex:.45 1 0;min-height:0}
   .tile{background:var(--panel);border:1px solid var(--border);border-radius:11px;
     padding:clamp(8px,.85vmin,15px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
   .tile .head{display:block;position:relative;text-align:center;background:var(--panel2);border-radius:8px;
@@ -183,7 +184,7 @@
   .cal-list .e span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* Q1 District Weather — now + next hours (big, glanceable) */
-  .wx-now{display:flex;align-items:center;gap:clamp(8px,1vmin,18px);flex:0 0 auto;margin-bottom:clamp(4px,.5vmin,9px)}
+  .wx-now{display:flex;align-items:center;justify-content:space-between;gap:clamp(8px,1vmin,18px);flex:0 0 auto;margin-bottom:clamp(4px,.5vmin,9px)}
   .wx-ic .wic{width:clamp(28px,2.5vmin,44px);height:clamp(28px,2.5vmin,44px);display:block}
   .wx-flag{flex:0 0 auto;background:rgba(255,193,7,.15);border:1px solid var(--amber);color:var(--amber);
     border-radius:8px;padding:clamp(4px,.45vmin,9px) clamp(8px,.9vmin,14px);font-size:clamp(11px,1vmin,16px);
@@ -192,7 +193,7 @@
   .wx-main{min-width:0}
   .wx-temp{font-family:'Bebas Neue',sans-serif;font-size:clamp(26px,2.7vmin,46px);line-height:.85;letter-spacing:1px}
   .wx-cond{font-family:'Bebas Neue',sans-serif;font-size:clamp(11px,1.15vmin,18px);letter-spacing:1px;color:var(--dim);margin-top:2px}
-  .wx-vitals{margin-left:auto;display:flex;flex-direction:row;align-items:center;gap:clamp(12px,1.6vmin,28px);text-align:center}
+  .wx-vitals{display:flex;flex-direction:row;align-items:center;gap:clamp(12px,1.6vmin,28px);text-align:center}
   .wx-vitals .k{font-size:clamp(9px,.8vmin,13px);letter-spacing:2px;color:var(--dim);display:block}
   .wx-vitals .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.7vmin,27px);letter-spacing:1px;display:block}
   .wx-vitals .v em{font-style:normal;color:var(--amber)}
@@ -208,20 +209,40 @@
   .hcol .hp.wet{color:var(--blue)}
   .hcol .hp.dry{color:var(--amber)}
   .hcol .hf{font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.2vmin,20px);color:var(--amber);letter-spacing:.5px;line-height:1}   /* feels-like */
-  /* sunrise / sunset / moon — compact strip above the 12-hour outlook */
-  .wx-astro{flex:0 0 auto;display:flex;align-items:center;justify-content:space-around;
-    gap:clamp(8px,1vmin,20px);border-top:1px solid var(--border);
-    margin-top:clamp(5px,.55vmin,11px);padding-top:clamp(5px,.55vmin,11px)}
-  .wx-astro .astro{display:flex;flex-direction:column;align-items:center;gap:clamp(2px,.3vmin,5px);text-align:center;min-width:0}
-  .wx-astro .k{font-size:clamp(9px,.85vmin,14px);letter-spacing:2px;color:var(--dim)}
-  .wx-astro .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,27px);letter-spacing:1px;line-height:1;display:flex;align-items:center;justify-content:center;gap:clamp(3px,.4vmin,7px)}
-  .wx-astro .astro-ic{width:clamp(19px,2vmin,34px);height:clamp(19px,2vmin,34px);flex:0 0 auto}
-  .wx-astro .astro.moon .v{font-size:clamp(12px,1.25vmin,20px)}
-  .wx-astro .astro.moon.full .v{color:var(--amber)}
+  /* sunrise / sunset / moon — inline in the current-conditions row. wx-now's space-between spreads
+     the four zones: temp (left) · FEELS/WIND · SUNRISE/SUNSET · MOON (right), each centered between its neighbours. */
+  .wx-lead{display:flex;align-items:center;gap:clamp(8px,1vmin,18px);min-width:0}
+  .wx-sun{display:flex;align-items:center;gap:clamp(8px,1vmin,18px)}
+  .wx-moon{display:flex;align-items:center}
+  .astro{display:flex;flex-direction:column;align-items:center;gap:clamp(2px,.3vmin,5px);text-align:center;min-width:0}
+  .astro .k{font-size:clamp(9px,.85vmin,14px);letter-spacing:2px;color:var(--dim)}
+  .astro .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,27px);letter-spacing:1px;line-height:1;display:flex;align-items:center;justify-content:center;gap:clamp(3px,.4vmin,7px)}
+  .astro-ic{width:clamp(19px,2vmin,34px);height:clamp(19px,2vmin,34px);flex:0 0 auto}
+  .astro.moon .v{font-size:clamp(12px,1.25vmin,20px)}
+  .astro.moon.full .v{color:var(--amber)}
   .wx-moonflag{flex:0 0 auto;text-align:center;background:rgba(255,193,7,.15);border:1px solid var(--amber);
     color:var(--amber);border-radius:8px;padding:clamp(4px,.45vmin,9px);margin-top:clamp(5px,.6vmin,11px);
     font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;font-size:clamp(13px,1.3vmin,22px)}
   .wx-moonflag[hidden]{display:none}
+  /* WPC Excessive Rainfall Outlook — bottom of the weather tile (MODERATE+ only) */
+  .ero{flex:0 0 auto;border-radius:9px;margin-top:clamp(4px,.5vmin,9px);
+    padding:clamp(5px,.6vmin,10px) clamp(9px,1.1vmin,15px)}
+  .ero[hidden]{display:none}
+  .ero.on{background:rgba(220,38,38,.10);border:1px solid rgba(220,38,38,.4)}
+  .ero.on.hi{background:rgba(220,38,38,.17);border-color:rgba(220,38,38,.65)}
+  .ero.err{background:rgba(255,178,0,.08);border:1px solid rgba(255,178,0,.4)}
+  .ero-hd{display:flex;align-items:center;gap:8px;font-family:'DM Mono',monospace}
+  .ero-t{font-size:clamp(11px,1.1vmin,17px);letter-spacing:1px;color:var(--dim);font-weight:500}
+  .ero-days{margin-left:auto;display:flex;gap:clamp(8px,1vmin,16px)}
+  .ero-day{font-size:clamp(12px,1.2vmin,19px);font-weight:700;letter-spacing:.5px}
+  .ero-day.lo{color:#FBBF24} .ero-day.mdt{color:#F87171} .ero-day.hi{color:#DC2626} .ero-day.none{color:var(--dim)}
+  .ero-warn{margin-left:auto;font-size:clamp(12px,1.2vmin,18px);font-weight:700;color:var(--amber)}
+  .ero-note{font-size:clamp(10px,1vmin,15px);color:var(--dim);margin-top:3px;line-height:1.3}
+  .ero.on .ero-note{color:#F87171}
+  .ero.err .ero-note{color:var(--amber)}
+  /* when ERO is showing, the weather row borrows height from Active Calls */
+  .lcol.ero-on > .wxrow{flex:1.35 1 0}
+  .lcol.ero-on > .calls-tile{flex:1 1 0}
 
   /* Compact medical block (shares Q4 with calendar) */
   .med-compact{flex:0 0 auto;justify-content:flex-start;margin-bottom:clamp(6px,.7vmin,12px)}
@@ -237,32 +258,40 @@
   .tile.ph .pname{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.7vmin,28px);letter-spacing:1.5px;color:var(--text);opacity:.75}
   .tile.ph .pidea{font-size:clamp(10px,.95vmin,14px);color:var(--dim);margin-top:6px;max-width:78%;line-height:1.4}
   /* ── Flood ops band ── */
-  .floodband{flex:0 0 auto;display:flex;flex-direction:column;gap:clamp(3px,.35vw,7px);
-    border:2px solid #4A90D9;border-radius:11px;background:rgba(74,144,217,.08);
-    padding:clamp(6px,.7vmin,12px) clamp(11px,1.3vmin,20px)}
+  .floodband{flex:0 0 auto;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);
+    padding:clamp(4px,.5vmin,9px) 0}   /* blue bounding removed — blends into the NWS tile */
   .floodband[hidden]{display:none}                        /* author display:flex beats the hidden attr without this */
   .fb-head{display:flex;align-items:center;gap:12px}
-  .fb-stamp{font-family:'Bebas Neue',sans-serif !important;font-size:clamp(13px,1.2vw,20px) !important;letter-spacing:1.5px;color:var(--text) !important}
-  .fb-tag{font-family:'Bebas Neue',sans-serif;font-size:clamp(14px,1.3vw,22px);letter-spacing:2px;color:#4A90D9}
-  .fb-rain{font-size:clamp(11px,1.05vw,17px)}
-  .fb-rain .big{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.5vw,26px);letter-spacing:1px;color:var(--text)}
+  .fb-stamp{font-family:'Bebas Neue',sans-serif !important;font-size:clamp(11px,1.15vmin,18px) !important;letter-spacing:1.5px;color:var(--text) !important}
+  .fb-tag{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.45vmin,24px);letter-spacing:2px;color:#4A90D9}
+  .fb-rain{font-size:clamp(12px,1.35vmin,20px);margin-bottom:clamp(6px,.85vmin,14px);text-align:center}   /* centered; gap below so it doesn't sit on District 2 */
+  .fb-rline{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fb-rline + .fb-rline{margin-top:clamp(3px,.45vmin,7px)}   /* space between PAST 6H and NEXT 6H */
+  .fb-rk{color:var(--dim);letter-spacing:1px;font-size:.82em;margin-right:5px}
+  .fb-rline.err{color:var(--amber)}
+  .fb-rain .big{font-family:'Bebas Neue',sans-serif;font-size:clamp(14px,1.5vmin,24px);letter-spacing:1px;color:var(--text)}
   .fb-rain.err,.fb-cx .cx-err{color:var(--amber)}
   .fb-cx{display:block}
-  .fb-cols{display:flex;gap:clamp(12px,1.4vw,30px)}
-  .fb-col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(3px,.35vmin,7px)}
-  .fb-coltag{font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;color:var(--dim);font-size:clamp(12px,1.15vw,20px);border-bottom:1px solid var(--border);padding-bottom:3px;margin-bottom:2px}
-  .cx2{font-family:'DM Mono',monospace;font-size:clamp(12px,1.1vw,19px);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .cx2.open{color:var(--green)}
-  .cx2.bad{color:var(--red);font-weight:700}
-  .cx2.offline{color:#8B949E}
+  .fb-cols{display:flex;flex-direction:column;gap:clamp(3px,.45vmin,8px)}   /* half-width tile: stack the two districts full-width so crossing names fit un-truncated */
+  .fb-col{flex:0 0 auto;min-width:0;display:flex;flex-direction:column;gap:clamp(1px,.22vmin,4px)}
+  .fb-coltag{font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;color:var(--text);text-align:center;font-size:clamp(12px,1.35vmin,22px);border-bottom:1px solid var(--border);padding-bottom:3px;margin-bottom:2px}
+  .fb-coltag.d2{color:#6FB7FF;border-bottom-color:#6FB7FF}   /* District 2 — light blue */
+  .fb-coltag.d6{color:#E8D96A;border-bottom-color:#E8D96A}   /* District 6 — light yellow */
+  .cx2{font-family:'DM Mono',monospace;font-size:clamp(12px,1.35vmin,22px);line-height:1.18;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cxs{display:inline-block;min-width:5em}   /* status column — left, fixed width so names align */
+  .cx2{color:var(--text)}                               /* road name stays white */
+  .cx2.open .cxs{color:var(--green)}                    /* color-code the status word only */
+  .cx2.bad .cxs{color:var(--red);font-weight:700}
+  .cx2.offline .cxs{color:#8B949E}
   .cx2.none{color:var(--dim)}
 
   /* ── Fire-weather hourly pills: RH · wind · temp per hour, tier-colored ── */
-  .fw-pills{display:flex;flex-wrap:wrap;gap:clamp(4px,.5vmin,9px);justify-content:center;
-    margin-top:clamp(5px,.6vmin,11px)}
+  .fw-pills{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(3px,.35vmin,6px);
+    justify-items:stretch;margin-top:clamp(4px,.5vmin,9px)}   /* uniform grid: 3 rows of 4, all pills identical & aligned */
+  .fwp{min-width:0}
   .fwp{display:flex;flex-direction:column;align-items:center;gap:clamp(2px,.25vmin,5px);
     border:1px solid var(--border);border-radius:8px;background:var(--panel2);
-    padding:clamp(4px,.45vmin,8px) clamp(6px,.7vmin,11px);
+    padding:clamp(2px,.3vmin,5px) clamp(3px,.45vmin,7px);
     font-family:'DM Mono',monospace;line-height:1;white-space:nowrap}
   .fwp .pt{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--dim);font-size:clamp(12px,1.2vmin,19px)}      /* time, gray, 2400 */
   .fwp .pT{font-family:'Bebas Neue',sans-serif;font-weight:700;color:#fff;font-size:clamp(15px,1.6vmin,26px);letter-spacing:.5px}  /* temp, white bold */
@@ -276,24 +305,37 @@
   .fwp.t3{border-color:var(--red);background:rgba(255,59,48,.14)}
 
   /* ── Drone stream overlay + badge ── */
-  .drone-overlay{position:fixed;inset:0;z-index:900;background:#000;display:none;flex-direction:column}
+  /* Drone overlay is contained within the NWS quadrant — it takes over that tile while a feed
+     is live and reverts to NWS alerts when cleared. Not fullscreen. */
+  /* Drone Video tile: video feed (left) + aircraft location map (right) */
+  .drone-split{flex:1 1 auto;min-height:0;display:flex;gap:clamp(6px,.6vmin,10px)}
+  .drone-video{flex:1.4 1 0;min-width:0;position:relative;border-radius:9px;overflow:hidden;background:#000}
+  .drone-map{flex:1 1 0;min-width:0;position:relative;border-radius:9px;overflow:hidden;background:#0D1117}
+  .drone-map .leaflet-container{width:100%;height:100%;background:#0D1117;font-family:'DM Mono',monospace}
+  .drone-map .leaflet-tooltip{background:rgba(13,17,23,.82);border:1px solid var(--border);color:var(--text);font-size:11px;font-family:'DM Mono',monospace;padding:1px 5px}
+  .drone-map .leaflet-tooltip::before{display:none}
+  .drone-map .leaflet-control-attribution{background:rgba(13,17,23,.45);color:#5A626C;font-size:8px;line-height:1.4;padding:0 4px}
+  .drone-map .leaflet-control-attribution a{color:#5A626C}
+  .drone-idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;
+    color:var(--dim);font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:clamp(14px,1.6vmin,26px)}
+  .drone-overlay{position:absolute;inset:0;z-index:5;background:#000;display:none;flex-direction:column;border-radius:inherit;overflow:hidden}
   .drone-overlay[hidden]{display:none}
   @media (min-width:1500px){ .drone-overlay:not([hidden]){display:flex} }   /* TV only auto-plays */
-  .dro-banner{flex:0 0 auto;display:flex;align-items:center;gap:clamp(10px,1.4vw,22px);padding:clamp(8px,1vw,16px) clamp(16px,1.8vw,30px);
+  .dro-banner{flex:0 0 auto;display:flex;align-items:center;gap:clamp(8px,1vmin,16px);padding:clamp(6px,.8vmin,12px) clamp(10px,1.2vmin,18px);
     background:rgba(13,17,23,.94);border-bottom:3px solid var(--red)}
-  .dro-btext{display:flex;flex-direction:column;gap:clamp(1px,.3vw,5px);min-width:0}
-  .dro-mission{font-family:'Bebas Neue',sans-serif;letter-spacing:2px;color:var(--red);line-height:1;
-    font-size:clamp(24px,3vw,52px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* ~STATION DASHBOARD size */
-  .dro-cs{font-family:'DM Mono',monospace;letter-spacing:1px;color:var(--text);line-height:1;font-size:clamp(14px,1.6vw,28px)}
+  .dro-btext{display:flex;flex-direction:column;gap:clamp(1px,.3vmin,4px);min-width:0}
+  .dro-mission{font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;color:var(--red);line-height:1;
+    font-size:clamp(18px,1.9vmin,32px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dro-cs{font-family:'DM Mono',monospace;letter-spacing:1px;color:var(--text);line-height:1;font-size:clamp(11px,1.2vmin,20px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dro-banner.ending{border-bottom-color:var(--amber)}
   .dro-banner.ending .dro-mission{color:var(--amber)}
-  .dro-dot{width:clamp(12px,1vw,18px);height:clamp(12px,1vw,18px);flex:0 0 auto;border-radius:50%;background:var(--red);animation:pulse 1.6s ease-in-out infinite}
+  .dro-dot{width:clamp(9px,.9vmin,15px);height:clamp(9px,.9vmin,15px);flex:0 0 auto;border-radius:50%;background:var(--red);animation:pulse 1.6s ease-in-out infinite}
   .dro-banner.ending .dro-dot{background:var(--amber);animation:none}
-  .dro-frames{flex:1 1 auto;display:flex;min-height:0}
+  .dro-frames{flex:1 1 auto;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);min-height:0}   /* two live feeds stack top/bottom (option 1) */
   .dro-frames iframe{flex:1 1 0;width:100%;height:100%;border:0;background:#000}
-  .dro-frames .dro-link{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--text)}
-  .dro-frames .dro-link .big{font-family:'Bebas Neue',sans-serif;font-size:clamp(34px,4vmin,72px);letter-spacing:3px;color:var(--red)}
-  .dro-frames .dro-link .url{font-family:'DM Mono',monospace;font-size:clamp(13px,1.3vmin,22px);color:var(--dim);word-break:break-all;max-width:80%}
+  .dro-frames .dro-link{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(6px,1vmin,16px);color:var(--text);padding:clamp(8px,1.5vmin,24px);text-align:center}
+  .dro-frames .dro-link .big{font-family:'Bebas Neue',sans-serif;font-size:clamp(22px,2.6vmin,44px);letter-spacing:2px;color:var(--red)}
+  .dro-frames .dro-link .url{font-family:'DM Mono',monospace;font-size:clamp(11px,1.15vmin,18px);color:var(--dim);word-break:break-all;max-width:90%}
   .hchip.drone-badge{display:none;text-decoration:none;border-color:var(--red);background:rgba(255,59,48,.14);animation:pulse 1.6s ease-in-out infinite}
   .hchip.drone-badge .val{color:var(--red)}
   @media (max-width:1499px){ .hchip.drone-badge.live{display:flex} }        /* iOS/small: badge, tap to open */
@@ -303,22 +345,25 @@
   @media (min-width:1500px){
     .tile .head .name{font-size:clamp(18px,1.7vmin,30px)}
     .calls-body .idle{font-size:clamp(15px,1.5vmin,24px)}
+    .calls-tile .calls-body .callsclear{font-size:clamp(18px,1.7vmin,30px)}   /* == .tile .head .name on the wall (extra specificity beats the later base rule) */
     .call-e .ct{font-size:clamp(24px,2.5vmin,44px)}
     .call-e .ca{font-size:clamp(19px,2vmin,34px)}
     .call-e .cu{font-size:clamp(24px,2.5vmin,44px)}   /* units sized to match the call TYPE on the wall */
+    .call-e .cc{font-size:clamp(24px,2.5vmin,44px)}   /* channel — same size as units */
     .call-e .cw{font-size:clamp(19px,2vmin,34px)}
     .call-e .ce{font-size:clamp(17px,1.8vmin,30px)}
-    .sched-e .tm{font-size:clamp(24px,2.6vmin,44px)}
-    .sched-e .ds{font-size:clamp(18px,1.9vmin,32px)}
+    .sched-e .tm{font-size:clamp(26px,2.8vmin,48px)}
+    .sched-e .ds{font-size:clamp(19px,2.05vmin,35px)}
     .sched-list .idle{font-size:clamp(15px,1.5vmin,24px)}
     .tally .tlbl{font-size:clamp(12px,1.15vmin,20px)}
     .tally .tchip2{font-size:clamp(17px,1.8vmin,30px)}
-    .med-body .mname{font-size:clamp(28px,3vmin,52px)}
-    .med-body .mphone{font-size:clamp(28px,3vmin,52px)}
-    .med-body .mrole{font-size:clamp(15px,1.55vmin,25px)}
+    .med-strip .med-body .mname{font-size:clamp(20px,2.05vmin,34px)}
+    .med-strip .med-body .mphone{font-size:clamp(22px,2.25vmin,38px)}
+    .med-strip .med-body .mnote{font-size:clamp(11px,1.05vmin,17px)}
+    .med-strip-lbl{font-size:clamp(14px,1.4vmin,23px)}
     .hosp-msg{font-size:clamp(26px,3vmin,52px)}
     .hosp-sub{font-size:clamp(14px,1.4vmin,23px)}
-    .hosp-list .hrow{font-size:clamp(17px,1.8vmin,29px)}
+    .hosp-list .hrow{font-size:clamp(20px,2.1vmin,34px)}
     /* header: shield, title, clock, chips */
     .shield{width:clamp(56px,4.8vw,94px)}
     .id h1{font-size:clamp(28px,3.1vw,54px)}
@@ -337,28 +382,28 @@
     .wx-temp{font-size:clamp(42px,4.2vmin,72px)}
     .wx-cond{font-size:clamp(15px,1.5vmin,26px)}
     .wx-vitals .k{font-size:clamp(11px,1vmin,16px)}
-    .wx-vitals .v{font-size:clamp(22px,2.3vmin,38px)}
+    .wx-vitals .v{font-size:clamp(24px,2.5vmin,42px)}
     .hcol .hh{font-size:clamp(17px,1.8vmin,30px)}
     .hcol .wic{width:clamp(30px,2.9vmin,50px);height:clamp(30px,2.9vmin,50px)}
     .hcol .ht{font-size:clamp(22px,2.3vmin,40px)}
     .hcol .hf{font-size:clamp(16px,1.6vmin,28px)}
-    .wx-astro .k{font-size:clamp(10px,.95vmin,15px)}
-    .wx-astro .v{font-size:clamp(20px,2.1vmin,34px)}
-    .wx-astro .astro.moon .v{font-size:clamp(15px,1.55vmin,25px)}
-    .wx-astro .astro-ic{width:clamp(22px,2.3vmin,40px);height:clamp(22px,2.3vmin,40px)}
+    .astro .k{font-size:clamp(10px,.95vmin,15px)}
+    .astro .v{font-size:clamp(20px,2.1vmin,34px)}
+    .astro.moon .v{font-size:clamp(15px,1.55vmin,25px)}
+    .astro-ic{width:clamp(22px,2.3vmin,40px);height:clamp(22px,2.3vmin,40px)}
     .wx-moonflag{font-size:clamp(16px,1.6vmin,27px)}
     .wx-ic .wic{width:clamp(40px,3.6vmin,64px);height:clamp(40px,3.6vmin,64px)}
     .tchip{font-size:clamp(16px,1.7vmin,29px)}
-    .fb-coltag{font-size:clamp(14px,1.35vw,23px)}
-    .cx2{font-size:clamp(14px,1.35vw,24px)}
-    .fb-rain .big{font-size:clamp(18px,1.8vw,32px)}
-    .fwp .pt{font-size:clamp(15px,1.5vmin,26px)}
-    .fwp .pT{font-size:clamp(20px,2.1vmin,36px)}
-    .fwp .pR{font-size:clamp(15px,1.5vmin,25px)}
-    .fwp .pW{font-size:clamp(13px,1.25vmin,21px)}
-    .strike .s .n{font-size:clamp(11px,1.05vmin,17px)}
-    .strike .s .v{font-size:clamp(18px,1.9vmin,32px)}
-    .strike .s .p{font-size:clamp(15px,1.5vmin,25px)}
+    .fb-coltag{font-size:clamp(14px,1.5vmin,24px)}
+    .cx2{font-size:clamp(14px,1.5vmin,24px)}
+    .fb-rain .big{font-size:clamp(14px,1.6vmin,26px)}
+    .fwp .pt{font-size:clamp(10px,1vmin,15px)}
+    .fwp .pT{font-size:clamp(13px,1.35vmin,21px)}
+    .fwp .pR{font-size:clamp(10px,1vmin,15px)}
+    .fwp .pW{font-size:clamp(9px,.85vmin,13px)}
+    .strike .s .n{font-size:clamp(9px,.85vmin,13px)}
+    .strike .s .v{font-size:clamp(14px,1.45vmin,23px)}
+    .strike .s .p{font-size:clamp(12px,1.2vmin,19px)}
   }
 
   /* ── Phone (portrait) — board becomes a stacked, scrollable status page; wall TV unaffected ── */
@@ -428,23 +473,26 @@
   .alert-lane{flex:0 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(4px,.4vw,8px)}
   .alert-lane .al-none{color:var(--dim);font-size:clamp(11px,1vmin,16px);text-align:center;padding:clamp(2px,.3vmin,5px) 0}
   .alert-lane[hidden]{display:none}
-  .al-band{display:flex;flex-direction:column;align-items:stretch;gap:clamp(3px,.35vw,7px);border:2px solid;border-radius:11px;
-    padding:clamp(7px,.75vmin,13px) clamp(12px,1.4vmin,22px)}
-  .al-top{display:flex;align-items:center;gap:clamp(10px,1.2vw,20px)}
-  .al-sum{font-size:clamp(12px,1.05vw,17px);color:var(--text);line-height:1.28;
-    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .al-sum[hidden]{display:none}
-  .al-band .al-ev{font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vw,34px);letter-spacing:1.5px;line-height:1}
-  .al-band .al-meta{font-size:clamp(11px,1vw,16px);color:var(--text);margin-left:auto;text-align:right;line-height:1.2}
-  .al-band.sev-extreme,.al-band.sev-severe{border-color:var(--red);
-    background:linear-gradient(90deg,rgba(255,59,48,.22),rgba(255,107,53,.10));animation:pulse 3s ease-in-out infinite}
-  .al-band.sev-extreme .al-ev,.al-band.sev-severe .al-ev{color:var(--red)}
-  .al-band.sev-moderate{border-color:var(--amber);background:rgba(255,193,7,.12)}
-  .al-band.sev-moderate .al-ev{color:var(--amber)}
-  .al-band.sev-minor,.al-band.sev-unknown{border-color:var(--blue);background:rgba(59,130,246,.12)}
-  .al-band.sev-minor .al-ev,.al-band.sev-unknown .al-ev{color:var(--blue)}
-  .al-band.sev-error{border-color:var(--amber);background:rgba(255,193,7,.12)}
-  .al-band.sev-error .al-ev{color:var(--amber)}
+  /* Compact NWS banners (Firehawk Ops style): icon · label + area/until · NWS source. Colored by type. */
+  .al-band{display:flex;align-items:center;gap:clamp(8px,1vmin,14px);border:1px solid;border-radius:10px;
+    padding:clamp(6px,.7vmin,11px) clamp(10px,1.2vmin,16px)}
+  .al-icon{flex:0 0 auto;line-height:1;font-size:clamp(16px,1.7vmin,26px)}
+  .al-body{min-width:0;flex:1 1 auto}
+  .al-band .al-ev{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.7vmin,26px);letter-spacing:1.5px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .al-sub{font-size:clamp(10px,1vmin,15px);color:var(--dim);letter-spacing:.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .al-src{flex:0 0 auto;align-self:flex-start;margin-top:2px;font-size:clamp(9px,.95vmin,14px);color:var(--dim);white-space:nowrap}
+  .al-band.al-redflag{border-color:rgba(255,59,48,.5);background:linear-gradient(135deg,rgba(255,59,48,.20),rgba(180,0,0,.10))}
+  .al-band.al-redflag .al-ev{color:#FF3B30}
+  .al-band.al-warn{border-color:rgba(255,59,48,.5);background:linear-gradient(135deg,rgba(255,59,48,.18),rgba(150,0,0,.10))}
+  .al-band.al-warn .al-ev{color:#FF3B30}
+  .al-band.al-cat{border-color:rgba(255,59,48,.6);background:linear-gradient(135deg,rgba(255,59,48,.25),rgba(150,0,0,.12));animation:pulse 3s ease-in-out infinite}
+  .al-band.al-cat .al-ev{color:#FF3B30}
+  .al-band.al-flood{border-color:rgba(74,144,217,.5);background:linear-gradient(135deg,rgba(74,144,217,.20),rgba(0,80,180,.10))}
+  .al-band.al-flood .al-ev{color:#4A90D9}
+  .al-band.al-watch{border-color:rgba(245,158,11,.5);background:linear-gradient(135deg,rgba(245,158,11,.20),rgba(180,90,0,.10))}
+  .al-band.al-watch .al-ev{color:#F59E0B}
+  .al-band.sev-error{border-color:rgba(255,59,48,.5);background:linear-gradient(135deg,rgba(255,59,48,.18),rgba(150,0,0,.10))}
+  .al-band.sev-error .al-ev{color:var(--red)}
   .al-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
   .al-more{font-size:clamp(10px,.9vw,14px);color:var(--dim);text-align:center;letter-spacing:1px}
   /* Shift calendar — bottom strip (officer-set) */
@@ -471,6 +519,15 @@
   .med-body .mphone{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2.1vmin,34px);color:var(--blue);letter-spacing:2px}
   .med-body .mnote{font-size:clamp(9px,.8vmin,13px);color:var(--dim)}
   .med-body.err .mname{color:var(--amber)}
+  /* Medical Direction — compact strip anchored at the bottom of the Hospital tile */
+  .med-strip{flex:0 0 auto;border-top:1px solid var(--border);
+    margin-top:clamp(5px,.6vmin,11px);padding-top:clamp(5px,.6vmin,11px)}
+  .med-strip-hd{display:flex;align-items:baseline;justify-content:center;gap:8px;margin-bottom:clamp(2px,.3vmin,5px)}
+  .med-strip-lbl{font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.35vmin,22px);letter-spacing:1.5px;color:var(--blue)}
+  .med-strip .med-body{flex:0 0 auto;overflow:visible;flex-direction:row;flex-wrap:wrap;
+    justify-content:center;align-items:baseline;text-align:center;gap:clamp(6px,.7vmin,14px)}
+  .med-strip .med-body .mrole{display:none}          /* section label already reads "Medical Direction" */
+  .med-strip .med-body .mnote{flex-basis:100%}        /* revert/backup notes wrap to their own line */
   /* Active Calls tile */
   .calls-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px)}
   .call-e{display:flex;align-items:baseline;gap:clamp(8px,1vmin,18px);padding:clamp(3px,.4vmin,7px) clamp(6px,.7vmin,12px);
@@ -478,17 +535,19 @@
   .call-e .ct{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,26px);letter-spacing:1px;color:var(--red);flex:0 0 auto;white-space:nowrap}
   .call-e .ca{font-size:clamp(12px,1.2vmin,19px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .call-e .cu{margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--green);flex:0 0 auto;white-space:nowrap}   /* units sized to match the call TYPE */
+  .call-e .cc{font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--text);flex:0 0 auto;white-space:nowrap}   /* channel — same size as units, white */
   .call-e .cw{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.3vmin,21px);letter-spacing:1px;color:var(--text)}
   .call-e .ce{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vmin,22px);letter-spacing:1px;color:var(--accent)}
   /* ── new-call strobe: first 60s a call is on the board, alternate to inverse (solid class-color
      bg, dark text) every 500ms. Driven by the .flashtick toggle, no keyframes = restart-proof. ── */
   .call-e{--flash:var(--red)}
   .call-e.k-alarm{--flash:var(--purple)} .call-e.k-mvc{--flash:var(--accent)}
-  .call-e.k-gen{--flash:var(--green)}   .call-e.k-fuel{--flash:var(--teal)}
+  .call-e.k-gen{--flash:var(--green)}   .call-e.k-fuel{--flash:var(--teal)}   .call-e.k-haz{--flash:var(--lime)}   .call-e.k-rescue{--flash:var(--pink)}
   .call-e.k-med{--flash:var(--amber)}   .call-e.k-assist{--flash:var(--blue)}
   .calls-body.flashtick .call-e.fresh{background:var(--flash);border-left-color:#fff}
   .calls-body.flashtick .call-e.fresh .ct,.calls-body.flashtick .call-e.fresh .ca,
   .calls-body.flashtick .call-e.fresh .cu,.calls-body.flashtick .call-e.fresh .cw,
+  .calls-body.flashtick .call-e.fresh .cc,
   .calls-body.flashtick .call-e.fresh .ce{color:#0d1117}
   .calls-body.compact .call-e .ct{font-size:clamp(12px,1.25vmin,20px)}
   .calls-body.compact .call-e .ca{font-size:clamp(10px,1vmin,16px)}
@@ -500,7 +559,11 @@
   .call-e.k-mvc{border-left-color:var(--accent);background:rgba(255,107,53,.12)} .call-e.k-mvc .ct{color:var(--accent)}
   .call-e.k-gen{border-left-color:var(--green);background:rgba(52,199,89,.12)} .call-e.k-gen .ct{color:var(--green)}
   .call-e.k-fuel{border-left-color:var(--teal);background:rgba(45,212,191,.12)} .call-e.k-fuel .ct{color:var(--teal)}
+  .call-e.k-haz{border-left-color:var(--lime);background:rgba(178,255,89,.12)} .call-e.k-haz .ct{color:var(--lime)}
+  .call-e.k-rescue{border-left-color:var(--pink);background:rgba(255,79,163,.12)} .call-e.k-rescue .ct{color:var(--pink)}
   .calls-body .idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px)}
+  .calls-body .callsclear{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;text-align:center;
+    font-family:'Bebas Neue',sans-serif;color:var(--text);letter-spacing:2px;font-size:clamp(14px,1.35vmin,22px)}   /* matches the tile header size/weight, white, centered top-to-bottom */
   /* District 2 tour tally strip (per-station call counts, resets 0700 day 1) */
   .tally{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:clamp(5px,.6vmin,12px);
     border-top:1px solid rgba(48,54,61,.5);padding-top:clamp(4px,.45vmin,9px);margin-top:clamp(3px,.35vmin,6px)}
@@ -535,11 +598,11 @@
   .sched-page[hidden]{display:none}
 
   /* Unit Status tile (UAV live + officer-set teams) */
-  .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;gap:clamp(5px,.6vmin,10px)}
+  .teams-body{flex:1 1 auto;min-height:0;overflow:hidden;display:grid;grid-template-columns:repeat(3,1fr);align-content:center;gap:clamp(5px,.6vmin,10px)}
   .tchip{display:flex;align-items:center;justify-content:center;text-align:center;
-    flex:0 0 auto;width:clamp(92px,9vmin,150px);height:clamp(30px,3.1vmin,50px);
+    width:auto;min-width:0;height:clamp(30px,3.1vmin,50px);
     border:2px solid var(--border);border-radius:9px;background:var(--panel2);overflow:hidden}
-  .tchip .tcn{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.8vmin,29px);letter-spacing:1px;line-height:1;white-space:nowrap;color:var(--dim)}
+  .tchip .tcn{font-family:'Bebas Neue',sans-serif;font-size:clamp(14px,1.75vmin,27px);letter-spacing:.5px;line-height:1;white-space:nowrap;color:var(--dim)}
   .tchip.on{border-color:var(--green);background:rgba(52,199,89,.14)}
   .tchip.on .tcn{color:var(--green)}
   .tchip.err{border-color:var(--amber);background:rgba(255,193,7,.10)}
@@ -619,12 +682,7 @@
   <!-- NWS alert lane — live; hidden when zero active alerts, fail-loud if NWS unreachable -->
 
   <!-- Flood ops band — appears only while a Warning-tier flood product is active -->
-  <!-- 2×2 Quadrants -->
-  <!-- Drone stream overlay: TV full-screen; 2 live = 50/50 split; 30s grace on end -->
-  <div class="drone-overlay" id="droneOverlay" hidden>
-    <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><div class="dro-btext"><div class="dro-mission" id="droTitle">DRONE LIVE</div><div class="dro-cs" id="droLbls"></div></div></div>
-    <div class="dro-frames" id="droFrames"></div>
-  </div>
+  <!-- 2×2 Quadrants (drone overlay now lives inside the NWS tile — see below) -->
   <div class="quad">
 
     <!-- Left column: District Weather (compact) over Shift Schedule -->
@@ -634,34 +692,41 @@
       <div class="head"><span class="name">District Weather</span><span class="stamp src" id="wxStamp">Loading NWS&hellip;</span></div>
       <div class="wx-flag" id="wxFlag" hidden></div>
       <div class="wx-now">
-        <div class="wx-ic" id="wxIcon"></div>
-        <div class="wx-main">
-          <div class="wx-temp" id="wxTemp">&mdash;&deg;</div>
-          <div class="wx-cond" id="wxCond">&mdash;</div>
+        <div class="wx-lead">
+          <div class="wx-ic" id="wxIcon"></div>
+          <div class="wx-main">
+            <div class="wx-temp" id="wxTemp">&mdash;&deg;</div>
+            <div class="wx-cond" id="wxCond">&mdash;</div>
+          </div>
         </div>
         <div class="wx-vitals">
           <div class="vit"><span class="k">FEELS</span><span class="v" id="wxFeels">&mdash;</span></div>
           <div class="vit"><span class="k">WIND</span><span class="v" id="wxWind">&mdash;</span></div>
         </div>
-      </div>
-      <div class="wx-astro" id="wxAstro">
-        <div class="astro"><span class="k">SUNRISE</span><span class="v" id="wxRise">&mdash;</span></div>
-        <div class="astro"><span class="k">SUNSET</span><span class="v" id="wxSet">&mdash;</span></div>
-        <div class="astro moon" id="wxMoonCol"><span class="k">MOON</span><span class="v" id="wxMoon">&mdash;</span></div>
+        <div class="wx-sun">
+          <div class="astro"><span class="k">SUNRISE</span><span class="v" id="wxRise">&mdash;</span></div>
+          <div class="astro"><span class="k">SUNSET</span><span class="v" id="wxSet">&mdash;</span></div>
+        </div>
+        <div class="wx-moon" id="wxAstro">
+          <div class="astro moon" id="wxMoonCol"><span class="k">MOON</span><span class="v" id="wxMoon">&mdash;</span></div>
+        </div>
       </div>
       <div class="wx-hours" id="wxHours"></div>
       <div class="wx-moonflag" id="wxMoonFlag" hidden>&#127765; FULL MOON</div>
+      <!-- WPC Excessive Rainfall Outlook — anchored at the bottom; shows only on MODERATE+ (or a sustained feed failure). -->
+      <div class="ero" id="eroBand" hidden></div>
     </div>
     <div class="tile teams-tile">
       <div class="head"><span class="name">Specialty Units &amp; OOS</span><span class="stamp src" id="teamsStamp"></span></div>
       <div class="teams-body" id="teamsBody"></div>
     </div>
     </div><!-- /wxrow -->
-    <!-- Active Calls — CAD via the bc2fd-dash-auth worker /dispatch relay. Hidden until the
-         relay is configured (no feed ≠ failure); amber when a configured feed can't be reached. -->
-    <div class="tile calls-tile" id="callsTile" hidden>
+    <!-- Active Calls — CAD via the bc2fd-dash-auth worker /dispatch relay. Always on the board
+         now (officer request); "standby" until the relay answers, "No active calls" when the feed
+         is live and clear, bold amber when a configured feed can't be reached. Never a false all-clear. -->
+    <div class="tile calls-tile" id="callsTile">
       <div class="head"><span class="name">Active Calls</span><span class="sched-page" id="callsPage" hidden></span></div>
-      <div class="calls-body" id="callsBody"></div>
+      <div class="calls-body" id="callsBody"><div class="idle">&mdash; Connecting to dispatch&hellip;</div></div>
       <div class="tally" id="tallyRow" hidden>
         <span class="tlbl">This Tour</span>
         <span class="tchip2" data-st="121">121 <b>0</b></span>
@@ -678,38 +743,50 @@
       <div class="head"><span class="name">Shift Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
       <div class="sched-list" id="schedList"></div>
     </div>
-    <div class="tile empty-tile">
-      <div class="head"><span class="name">Empty Tile</span></div>
-      <div class="empty-body">&mdash; Open slot &mdash;</div>
-    </div>
     </div>
 
-    <!-- Right column: Hospital + Medical (top) · NWS Alerts · Empty -->
+    <!-- Right column: Hospital + Medical (top) · NWS Alerts -->
     <div class="rcol">
       <div class="rrow">
+        <!-- NWS Alerts — now the left half of the top row -->
+        <div class="tile nws-tile">
+          <div class="head"><span class="name">National Weather Service Alerts</span><span class="stamp src" id="fwStamp"></span></div>
+          <div class="alert-lane" id="alertLane"></div>
+          <div class="fw-body" id="fwBody"></div>
+          <div class="floodband" id="floodBand" hidden>
+            <div class="fb-head"><span class="fb-stamp src" id="fbStamp"></span></div>
+            <div class="fb-rain" id="fbRain">checking station rain (MRMS)…</div>
+            <div class="fb-cx" id="fbCx"></div>
+          </div>
+          <div class="strike" id="strikeRow"></div>
+        </div>
+        <!-- Hospital Status + Medical Direction — right half -->
         <div class="tile hosp-tile">
           <div class="head"><span class="name">Hospital Status</span><span class="stamp src" id="hospStamp">Loading&hellip;</span></div>
           <div class="hosp-body" id="hospBody"></div>
-        </div>
-        <div class="tile med-tile">
-          <div class="head"><span class="name">Medical Direction</span><span class="stamp src" id="medStamp">Loading&hellip;</span></div>
-          <div class="med-body" id="medBody"></div>
+          <!-- #medBody/#medStamp are the same elements the med render code targets, just relocated. -->
+          <div class="med-strip">
+            <div class="med-strip-hd"><span class="med-strip-lbl">Medical Direction</span></div>
+            <div class="med-body" id="medBody"></div>
+          </div>
         </div>
       </div>
-      <div class="tile nws-tile">
-        <div class="head"><span class="name">National Weather Service Alerts</span><span class="stamp src" id="fwStamp"></span></div>
-        <div class="alert-lane" id="alertLane"></div>
-        <div class="fw-body" id="fwBody"></div>
-        <div class="floodband" id="floodBand" hidden>
-          <div class="fb-head"><span class="fb-tag">🌊 FLOOD OPS</span><span class="fb-stamp src" id="fbStamp"></span></div>
-          <div class="fb-rain" id="fbRain">checking station rain (MRMS)…</div>
-          <div class="fb-cx" id="fbCx"></div>
+
+      <!-- Drone Video — dedicated section (was the NWS slot). Stream fills the whole tile.
+           Overlay show/hide + 30s grace handled by the drone module. -->
+      <div class="tile drone-tile">
+        <div class="head"><span class="name">Drone Video</span><span class="stamp src" id="droneStamp"></span></div>
+        <div class="drone-split">
+          <div class="drone-video">
+            <div class="drone-idle" id="droneIdle">NO ACTIVE FEED</div>
+            <div class="drone-overlay" id="droneOverlay" hidden>
+              <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><div class="dro-btext"><div class="dro-mission" id="droTitle">DRONE LIVE</div><div class="dro-cs" id="droLbls"></div></div></div>
+              <div class="dro-frames" id="droFrames"></div>
+            </div>
+          </div>
+          <!-- Aircraft location map (Leaflet/keyless). Drone at lat/lng + POI + look-at line, from /drones. -->
+          <div class="drone-map" id="droneMap"></div>
         </div>
-        <div class="strike" id="strikeRow"></div>
-      </div>
-      <div class="tile empty-tile">
-        <div class="head"><span class="name">Empty Tile</span></div>
-        <div class="empty-body">&mdash; Open slot &mdash;</div>
       </div>
     </div>
 
@@ -720,6 +797,77 @@
     <span class="tag">ANNOUNCEMENTS</span>
     <div class="note" id="annNote">&hellip;</div>
   </div>
+
+<script>
+  /* Header shield → Officer Control Panel. Tap/click (or Enter/Space) the shield to open
+     control.html in a NEW tab so the wall board stays up; control.html runs its own PIN sign-in. */
+  (function(){
+    var sh=document.querySelector(".shield");
+    if(!sh) return;
+    sh.style.cursor="pointer";
+    sh.setAttribute("role","button");
+    sh.setAttribute("tabindex","0");
+    sh.setAttribute("title","Officer Control Panel — sign in");
+    function go(){ var w=window.open("control.html","_blank"); if(w){ try{ w.opener=null; }catch(e){} } }
+    sh.addEventListener("click", go);
+    sh.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+  })();
+</script>
+
+<script>
+  /* Drone location map — Leaflet, keyless. Dark basemap default + Positron / Satellite toggles.
+     Plots each active drone at lat/lng with a POI look-at line, fed by /drones (worker now exposes
+     position). Fail-loud: null lat/lng -> no marker (never 0,0); null POI -> no POI dot, no line.
+     Guarded so an unreachable CDN just leaves the pane dark and never breaks the board. */
+  (function(){
+    var el=document.getElementById("droneMap"); if(!el) return;
+    if(typeof L==="undefined"){ return; }
+    var CARTO="© OSM · CARTO", ESRI="© Esri";
+    var TL=function(u,o){ return L.tileLayer(u,o); };
+    var dark=TL("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{attribution:CARTO,subdomains:"abcd",maxZoom:20});
+    var positron=TL("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{attribution:CARTO,subdomains:"abcd",maxZoom:20});
+    /* Satellite = Esri imagery + street/place label overlays (a "hybrid" so addresses/streets read on the photo) */
+    var imagery=TL("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{attribution:ESRI+", Maxar",maxZoom:19});
+    var roads=TL("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",{attribution:ESRI,maxZoom:19});
+    var places=TL("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{attribution:ESRI,maxZoom:19});
+    var satellite=L.layerGroup([imagery,roads,places]);
+    /* self-contained "is the sun up at the district" (UTC-based solar altitude, no tz/module dependency) */
+    function sunUp(lat,lng){ var now=new Date(), rad=Math.PI/180, deg=180/Math.PI;
+      var doy=Math.floor((now-new Date(now.getFullYear(),0,0))/86400000);
+      var utcH=now.getUTCHours()+now.getUTCMinutes()/60;
+      var decl=-23.44*Math.cos(rad*360/365*(doy+10));
+      var B=rad*360/365*(doy-81), eot=9.87*Math.sin(2*B)-7.53*Math.cos(B)-1.5*Math.sin(B);
+      var H=15*((utcH+lng/15+eot/60)-12);
+      var alt=deg*Math.asin(Math.sin(rad*lat)*Math.sin(rad*decl)+Math.cos(rad*lat)*Math.cos(rad*decl)*Math.cos(rad*H));
+      return alt>-0.833; }
+    var initial=sunUp(29.465,-98.730)?satellite:dark;   /* daylight -> satellite, night -> dark */
+    var map=L.map(el,{center:[29.465,-98.730],zoom:13,layers:[initial],zoomControl:false});
+    map.attributionControl.setPrefix(false);   /* drop Leaflet's own prefix; OSM/CARTO/Esri credit stays (tiny, subdued via CSS) */
+    L.control.layers({"Satellite":satellite,"Dark":dark,"Positron":positron},null,{collapsed:true,position:"topright"}).addTo(map);
+    var droneIcon=L.icon({iconUrl:"drone-marker.png",iconRetinaUrl:"drone-marker@2x.png",iconSize:[46,46],iconAnchor:[23,23]});
+    var poiIcon=L.icon({iconUrl:"poi-marker.png",iconRetinaUrl:"poi-marker@2x.png",iconSize:[44,44],iconAnchor:[22,22]});
+    var layer=L.layerGroup().addTo(map);
+    /* list = data.drones from /drones (meters / m/s). Convert for display: m->ft x3.281. */
+    window.BC2FD_DRONE_MAP=function(list){
+      try{
+        layer.clearLayers(); var pts=[];
+        (list||[]).forEach(function(d){
+          if(d==null||d.lat==null||d.lng==null) return;                  /* no position -> no marker (never 0,0) */
+          var agl=(d.altAgl!=null)?(" · "+Math.round(d.altAgl*3.281)+" ft"):"";
+          L.marker([d.lat,d.lng],{icon:droneIcon}).bindTooltip(String(d.callSign||"UAS")+agl,{permanent:true,direction:"top",offset:[0,-20]}).addTo(layer);
+          pts.push([d.lat,d.lng]);
+          if(d.poiLat!=null&&d.poiLng!=null){                            /* POI only when set (worker maps 0 -> null) */
+            L.marker([d.poiLat,d.poiLng],{icon:poiIcon}).addTo(layer);
+            L.polyline([[d.lat,d.lng],[d.poiLat,d.poiLng]],{color:"#FF3B30",weight:2,opacity:.8,dashArray:"6 5"}).addTo(layer);
+            pts.push([d.poiLat,d.poiLng]);
+          }
+        });
+        if(pts.length){ map.fitBounds(pts,{padding:[30,30],maxZoom:15}); }
+      }catch(e){}
+    };
+    setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 500);
+  })();
+</script>
 
 <script>
   /* ── BOARD PIN GATE (kiosk). Verify against bc2fd-dash-auth; remember in localStorage.
@@ -911,6 +1059,7 @@
        The same rows feed the fire-weather pills (RH/wind detail), which only surface on a Red Flag. */
     var html="", fhrs=[];
     for(var i=0;i<12;i++){ var a=aggHour(good,i); if(!a.time) break; fhrs.push(a);
+      if(i===0) continue;                                   /* skip current hour in the outlook — it duplicates the "now" block above (FireWx still gets all 12) */
       var feels=(a.feels!=null&&a.temp!=null&&a.feels>a.temp)?('<div class="hf">'+a.feels+'&deg;</div>'):'';
       html+='<div class="hcol"><div class="hh">'+wxHr(a.time)+'</div>'+wxIcon(a.sf,a.day)+
         '<div class="ht">'+(a.temp!=null?a.temp:"\u2014")+'&deg;</div>'+feels+'</div>';
@@ -1098,7 +1247,7 @@
       if(stamp) stamp.textContent="officer-set"+(setAt?(" \u00b7 "+hhmm(setAt)):"");
       if(!divs.length){
         body.className="hosp-body ok";
-        body.innerHTML='<div class="hosp-msg">ALL FACILITIES OPEN</div><div class="hosp-sub">no active diversions posted</div>';
+        body.innerHTML='<div class="hosp-msg">ALL FACILITIES OPEN</div>';
         return;
       }
       body.className="hosp-body div";
@@ -1128,11 +1277,13 @@
     function setAnns(list){
       lastList=list;
       var note=document.getElementById("annNote"); if(!note) return;
+      var banner=document.getElementById("annBanner");
       var anns=(list||[]).filter(function(a){ return a && a.text && String(a.text).trim() && notExpired(a); });
       var key=JSON.stringify(anns);
       if(key===lastKey) return;                              /* unchanged — don't restart the scroll */
       lastKey=key;
-      if(!anns.length){ note.className="note idle"; note.textContent="\u2014 none posted"; return; }
+      if(!anns.length){ if(banner) banner.hidden=true; note.textContent=""; return; }   /* nothing posted -> hide the whole strip (announcements aren't safety data) */
+      if(banner) banner.hidden=false;
       var seg=anns.map(function(a){
         return '<span class="ti">'+esc(a.text)+(a.by?('<span class="tw">\u2014 '+esc(a.by)+'</span>'):'')+'</span>';
       }).join("");
@@ -1275,13 +1426,14 @@
           })
           .then(function(j){
             if(j===null) return;                               /* transient error: hold */
-            if(j.off){ setAuto([]); return; }
+            if(j.off){ setAuto([]); if(window.BC2FD_DRONE_MAP) window.BC2FD_DRONE_MAP([]); return; }
             if(!j.ok || !Array.isArray(j.drones)) return;      /* bad shape: hold */
             var next=j.drones
               .filter(function(d){ return d && typeof d.video_url==="string" && /^https:\/\//i.test(d.video_url); })
               .slice(0,2)
               .map(function(d){ return { url:d.video_url, label:(d.callSign||d.model||"UAS"), mission:(d.mission||"") }; });
             setAuto(next);                                     /* authoritative (incl. empty = drone landed) */
+            if(window.BC2FD_DRONE_MAP) window.BC2FD_DRONE_MAP(j.drones);   /* map plots every aircraft with a position */
           })
           .catch(function(){ /* network error: hold current auto view */ });
       }
@@ -1301,8 +1453,8 @@
     function stopRot(){ if(rot){ rot(); rot=null; } }
     function elapsed(iso){ try{ var m=Math.floor((Date.now()-new Date(iso).getTime())/60000);
       if(!isFinite(m)||m<0) return ""; return m<60?(m+"m"):(Math.floor(m/60)+"h"+(m%60)+"m"); }catch(e){ return ""; } }
-    function show(tileOn){ var tl=document.getElementById("callsTile"); if(tl) tl.hidden=!tileOn;
-      if(tileOn){ var tr=document.getElementById("tallyRow"); if(tr) tr.hidden=false; } }   /* zeros beat invisible */
+    function show(tileOn){ var tl=document.getElementById("callsTile"); if(tl) tl.hidden=false;   /* Active Calls stays on the board; tileOn only gates the tour tally */
+      var tr=document.getElementById("tallyRow"); if(tr) tr.hidden=!tileOn; }
     /* advisory board, not CAD: rows age out after 10 min */
     var ADVISORY_MIN=15;
     function classify(t){ t=String(t||"").toUpperCase();
@@ -1310,7 +1462,9 @@
       if(/ALARM/.test(t)) return "k-alarm";
       if(/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "k-mvc";
       if(/FIRE|STRUCTURE|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "k-fire";
-      if(/GAS|FUEL|LEAK|SPILL|ODOR|HAZMAT|FLUID/.test(t)) return "k-fuel";
+      if(/RESCUE/.test(t)) return "k-rescue";
+      if(/\bHAZ/.test(t)) return "k-haz";
+      if(/GAS|FUEL|LEAK|SPILL|ODOR|FLUID/.test(t)) return "k-fuel";
       if(/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZURE|OVERDOSE|DIABET/.test(t)) return "k-med";
       if(/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "k-assist";
       return ""; }
@@ -1329,13 +1483,14 @@
       if(!body) return;
       stopRot();
       if(Array.isArray(calls)) calls=freshOnly(calls);
-      if(state==="off"){ show(false); return; }             /* relay not built/configured */
+      if(state==="off"){ show(false); body.className="calls-body";
+        body.innerHTML='<div class="idle">— Dispatch feed standby</div>'; if(pg) pg.hidden=true; return; }   /* relay not built/configured — tile stays, honest standby (not an all-clear) */
       show(true);
       if(state==="err"){ body.className="calls-body err";
         body.innerHTML='<div class="idle">DISPATCH FEED UNAVAILABLE'+(errDetail?(' \u2014 '+esc(errDetail)):'')+' \u00b7 verify via CAD / radio</div>';
         if(pg) pg.hidden=true; return; }
       body.className="calls-body";
-      if(!calls.length){ body.innerHTML='<div class="idle">\u2014 No active calls</div>'; if(pg) pg.hidden=true; return; }
+      if(!calls.length){ body.innerHTML='<div class="callsclear">No Active Calls</div>'; if(pg) pg.hidden=true; return; }
       var FRESH_MS=30000;                                   /* new-call strobe: first 30s on the board */
       var rows=calls.map(function(c){
         var un=displayUnits(c.units), ts=ageBasis(c);
@@ -1343,10 +1498,11 @@
         var isFresh=isFinite(age)&&age>=-120000&&age<FRESH_MS;   /* small negative tolerance for clock skew */
         var exp=isFresh?(Date.now()+Math.max(1000,FRESH_MS-Math.max(0,age))):0;
         return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'">'+
+               '<span class="cw">'+dropTime(ts)+'</span>'+                          /* time — far left */
                '<span class="ct">'+esc(c.type||"CALL")+'</span>'+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
-               (un?('<span class="cu">'+esc(un)+'</span>'):'')+
-               '<span class="cw">'+dropTime(ts)+'</span></div>';   /* elapsed chip removed — reads as call time only, not chute time */
+               (un?('<span class="cu">'+esc(un)+'</span>'):'')+                     /* units — green, pushed right */
+               (c.channel?('<span class="cc">'+esc(c.channel)+'</span>'):'')+'</div>';   /* channel — white, far right (only when the feed carries it) */
       });
       rot=autoRotate(body, rows, pg, 7000);
     }
@@ -1548,7 +1704,7 @@
         .filter(function(r){ return !r.valid || r.startDT < horizon; })   /* only this 48h tour: day 1 sees tomorrow, day 2 doesn't */
         .sort(function(a,b){ return a.sortKey-b.sortKey; });
       list.className="sched-list";
-      if(!items.length){ list.innerHTML='<div class="idle">\u2014 Nothing scheduled</div>'; if(pg) pg.hidden=true; return; }
+      if(!items.length){ list.innerHTML=''; if(pg) pg.hidden=true; return; }   /* nothing scheduled -> clean cell; SHIFT SCHEDULE UNAVAILABLE still shows on read failure */
       var todayKey=new Date().toDateString();
       var rows=items.map(function(r){
         var e=r.e;
@@ -1634,12 +1790,11 @@
       var active = mode==="on" ? true : mode==="off" ? false : (nws===true);
       var unknown = mode==="auto" && nws===null;
       if(!active && !unknown){
-        body.innerHTML='<div class="fw-idle">No Red Flag Warning</div>';   /* pills are fire-weather-only; everyday 12h lives in District Weather */
+        body.innerHTML="";   /* verified clear -> clean cell; header stamp proves the feed is live, and a fetch failure still shows RED FLAG STATUS UNKNOWN */
         if(stamp) stamp.textContent = mode==="off" ? "officer: forced off" : "NWS auto";
         return;
       }
-      var flag = unknown ? '<div class="fw-flag unk">⚠ RED FLAG STATUS UNKNOWN</div>'
-                         : '<div class="fw-flag">🚩 RED FLAG — EXTREME FIRE WEATHER</div>';
+      var flag = unknown ? '<div class="fw-flag unk">⚠ RED FLAG STATUS UNKNOWN</div>' : '';   /* active: the real NWS Red Flag Warning shows in the alert lane above — no custom banner */
       body.innerHTML=flag+pills();                          /* pills carry the 12h detail; no separate "current" box */
       if(stamp) stamp.textContent = (mode==="on"?"officer: forced on":"NWS")+" · worst of 5 stations";
     }
@@ -1663,24 +1818,45 @@
       new Promise(function(_,rej){ setTimeout(function(){rej(new Error("timeout"));},12000); }) ]); }
     function esc(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
     function el(id){return document.getElementById(id);}
+    var gridCache={};                                        /* station id -> NWS forecastGridData URL (resolved once) */
+    function isoDur(s){ var m=String(s||"").match(/PT(?:(\d+)H)?(?:(\d+)M)?/); return (((m&&m[1]?+m[1]:0)*3600)+((m&&m[2]?+m[2]:0)*60))*1000 || 3600000; }
+    function stationQPF(st){                                  /* next-6h forecast rain (inches) for one station — NWS gridpoint QPF (mm), CORS-ok direct */
+      function pull(u){ return tfetch(u).then(function(r){ if(!r.ok) throw 0; return r.json(); }); }
+      var chain = gridCache[st.id] ? pull(gridCache[st.id])
+        : pull("https://api.weather.gov/points/"+st.lat+","+st.lon).then(function(pt){
+            var u=pt&&pt.properties&&pt.properties.forecastGridData; if(!u) throw 0; gridCache[st.id]=u; return pull(u); });
+      return chain.then(function(g){
+        var q=g&&g.properties&&g.properties.quantitativePrecipitation;
+        if(!q||!Array.isArray(q.values)) return {name:"STA "+st.id, inches:null};
+        var now=Date.now(), end=now+6*3600000, mm=0, seen=false;
+        q.values.forEach(function(v){ if(v.value==null) return;
+          var parts=String(v.validTime).split("/"), start=new Date(parts[0]).getTime(); if(!isFinite(start)) return;
+          var dur=isoDur(parts[1]), pend=start+dur, ov=Math.min(pend,end)-Math.max(start,now);
+          if(ov>0){ mm += v.value*(ov/dur); seen=true; }   /* apportion each period's overlap with the next 6h */
+        });
+        return {name:"STA "+st.id, inches: seen ? mm/25.4 : 0};
+      }).catch(function(){ return {name:"STA "+st.id, inches:null}; });
+    }
     function loadRain(){
-      var jobs=STATIONS.map(function(st){
+      var mrms=STATIONS.map(function(st){                     /* past 6h — MRMS observed (inches) */
         var geom=encodeURIComponent(JSON.stringify({x:st.lon,y:st.lat,spatialReference:{wkid:4326}}));
         var rule=encodeURIComponent(JSON.stringify({rasterFunction:"rft_6hr"}));
         var u="https://mapservices.weather.noaa.gov/raster/rest/services/obs/mrms_qpe/ImageServer/identify?geometry="+geom+"&geometryType=esriGeometryPoint&renderingRule="+rule+"&returnGeometry=false&f=json";
         return tfetch(WX+"/?url="+encodeURIComponent(u)+"&_cb="+Date.now(),{cache:"no-store"})
           .then(function(r){ if(!r.ok) throw 0; return r.json(); })
           .then(function(j){ var v=(j&&j.value!=null)?parseFloat(j.value):(j&&j.values&&j.values.length?parseFloat(j.values[0]):NaN);
-            return {name:"STA "+st.id, inches:(isFinite(v)&&v>=0)?v:null}; })   /* negative = no-data sentinel, never 0 */
+            return {name:"STA "+st.id, inches:(isFinite(v)&&v>=0)?v:null}; })
           .catch(function(){ return {name:"STA "+st.id, inches:null}; });
       });
-      Promise.all(jobs).then(function(rs){
+      function worst(rs){ var v=rs.filter(function(r){return r.inches!=null;}); return v.length?v.reduce(function(a,b){return b.inches>a.inches?b:a;}):null; }
+      function line(k,w){ return w ? ('<div class="fb-rline"><span class="fb-rk">'+k+'</span> '+esc(w.name)+' — '+w.inches.toFixed(2)+'&#8221;</div>')
+                                   : ('<div class="fb-rline err"><span class="fb-rk">'+k+'</span> estimate unavailable</div>'); }
+      Promise.all([Promise.all(mrms), Promise.all(STATIONS.map(stationQPF))]).then(function(res){
         var box=el("fbRain"); if(!box||!active) return;
-        var valid=rs.filter(function(r){return r.inches!=null;});
-        if(!valid.length){ box.className="fb-rain err"; box.textContent="⚠ STATION RAIN ESTIMATE UNAVAILABLE (MRMS)"; return; }
-        var top=valid.reduce(function(a,b){return b.inches>a.inches?b:a;});
+        var past=worst(res[0]), next=worst(res[1]);
+        if(!past && !next){ box.className="fb-rain err"; box.textContent="⚠ STATION RAIN ESTIMATE UNAVAILABLE"; return; }
         box.className="fb-rain";
-        box.innerHTML='MOST RAIN · <span class="big">'+esc(top.name)+' — '+top.inches.toFixed(2)+'&#8221; / 6h</span> <span class="src">MRMS radar estimate · worst of 5 stations</span>';
+        box.innerHTML=line("PAST 6H",past)+line("NEXT 6H",next);   /* worst observed + worst forecast — can be two different stations */
       });
     }
     function loadCx(){
@@ -1697,21 +1873,20 @@
               var lbl=st===1?"CLOSED":st===4?"CAUTION":st===3?"OFFLINE":"OPEN";
               groups[WATCH[String(c.id)]].push({name:esc(c.title||"Unnamed crossing"), cls:cls, lbl:lbl, bad:st!==2});
             });
-          function col(tag,arr){
+          function col(tag,arr,dcls){
             arr.sort(function(a,b){ return (b.bad?1:0)-(a.bad?1:0); });    /* problems first */
-            var rows=arr.length ? arr.map(function(r){ return '<div class="cx2 '+r.cls+'">'+r.name+' \u2014 '+r.lbl+'</div>'; }).join("")
+            var rows=arr.length ? arr.map(function(r){ return '<div class="cx2 '+r.cls+'"><span class="cxs">'+r.lbl+'</span>\u2014 '+r.name+'</div>'; }).join("")
                                 : '<div class="cx2 none">\u2014 none watched</div>';
-            return '<div class="fb-col"><div class="fb-coltag">'+tag+'</div>'+rows+'</div>';
+            return '<div class="fb-col"><div class="fb-coltag '+dcls+'">'+tag+'</div>'+rows+'</div>';
           }
           if(!groups.D2.length && !groups.D6.length){ box.innerHTML='<span class="cx-err">⚠ watched crossings not in HALT feed — verify manually</span>'; return; }
-          box.innerHTML='<div class="fb-cols">'+col("DISTRICT 2",groups.D2)+col("DISTRICT 6",groups.D6)+'</div>';
+          box.innerHTML='<div class="fb-cols">'+col("DISTRICT 2",groups.D2,"d2")+col("DISTRICT 6",groups.D6,"d6")+'</div>';
         })
         .catch(function(){ var box=el("fbCx"); if(box&&active) box.innerHTML='<span class="cx-err">⚠ HALT CROSSING FEED UNAVAILABLE \u2014 verify closures manually</span>'; });
     }
     function poll(){ loadRain(); loadCx(); }
     var override="auto", lastWarn=false, lastName="";
-    function stampText(){ return override==="on" ? "officer: forced on"
-                        : (lastName ? (lastName+" active") : "officer view"); }
+    function stampText(){ return lastName ? (lastName+" active") : ""; }   /* no "officer: forced on" notification */
     function apply(){
       var band=el("floodBand"); if(!band) return;
       var eff = override==="on" ? true : override==="off" ? false : lastWarn;   /* auto = NWS Warning-tier gate */
@@ -1725,6 +1900,51 @@
     }
     onBoardState(function(ok,st){ override=(ok&&st&&st.flood&&st.flood.mode)||"auto"; apply(); });
     return { update:function(warningTier, eventName){ lastWarn=!!warningTier; lastName=eventName||""; apply(); } };
+  })();
+
+  /* ── WPC Excessive Rainfall Outlook — bottom of the weather tile. API verified 2026-07-18:
+     hazards/wpc_precip_hazards/MapServer, layers 0/1/2 = Day 1/2/3, field dn (1 MRGL · 2 SLGT · 3 MDT · 4 HIGH).
+     Shown only on MODERATE+ (dn>=3) or a sustained feed failure (fail-loud); nominal (<=Slight) stays hidden.
+     While shown, .ero-on makes the weather row borrow height from Active Calls. ── */
+  (function(){
+    var WX="https://firehawk-wx.usafsentinel-45e.workers.dev";
+    var BASE="https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer";
+    var LAT=29.465, LNG=-98.730, CODE={0:"–",1:"MRGL",2:"SLGT",3:"MDT",4:"HIGH"}, failCount=0;
+    function tfetch(u){ return Promise.race([ fetch(u,{cache:"no-store"}),
+      new Promise(function(_,r){ setTimeout(function(){ r(new Error("timeout")); }, 12000); }) ]); }
+    function dayUrl(layer){ return BASE+"/"+layer+"/query?geometry="+LNG+","+LAT+
+      "&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=dn&returnGeometry=false&f=json"; }
+    function fetchDay(layer){
+      return tfetch(WX+"/?url="+encodeURIComponent(dayUrl(layer))+"&_cb="+Date.now())
+        .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+        .then(function(j){ if(!j||!Array.isArray(j.features)) throw 0;
+          var mx=0; j.features.forEach(function(f){ var dn=f&&f.attributes&&f.attributes.dn; if(typeof dn==="number"&&dn>mx) mx=dn; }); return mx; })
+        .catch(function(){ return null; });                 /* null = that day errored */
+    }
+    function chip(d,i){ var code=d===null?"?":(CODE[d]||"–");
+      var cls=(d===null)?"none":d>=4?"hi":d>=3?"mdt":d>=1?"lo":"none";
+      return '<span class="ero-day '+cls+'">D'+(i+1)+' '+code+'</span>'; }
+    function render(days){
+      var band=document.getElementById("eroBand"); if(!band) return;
+      var lcol=document.querySelector(".lcol");
+      function show(on){ band.hidden=!on; if(lcol){ lcol.classList[on?"add":"remove"]("ero-on"); } }
+      if(days.every(function(d){ return d===null; })){                  /* whole feed down */
+        if(++failCount>=2){ band.className="ero err";
+          band.innerHTML='<div class="ero-hd"><span class="ero-t">🌧️ EXCESSIVE RAINFALL · WPC</span><span class="ero-warn">⚠ UNAVAILABLE</span></div><div class="ero-note">outlook feed unreachable — verify at wpc.ncep.noaa.gov</div>';
+          show(true); }
+        return; }                                                      /* single blip -> hold current view */
+      failCount=0;
+      var worst=Math.max.apply(null, days.map(function(d){ return d===null?0:d; }));
+      if(worst<3){ show(false); return; }                              /* nominal (<= Slight) -> hidden */
+      var lvl=worst>=4?"HIGH":"MODERATE", wd=days.indexOf(worst); if(wd<0) wd=0;
+      band.className="ero on"+(worst>=4?" hi":"");
+      band.innerHTML='<div class="ero-hd"><span class="ero-t">🌧️ EXCESSIVE RAINFALL · WPC</span><span class="ero-days">'+days.map(chip).join("")+'</span></div>'+
+        '<div class="ero-note">'+lvl+' risk of excessive rainfall (Day '+(wd+1)+') — flash flooding possible. Heads-up ahead of an NWS alert.</div>';
+      show(true);
+    }
+    function load(){ if(typeof fetch!=="function") return;
+      Promise.all([fetchDay(0),fetchDay(1),fetchDay(2)]).then(render).catch(function(){}); }
+    load(); setInterval(load, 30*60*1000);
   })();
 
 
@@ -1776,16 +1996,23 @@
     var lane=document.getElementById("alertLane"); if(!lane)return;
     if(alRot){ clearInterval(alRot); alRot=null; }
     if(err){ lane.hidden=false;
-      lane.innerHTML='<div class="al-band sev-error"><div class="al-top"><span class="al-ev">NWS Alerts Unavailable</span>'+
-        '<span class="al-meta">could not reach NWS \u00b7 verify active warnings manually</span></div></div>'; return; }
-    if(!alerts||!alerts.length){ lane.hidden=false; lane.innerHTML='<div class="al-none">No active NWS alerts \u00b7 monitoring</div>'; return; }   /* verified zero, said out loud */
+      lane.innerHTML='<div class="al-band sev-error"><span class="al-icon">\u26a0\ufe0f</span><div class="al-body"><div class="al-ev">NWS Alerts Unavailable</div>'+
+        '<div class="al-sub">could not reach NWS \u00b7 verify active warnings manually</div></div></div>'; return; }
+    if(!alerts||!alerts.length){ lane.hidden=true; lane.innerHTML=""; return; }   /* verified zero -> clean cell; the err branch above still shouts on failure */
     var rank={extreme:0,severe:1,moderate:2,minor:3,unknown:4};
     alerts.sort(function(a,b){return (rank[String(a.severity).toLowerCase()]==null?4:rank[String(a.severity).toLowerCase()])-(rank[String(b.severity).toLowerCase()]==null?4:rank[String(b.severity).toLowerCase()]);});
+    function alClass(ev,dt){ var e=String(ev||"").toLowerCase(), d=String(dt||"").toUpperCase();   /* type -> color/icon, per the Firehawk NWS banner spec */
+      if(/red flag/.test(e)) return {cls:"al-redflag", icon:"\ud83d\udea9"};                       /* red */
+      if(/flood/.test(e)){ if(/CATASTROPHIC|CONSIDERABLE/.test(d)) return {cls:"al-cat", icon:"\ud83d\udea7", tag:(/CATASTROPHIC/.test(d)?"CATASTROPHIC":"CONSIDERABLE")}; return {cls:"al-flood", icon:"\ud83d\udea7"}; }   /* blue, or red on a damage-threat CAP tag */
+      if(/watch/.test(e)) return {cls:"al-watch", icon:"\u26a0\ufe0f"};                             /* amber */
+      return {cls:"al-warn", icon:"\u26a0\ufe0f"}; }                                                /* default red */
     function band(a){
+      var m=alClass(a.event, a.damageThreat);
+      var label=alEsc(a.event)+(m.tag?(" \u2014 "+m.tag):"");
       var until=a.until?("until "+new Date(a.until).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false})):"until further notice";
       var area=a.area?(alEsc(a.area)+" \u00b7 "):"";
-      var sum=a.summary?('<div class="al-sum">'+alEsc(a.summary)+'</div>'):'';
-      return '<div class="al-band '+alSev(a.severity)+'"><div class="al-top"><span class="al-ev">'+alEsc(a.event)+'</span><span class="al-meta">'+area+until+'</span></div>'+sum+'</div>';
+      var t=a.sent?new Date(a.sent):null, src="NWS"+(t&&!isNaN(t.getTime())?(" \u00b7 "+t.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false})):"");
+      return '<div class="al-band '+m.cls+'"><span class="al-icon">'+m.icon+'</span><div class="al-body"><div class="al-ev">'+label+'</div><div class="al-sub">'+area+until+'</div></div><span class="al-src">'+src+'</span></div>';
     }
     var PER=2;                                             /* vertical budget: 2 bands per page keeps the quad stable */
     lane.hidden=false;
@@ -1803,6 +2030,8 @@
       var alerts=feats.map(function(f){var p=(f&&f.properties)||{};return {
         event:p.event||"Alert", severity:p.severity||"Unknown",
         area:String(p.areaDesc||"").split(";")[0].trim(), until:(p.ends||p.expires||null),
+        sent:(p.sent||p.effective||null),
+        damageThreat:(p.parameters && p.parameters.flashFloodDamageThreat && p.parameters.flashFloodDamageThreat[0])||"",
         summary:alSummary(p), messageType:p.messageType };}).filter(function(a){return a.messageType!=="Cancel";});
       var floodRank={"Flash Flood Warning":5,"Flood Warning":4,"Flash Flood Watch":3,"Flood Watch":2,"Flash Flood Statement":1};
       var fhit=alerts.filter(function(a){return floodRank[a.event];}).sort(function(a,b){return floodRank[b.event]-floodRank[a.event];})[0]||null;
