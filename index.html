@@ -86,7 +86,7 @@
   .tick-track{display:inline-flex;white-space:nowrap;will-change:transform;animation:tickscroll var(--tickdur,40s) linear infinite}
   .tick-track .ti{padding-right:clamp(80px,8vw,150px)}   /* wider gap between posts on the scroll */
   .tick-track .ti .tw{color:var(--dim);font-size:clamp(8px,.78vw,12px);margin-left:8px}
-  @keyframes tickscroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  @keyframes tickscroll{from{transform:translateX(var(--tick-from,100%))}to{transform:translateX(var(--tick-to,-100%))}}
   .banner .who{font-size:clamp(8px,.75vw,12px);color:var(--dim);flex:0 0 auto}
   .banner .note.idle{color:var(--dim);font-style:italic}
   .ann-page{font-family:'DM Mono',monospace;font-size:clamp(9px,.75vw,13px);color:var(--dim);letter-spacing:1px;flex:0 0 auto}
@@ -421,7 +421,8 @@
     .clock{margin-left:auto}
     .clock .time{font-size:30px}
     .hchip{min-width:96px;flex:1 1 auto}
-    .quad{flex-direction:column}
+    .quad{flex-direction:column;order:1}                     /* iPhone: push the tiles below the ticker */
+    .banner{order:0}                                          /* iPhone: announcement ticker rides at the top (after header, above the tiles) so it isn't lost at the bottom */
     .lcol{flex:none;width:100%}
     .lcol > .wxrow{flex:none;flex-direction:column}          /* stack Weather over Specialty Units */
     .wxrow > .wx-tile,.wxrow > .teams-tile{flex:none;width:100%}
@@ -674,6 +675,7 @@
   /* Hospital Status tile (live from shared board state) */
   .hosp-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:clamp(3px,.4vmin,8px)}
   .hosp-body.div{justify-content:flex-start;align-items:stretch;text-align:left}
+  .hosp-body.div .hosp-msg{text-align:center}                  /* center the "N FACILITIES ON DIVERSION" header; the list rows stay left */
   .hosp-msg{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.4vmin,40px);letter-spacing:1px;line-height:1}
   .hosp-body.ok .hosp-msg{color:var(--green)}
   .hosp-body.err .hosp-msg{color:var(--amber)}
@@ -1394,11 +1396,15 @@
         return '<span class="ti">'+esc(a.text)+(a.by?('<span class="tw">\u2014 '+esc(a.by)+'</span>'):'')+'</span>';
       }).join("");
       note.className="note";
-      note.innerHTML='<div class="tick-track">'+seg+seg+'</div>';   /* duplicate for a seamless loop */
+      note.innerHTML='<div class="tick-track">'+seg+'</div>';   /* single copy — scrolls in from the right edge, across, off the left, then repeats */
       var track=note.firstElementChild;
-      requestAnimationFrame(function(){                       /* duration from real content width = constant speed */
-        var half=track.scrollWidth/2;
-        if(half>0) track.style.setProperty("--tickdur", Math.max(12, half/PXSEC)+"s");
+      requestAnimationFrame(function(){                       /* start off-screen right (container width), end off-screen left (-track width); constant px/sec speed */
+        var cw=note.clientWidth, tw=track.scrollWidth;
+        if(tw>0){
+          track.style.setProperty("--tick-from", cw+"px");
+          track.style.setProperty("--tick-to", (-tw)+"px");
+          track.style.setProperty("--tickdur", Math.max(12,(cw+tw)/PXSEC)+"s");
+        }
       });
     }
     onBoardState(function(ok, st){ if(ok) setAnns((st&&st.announcements)||[]); /* fail -> keep last known */ });
