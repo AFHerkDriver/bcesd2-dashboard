@@ -615,7 +615,7 @@
   .sched-list{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px)}
   .sched-e{display:flex;align-items:baseline;gap:clamp(8px,.9vmin,16px);padding:clamp(2px,.3vmin,5px) 0;border-bottom:1px solid rgba(48,54,61,.5)}
   .sched-e:last-child{border-bottom:0}
-  .sched-e .tm{font-family:'Bebas Neue',sans-serif;color:var(--blue);letter-spacing:1px;font-size:clamp(19px,2.1vmin,34px);flex:0 0 auto;min-width:clamp(58px,5.4vmin,94px)}
+  .sched-e .tm{font-family:'Bebas Neue',sans-serif;color:var(--blue);letter-spacing:1px;font-size:clamp(19px,2.1vmin,34px);flex:0 0 auto;min-width:clamp(90px,9.8vmin,150px)}   /* fixed enough for a full "HH:MM–HH:MM" range so descriptions always align */
   .sched-e .tme{font-family:'Bebas Neue',sans-serif;color:var(--blue);opacity:.75;letter-spacing:1px;font-size:clamp(15px,1.6vmin,26px);flex:0 0 auto;margin-left:calc(-1*clamp(4px,.5vmin,9px))}
   .sched-e .dt{font-family:'DM Mono',monospace;font-size:clamp(10px,.95vmin,15px);color:var(--dim);flex:0 0 auto}
   .sched-e .ds{font-size:clamp(14px,1.45vmin,23px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -623,7 +623,7 @@
     padding-left:clamp(7px,.8vmin,13px);border-bottom:0;margin:1px 0}
   .sched-e.now .nowtag{margin-left:auto;flex:0 0 auto;font-family:'Bebas Neue',sans-serif;color:var(--green);
     letter-spacing:2px;font-size:clamp(11px,1.1vmin,18px)}
-  .sched-list.compact .sched-e .tm{font-size:clamp(15px,1.6vmin,26px)}
+  .sched-list.compact .sched-e .tm{font-size:clamp(15px,1.6vmin,26px);min-width:clamp(74px,7.8vmin,120px)}
   .sched-list.compact .sched-e .ds{font-size:clamp(11px,1.1vmin,18px)}
   .sched-list .idle{color:var(--dim);font-style:italic;font-size:clamp(11px,1vmin,16px)}
   .sched-list.err .ds,.sched-list.err .idle{color:var(--amber)}
@@ -1865,8 +1865,9 @@
       var rows=items.map(function(r){
         var e=r.e;
         var isNow = r.valid && r.startDT<=now && now<=r.endDT && parseMin(e.time)!=null;
+        var dLbl = r.valid ? ((r.startDT.getMonth()+1)+"/"+r.startDT.getDate()) : esc(e.date);   /* short M/D regardless of stored format (YYYY-MM-DD or MM/DD) */
         var dtxt = (e.date && !(r.valid && r.startDT.toDateString()===todayKey && (parseMin(e.time)!=null)))
-                   ? ((r.valid && r.startDT.toDateString()===todayKey) ? "" : '<span class="dt">'+esc(e.date)+'</span>') : "";
+                   ? ((r.valid && r.startDT.toDateString()===todayKey) ? "" : '<span class="dt">'+dLbl+'</span>') : "";
         var tmTxt = e.end ? (esc(e.time||"\u2014")+'\u2013'+esc(e.end)) : esc(e.time||"\u2014");
         return '<div class="sched-e'+(isNow?" now":"")+'"><span class="tm">'+tmTxt+'</span>'+dtxt+
                '<span class="ds">'+esc(e.desc||"")+'</span>'+(isNow?'<span class="nowtag">NOW</span>':'')+'</div>';
@@ -1929,7 +1930,9 @@
     function rhCls(rh){ return rh==null?"" : rh>=40?"rh0" : rh>=30?"rh1" : rh>=25?"rh2" : "rh3"; }   /* matches fwTier RH breaks */
     function pills(){
       if(!hrs||!hrs.length) return "";
-      return '<div class="fw-pills">'+hrs.map(function(a){
+      var wall=!!(window.matchMedia && window.matchMedia("(min-width:1500px)").matches);
+      var list=wall?hrs:hrs.slice(0,8);                        /* smaller tiles (iPad/phone) can't fit 3 rows — show an 8-hr (2-row) forecast so the tile doesn't overflow */
+      return '<div class="fw-pills">'+list.map(function(a){
         var t=fwTier(a.rh,a.spd,a.gust,a.temp);
         var wind=(a.spd>=0?a.spd:"\u2014")+" mph"+(a.dir?(" "+a.dir):"")+(a.gust!=null?(' <i>G'+a.gust+'</i>'):'');
         return '<div class="fwp t'+t+'">'+

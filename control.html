@@ -227,7 +227,7 @@
     <!-- Calendar -->
     <div class="card">
       <h2>Shift Calendar</h2>
-      <div class="hint">Date optional (MM/DD, blank = today). End time optional. Sorted automatically on the board; events clear themselves one hour after they end.</div>
+      <div class="hint">Date optional (blank = today). End time optional. Tap a field for the date/time picker. Sorted automatically on the board; events clear themselves one hour after they end.</div>
       <div id="calList"></div>
       <button class="add" id="addCal">+ Add event</button>
     </div>
@@ -538,13 +538,20 @@ function renderAnn(){
     box.appendChild(row);
   });
 }
+function toDateInput(d){                                       /* -> YYYY-MM-DD for <input type=date>; tolerates the old MM/DD and MM/DD/YYYY */
+  d=String(d==null?'':d).trim(); if(!d) return ''; var m;
+  if(/^\d{4}-\d{1,2}-\d{1,2}$/.test(d)) return d;
+  if((m=d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))){ var y=+m[3]<100?2000+ +m[3]:+m[3]; return y+'-'+('0'+m[1]).slice(-2)+'-'+('0'+m[2]).slice(-2); }
+  if((m=d.match(/^(\d{1,2})\/(\d{1,2})$/))) return (new Date().getFullYear())+'-'+('0'+m[1]).slice(-2)+'-'+('0'+m[2]).slice(-2);
+  return '';
+}
 function renderCal(){
   var box=$('calList'); box.innerHTML='';
   state.calendar.forEach(function(e,i){
     var row=document.createElement('div'); row.className='list-row';
-    row.innerHTML='<input type="text" data-i="'+i+'" data-f="date" value="'+esc(e.date)+'" placeholder="MM/DD" style="flex:1 1 64px;min-width:0">'+
-      '<input type="text" data-i="'+i+'" data-f="time" value="'+esc(e.time)+'" placeholder="09:00" style="flex:1 1 70px;min-width:0">'+
-      '<input type="text" data-i="'+i+'" data-f="end" value="'+esc(e.end)+'" placeholder="End" style="flex:1 1 70px;min-width:0">'+
+    row.innerHTML='<input type="date" data-i="'+i+'" data-f="date" value="'+esc(toDateInput(e.date))+'" title="Date (optional — blank = today)" style="flex:1 1 132px;min-width:0">'+
+      '<input type="time" data-i="'+i+'" data-f="time" value="'+esc(e.time)+'" title="Start time" style="flex:1 1 112px;min-width:0">'+
+      '<input type="time" data-i="'+i+'" data-f="end" value="'+esc(e.end)+'" title="End time (optional)" style="flex:1 1 112px;min-width:0">'+
       '<input type="text" data-i="'+i+'" data-f="desc" value="'+esc(e.desc)+'" placeholder="Event"><button class="del" data-i="'+i+'">✕</button>';
     box.appendChild(row);
   });
