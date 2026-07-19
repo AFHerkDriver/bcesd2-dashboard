@@ -21,7 +21,7 @@
     --green:#34C759; --amber:#FFC107; --red:#FF3B30; --shiftA:#FF3B30; --purple:#AF52DE; --teal:#2DD4BF; --lime:#B2FF59; --pink:#FF4FA3;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;height:100%;overflow:hidden}
+  html,body{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;height:100%;overflow:hidden;background:var(--bg)}   /* html bg matches so the pixel-shift orbit never reveals a light edge */
   body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;
     display:flex;flex-direction:column;height:100vh;
     padding:clamp(7px,.8vw,14px);gap:clamp(6px,.6vw,10px)}
@@ -320,6 +320,7 @@
     color:var(--dim);font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:clamp(14px,1.6vmin,26px)}
   .drone-idle img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}  /* Fire Hawk placeholder; image already carries the NO ACTIVE FEED text */
   .drone-idle .idle-fallback[hidden]{display:none}   /* fail-loud: shown only if the placeholder PNG fails to load */
+  .station-ic{filter:drop-shadow(0 1px 2px rgba(0,0,0,.7))}   /* station emblems pop on both dark + satellite basemaps */
   .drone-overlay{position:absolute;inset:0;z-index:5;background:#000;display:flex;flex-direction:column;border-radius:inherit;overflow:hidden}
   .drone-overlay[hidden]{display:none}
   /* overlay now shows on all sizes when a stream is live; iOS/small taps the player to start it */
@@ -565,6 +566,9 @@
   .calls-body.flashtick .call-e.fresh .cu,.calls-body.flashtick .call-e.fresh .cw,
   .calls-body.flashtick .call-e.fresh .cc,
   .calls-body.flashtick .call-e.fresh .ce{color:#0d1117}
+  /* per-apparatus inverse flash: a newly-assigned unit blinks a green chip for 10s, on the same 500ms tick */
+  .call-e .u.fresh-u{border-radius:3px;padding:0 .25em}                              /* reserve geometry so the blink never jitters spacing */
+  .calls-body.flashtick .call-e .u.fresh-u{background:var(--green);color:#0d1117}    /* on-tick: inverse chip (green fill, dark text) */
   .calls-body.compact .call-e .ct{font-size:clamp(12px,1.25vmin,20px)}
   .calls-body.compact .call-e .ca{font-size:clamp(10px,1vmin,16px)}
   /* call-type color coding: med=yellow fire=red alarm=purple assist=blue mvc=orange (default red) */
@@ -744,14 +748,14 @@
       <div class="head"><span class="name">Active Calls</span><span class="sched-page" id="callsPage" hidden></span></div>
       <div class="calls-body" id="callsBody"><div class="idle">&mdash; Connecting to dispatch&hellip;</div></div>
       <div class="tally" id="tallyRow" hidden>
-        <span class="tlbl">This Tour</span>
-        <span class="tchip2" data-st="121">121 <b>0</b></span>
-        <span class="tchip2" data-st="122">122 <b>0</b></span>
-        <span class="tchip2" data-st="123">123 <b>0</b></span>
-        <span class="tchip2" data-st="124">124 <b>0</b></span>
-        <span class="tchip2" data-st="125">125 <b>0</b></span>
-        <span class="tchip2" data-st="161">161 <b>0</b></span>
-        <span class="tchip2" data-st="162">162 <b>0</b></span>
+        <span class="tlbl">Runs This Tour</span>
+        <span class="tchip2" data-st="121">S121 <b>0</b></span>
+        <span class="tchip2" data-st="122">S122 <b>0</b></span>
+        <span class="tchip2" data-st="123">S123 <b>0</b></span>
+        <span class="tchip2" data-st="124">S124 <b>0</b></span>
+        <span class="tchip2" data-st="125">S125 <b>0</b></span>
+        <span class="tchip2" data-st="161">S161 <b>0</b></span>
+        <span class="tchip2" data-st="162">S162 <b>0</b></span>
       </div>
     </div>
     <!-- Shift schedule — officer-set via control.html; vertical list, auto-paging on overflow -->
@@ -857,12 +861,29 @@
       var alt=deg*Math.asin(Math.sin(rad*lat)*Math.sin(rad*decl)+Math.cos(rad*lat)*Math.cos(rad*decl)*Math.cos(rad*H));
       return alt>-0.833; }
     var initial=sunUp(29.465,-98.730)?satellite:dark;   /* daylight -> satellite, night -> dark */
-    var map=L.map(el,{center:[29.465,-98.730],zoom:13,layers:[initial],zoomControl:false});
+    var map=L.map(el,{center:[29.465,-98.730],zoom:13,layers:[initial],zoomControl:false,zoomSnap:0.1});   /* fine zoom steps so the idle fit tightens to the exact framing, not a coarse level */
     map.attributionControl.setPrefix(false);   /* drop Leaflet's own prefix; OSM/CARTO/Esri credit stays (tiny, subdued via CSS) */
     L.control.layers({"Satellite":satellite,"Dark":dark,"Positron":positron},null,{collapsed:true,position:"topright"}).addTo(map);
     var droneIcon=L.icon({iconUrl:"drone-marker.png",iconRetinaUrl:"drone-marker@2x.png",iconSize:[46,46],iconAnchor:[23,23]});
     var poiIcon=L.icon({iconUrl:"poi-marker.png",iconRetinaUrl:"poi-marker@2x.png",iconSize:[44,44],iconAnchor:[22,22]});
     var layer=L.layerGroup().addTo(map);
+    /* ── BC2FD station emblems — fixed, persistent layer (independent of the drone layer, never cleared).
+       Geocoded (ArcGIS, score 98-100). Sits beneath the drone/POI markers. ── */
+    var STATIONS=[
+      {n:"120",lat:29.392122,lng:-98.709906},{n:"121",lat:29.454183,lng:-98.755111},
+      {n:"122",lat:29.505141,lng:-98.782267},{n:"123",lat:29.405115,lng:-98.701876},
+      {n:"124",lat:29.413373,lng:-98.785885},{n:"125",lat:29.495450,lng:-98.743302},
+      {n:"161",lat:29.219397,lng:-98.458088},{n:"162",lat:29.178697,lng:-98.430572}
+    ];
+    var idlePts=[];
+    var stationLayer=L.layerGroup().addTo(map);
+    STATIONS.forEach(function(s){
+      var ic=L.icon({iconUrl:"station-"+s.n+".png",iconSize:[30,30],iconAnchor:[15,15],className:"station-ic"});
+      L.marker([s.lat,s.lng],{icon:ic,interactive:false,keyboard:false,zIndexOffset:-1000}).addTo(stationLayer);
+      if(+s.n>120 && +s.n<130) idlePts.push([s.lat,s.lng]);   /* default view frames 121-125; 120 (far south) + 161/162 stay plotted, shown when a drone heads their way */
+    });
+    function idleView(){ try{ map.fitBounds(idlePts,{padding:[14,14],maxZoom:15,animate:false}); }catch(e){} }   /* frame 121-125 tightly (animate:false — an animated fit gets cancelled while the map is still settling on load) */
+    idleView();
     /* list = data.drones from /drones (meters / m/s). Convert for display: m->ft x3.281. */
     window.BC2FD_DRONE_MAP=function(list){
       try{
@@ -879,9 +900,10 @@
           }
         });
         if(pts.length){ map.fitBounds(pts,{padding:[30,30],maxZoom:15}); }
+        else { idleView(); }                                          /* drones gone -> back to the district/station overview */
       }catch(e){}
     };
-    setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 500);
+    setTimeout(function(){ try{ map.invalidateSize(); idleView(); }catch(e){} }, 500);   /* re-fit once the container has its real size, else the first fit picks a wrong zoom */
   })();
 </script>
 
@@ -1242,6 +1264,22 @@
     return function(fn){ subs.push(fn); if(last) fn(last[0],last[1],last[2]); };
   })();
 
+  /* ── Burn-in pixel-shift ("orbit"): on the wall tier, glide the WHOLE board through a small
+     ±4px box on a slow cycle so no static element (shield, labels, drone placeholder) sits on the
+     same pixels for hours. Officer-toggleable via control.html (state.display.pixelShift); ON by
+     default. Inert on phones/tablets (they don't burn in and shouldn't scroll-shift). ── */
+  (function(){
+    var SEQ=[[0,0],[4,0],[4,4],[0,4],[-4,4],[-4,0],[-4,-4],[0,-4],[4,-4]], si=0, timer=null, on=null;
+    function wall(){ return !!(window.matchMedia && window.matchMedia("(min-width:1500px)").matches); }
+    function tick(){ if(!wall()){ document.body.style.transform="translate(0,0)"; return; }
+      var s=SEQ[si]; document.body.style.transform="translate("+s[0]+"px,"+s[1]+"px)"; si=(si+1)%SEQ.length; }
+    function set(want){ if(want===on) return; on=want;
+      if(on){ document.body.style.transition="transform 4s ease"; tick(); if(!timer) timer=setInterval(tick, 120000); }   /* glide every 2 min */
+      else { if(timer){ clearInterval(timer); timer=null; } document.body.style.transform="translate(0,0)"; } }
+    set(true);                                               /* protect by default, before state loads */
+    onBoardState(function(ok, st){ set(!(st && st.display && st.display.pixelShift===false)); });
+  })();
+
   /* ── Hospital diversions — subscribes to the state bus. Fail-loud: a read failure shows
      amber "unavailable", never a false "all open". ── */
   (function(){
@@ -1484,11 +1522,27 @@
       if(/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZURE|OVERDOSE|DIABET/.test(t)) return "k-med";
       if(/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "k-assist";
       return ""; }
-    function displayUnits(units){ if(!units||!units.length) return "";
+    function displayUnitsArr(units){ if(!units||!units.length) return [];
       var isStation=function(u){ return /^\d{3}[A-F]$/i.test(u); };
       var real=units.filter(function(u){ return !isStation(u); });
-      return (real.length?real:units).join(" "); }   /* real units supersede station assignments */
+      return (real.length?real:units); }   /* real units supersede station assignments */
+    function displayUnits(units){ return displayUnitsArr(units).join(" "); }
     function ageBasis(c){ return c.logged||c.started||""; }   /* logged = worker first-seen UTC (trustworthy); started = A911's own stamp (TZ undocumented) */
+    /* ── per-apparatus flash: when a new unit is assigned to a call ALREADY on the board, blink that
+       unit (inverse green chip) for 10s on the same 500ms tick. New calls are grandfathered — the 30s
+       row flash already covers their initial units; only units added to a known call flash on their own. ── */
+    var UNIT_FLASH_MS=10000, callSeen={}, unitFU={};
+    function callKey(c){ return (ageBasis(c)||"")+"|"+(c.type||"")+"|"+(c.address||""); }
+    function markUnits(c){                                        /* -> {unit: flashUntil|0} for the displayed units */
+      var key=callKey(c), arr=displayUnitsArr(c.units), out={};
+      if(!callSeen[key]){ callSeen[key]=arr.slice(); return out; }   /* first sighting of this call -> grandfather, no unit flash */
+      var fu=unitFU[key]||(unitFU[key]={});
+      arr.forEach(function(u){ if(callSeen[key].indexOf(u)<0){ fu[u]=Date.now()+UNIT_FLASH_MS; callSeen[key].push(u); } });   /* newly-assigned apparatus */
+      arr.forEach(function(u){ out[u]=(fu[u]&&fu[u]>Date.now())?fu[u]:0; });
+      return out;
+    }
+    function pruneUnits(calls){ var live={}; calls.forEach(function(c){ live[callKey(c)]=1; });   /* drop state for calls that left the board */
+      Object.keys(callSeen).forEach(function(k){ if(!live[k]){ delete callSeen[k]; delete unitFU[k]; } }); }
     function freshOnly(calls){ return calls.filter(function(c){
       var ts=ageBasis(c);
       if(!ts) return true;                             /* no timestamp: keep (fail-visible) */
@@ -1509,17 +1563,20 @@
       if(!calls.length){ body.innerHTML='<div class="callsclear">No Active Calls</div>'; if(pg) pg.hidden=true; return; }
       var FRESH_MS=30000;                                   /* new-call strobe: first 30s on the board */
       var rows=calls.map(function(c){
-        var un=displayUnits(c.units), ts=ageBasis(c);
+        var uarr=displayUnitsArr(c.units), uflash=markUnits(c), ts=ageBasis(c);
         var age=ts?(Date.now()-new Date(ts).getTime()):NaN;
         var isFresh=isFinite(age)&&age>=-120000&&age<FRESH_MS;   /* small negative tolerance for clock skew */
         var exp=isFresh?(Date.now()+Math.max(1000,FRESH_MS-Math.max(0,age))):0;
+        var unitsHtml=uarr.length?('<span class="cu">'+uarr.map(function(u){ var fu=uflash[u];   /* one span per apparatus so only the new one blinks */
+          return '<span class="u'+(fu?' fresh-u':'')+'"'+(fu?(' data-ufx="'+fu+'"'):'')+'>'+esc(u)+'</span>'; }).join(" ")+'</span>'):'';
         return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'">'+
                '<span class="cw">'+dropTime(ts)+'</span>'+                          /* time — far left */
                '<span class="ct">'+esc(c.type||"CALL")+'</span>'+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
-               (un?('<span class="cu">'+esc(un)+'</span>'):'')+                     /* units — green, pushed right */
+               unitsHtml+                                                            /* units — green, pushed right; a newly-assigned apparatus blinks 10s */
                (c.channel?('<span class="cc">'+esc(c.channel)+'</span>'):'')+'</div>';   /* channel — white, far right (only when the feed carries it) */
       });
+      pruneUnits(calls);
       rot=autoRotate(body, rows, pg, 7000);
     }
     function dropTime(ts){ try{ if(!ts) return ""; var d=new Date(ts); if(isNaN(d.getTime())) return "";
@@ -1532,6 +1589,11 @@
       for(var i=0;i<frs.length;i++){
         var x=parseInt(frs[i].getAttribute("data-fx")||"0",10);
         if(x && Date.now()>x) frs[i].classList.remove("fresh"); else any=true;
+      }
+      var ufr=b.querySelectorAll(".u.fresh-u");                    /* per-apparatus flash: same tick, own 10s expiry */
+      for(var j=0;j<ufr.length;j++){
+        var ux=parseInt(ufr[j].getAttribute("data-ufx")||"0",10);
+        if(ux && Date.now()>ux) ufr[j].classList.remove("fresh-u"); else any=true;
       }
       if(any) b.classList.toggle("flashtick");
       else b.classList.remove("flashtick");

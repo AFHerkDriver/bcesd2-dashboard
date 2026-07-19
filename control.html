@@ -121,8 +121,13 @@
   .hosp-row.diverted .hstatus{color:var(--red);border-color:var(--red)}
   .adv{display:flex;gap:10px;margin-top:6px}
   .advchip{flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;text-align:center}
-  .advchip .k{display:block;font-size:9px;letter-spacing:2px;color:var(--dim)}
-  .advchip .v{display:block;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:var(--text);margin-top:2px}
+  .advchip{display:flex;flex-direction:column;justify-content:center}
+  .advchip .k{display:block;font-size:11px;letter-spacing:2px;color:var(--dim)}
+  .advchip .v{display:block;font-family:'Bebas Neue',sans-serif;font-size:40px;letter-spacing:1px;color:var(--text);margin-top:3px;line-height:1}
+  /* ON DUTY shift color-coded to match the wall board: A red · B blue · C green */
+  .advchip.sa{background:#FF3B30;border-color:#FF3B30} .advchip.sa .k,.advchip.sa .v{color:#0D1117}
+  .advchip.sb{background:#4A90D9;border-color:#4A90D9} .advchip.sb .k,.advchip.sb .v{color:#0D1117}
+  .advchip.sc{background:#34C759;border-color:#34C759} .advchip.sc .k,.advchip.sc .v{color:#0D1117}
   .savebar{position:fixed;bottom:0;left:0;right:0;background:rgba(13,17,23,.96);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
     border-top:1px solid var(--border);display:flex;gap:10px;justify-content:center;z-index:50;
     padding:12px 14px;padding-bottom:calc(12px + env(safe-area-inset-bottom));
@@ -199,7 +204,7 @@
       <h2>Shift &amp; UAV <span class="tag live">AUTO · FIREHAWK</span></h2>
       <div class="hint">Who's on right now — pulled live from Firehawk. Advisory only; not set here.</div>
       <div class="adv">
-        <div class="advchip"><span class="k">ON DUTY</span><span class="v" id="advShift">…</span></div>
+        <div class="advchip" id="advShiftChip"><span class="k">ON DUTY</span><span class="v" id="advShift">…</span></div>
         <div class="advchip"><span class="k">UAV</span><span class="v" id="advUav">…</span></div>
       </div>
     </div>
@@ -306,6 +311,18 @@
       <div class="hint">Date optional (MM/DD, blank = today). End time optional. Sorted automatically on the board; events clear themselves one hour after they end.</div>
       <div id="calList"></div>
       <button class="add" id="addCal">+ Add event</button>
+    </div>
+
+    <!-- Display — wall-TV burn-in guard -->
+    <div class="card">
+      <h2>Display <span class="tag">OFFICER</span></h2>
+      <div class="hint">Pixel Shift nudges the whole wall board a few pixels on a slow cycle so no static element sits on the same pixels for hours — the standard burn-in guard for always-on TVs. Invisible across the room; only affects the big-screen wall view, not phones or tablets. Leave On unless you&rsquo;re troubleshooting.</div>
+      <div class="field">
+        <label>Pixel Shift (Burn-in Guard)</label>
+        <div class="seg" id="segPxShift">
+          <button data-v="on">On</button><button data-v="off">Off</button>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -426,7 +443,8 @@ function defaults(){
       {time:'13:00', desc:'UAS currency flights — M30T'},
       {time:'15:00', desc:'Wildland PPE inspection'},
       {time:'19:00', desc:'Blue Card scenario drill'}
-    ]
+    ],
+    display:{ pixelShift:true }                          /* wall-TV burn-in guard; board reads state.display.pixelShift */
   };
 }
 var HSTATUS=['OPEN','DIVERSION','ER DIVERT','TRAUMA DIV','STEMI DIV','STROKE DIV','CLOSED'];
@@ -530,6 +548,8 @@ function hydrate(){
   /* drone streams are auto-detected via the worker /drones feed; manual override card removed. Keep a valid drone object for the board contract. */
   if(!state.drone||!Array.isArray(state.drone.streams)) state.drone={streams:[{url:'',label:''},{url:'',label:''}],bannerOnly:false};
   while(state.drone.streams.length<2) state.drone.streams.push({url:'',label:''});
+  if(!state.display) state.display={pixelShift:true};                       /* older saved state has no display block */
+  segSet('segPxShift', state.display.pixelShift===false?'off':'on');
 
   segSet('segMed', state.med.mode);
   $('medName').value=state.med.custom.name||''; $('medPhone').value=state.med.custom.phone||'';
@@ -580,6 +600,7 @@ segClick('segRescue124', function(v){ state.teams.rescue124=(v==='on'); updateEx
 segClick('segWest', function(v){ state.strikes.west.active=(v==='on'); state.teams.west=state.strikes.west.active; });
 segClick('segEast', function(v){ state.strikes.east.active=(v==='on'); state.teams.east=state.strikes.east.active; });
 segClick('segFlood', function(v){ state.flood.mode=v; if(v==='on') state.fire.redFlag='off'; });
+segClick('segPxShift', function(v){ if(!state.display) state.display={pixelShift:true}; state.display.pixelShift=(v==='on'); });
 $('stCsWest').addEventListener('input', function(){ state.strikes.west.callsign=this.value; });
 $('stPhWest').addEventListener('input', function(){ state.strikes.west.phone=this.value; });
 $('stCsEast').addEventListener('input', function(){ state.strikes.east.callsign=this.value; });
@@ -696,7 +717,8 @@ $('saveTop').addEventListener('click',save);
   function decodeDay(day){ var N=function(x){return x==null?null:parseInt(x);}; var ex=(day.extra||[]).map(N).filter(function(x){return x!=null;}); var a,r;
     if(day.lead!==undefined){a=!!day.lead;r=N(day.rpic);} else {var id=N(day.rpic);a=(id===LEAD)||ex.indexOf(LEAD)!==-1;r=(id!=null&&id!==LEAD)?id:null;} return {u121:!!a,u124:r!=null}; }
   function setTxt(id,t){ var e=document.getElementById(id); if(e)e.textContent=t; }
-  setTxt('advShift', todayShift());
+  var _sh=todayShift(); setTxt('advShift', _sh);
+  var _sc=document.getElementById('advShiftChip'); if(_sc) _sc.className='advchip s'+String(_sh).toLowerCase();   /* A red · B blue · C green, matching the board */
   var now=new Date();
   fetch(B+'/firehawk/schedule_'+now.getFullYear()+'_'+now.getMonth()+'?key='+K).then(function(r){
     if(r.status===404) return {__none:true}; if(!r.ok) throw new Error('HTTP '+r.status); return r.json();
