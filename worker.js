@@ -59,6 +59,17 @@ async function fsAccessToken(env) {
   const j = await r.json(); _fsTok = j.access_token; _fsExp = now + (j.expires_in || 3600); return _fsTok;
 }
 
+/* Coordinate coercion for the Active911 lat/lon strings. Anything unparseable, out of range, or
+   exactly 0 becomes null: 0/0 is a valid point in the Gulf of Guinea, so a missing coordinate that
+   slipped through as 0 would silently drop a pin on the wrong continent rather than not drawing one.
+   Bexar County sits near 29.4N/-98.5W; the bounds check is loose enough to survive a data quirk but
+   tight enough to reject a swapped or zeroed pair. */
+function geoNum(v) {
+  const n = Number(String(v == null ? "" : v).trim());
+  if (!isFinite(n) || n === 0) return null;
+  return (n >= -180 && n <= 180) ? n : null;
+}
+
 /* Station derivation: "122A" (station assignment) -> 122; "UAV124"/"L123" (real unit) -> trailing 3 digits. */
 function stationsOf(units) {
   const s = new Set();
@@ -147,7 +158,13 @@ function dedupeIncidents(rows) {
       const uk = String(u).toUpperCase();
       if (u && !seen[uk]) { seen[uk] = 1; units.push(u); }
     }
-    return { ...base, units, stations: stationsOf(units) };
+    /* Coordinates can arrive on a re-tone even when the original alert had none, and the earliest
+       row is the one we keep — so coalesce across the group rather than losing a fix that exists. */
+    const withGeo = g.rows.find(r => r.lat != null && r.lng != null);
+    const cross   = base.cross || (g.rows.find(r => r.cross) || {}).cross || "";
+    return { ...base, units, stations: stationsOf(units), cross,
+             lat: base.lat != null ? base.lat : (withGeo ? withGeo.lat : null),
+             lng: base.lng != null ? base.lng : (withGeo ? withGeo.lng : null) };
   });
 }
 
@@ -599,6 +616,16 @@ export default {
             units:   mergedUnits(a),
             channel: chan(a),
             started: normTime(a.received || a.sent),
+            /* Active911 already geocodes every alert — verified against a live payload, the fields
+               are `latitude`/`longitude` as STRINGS ("29.48363720"). Passing them through means the
+               board can pin runs on a map with no geocoding service, no API key, no rate limit.
+               Coerced to numbers and validated: a bad or absent value must be null, never NaN and
+               never 0/0, which is a real coordinate in the Gulf of Guinea and would drop a pin
+               thousands of miles off. cross_street is genuinely useful on a run row — the address
+               alone is often ambiguous out in the district. */
+            lat:     geoNum(a.latitude),
+            lng:     geoNum(a.longitude),
+            cross:   String(a.cross_street || "").trim(),
           });
         }
         return { ok: true, calls };
