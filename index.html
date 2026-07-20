@@ -688,6 +688,45 @@
   .rt-cell.rt-lead{border-width:2px;background:color-mix(in srgb, var(--rc) 26%, transparent)}   /* busiest (rank 1, top-left) */
   .rt-cell.rt-zero{border-color:var(--border);background:none}                                     /* no runs -> unlit (neutral); only lights up its color at a tally of 1+ */
   .rt-cell.rt-zero .rt-cnm,.rt-cell.rt-zero .rt-cct{color:var(--dim)}
+  .rt-cell.rt-tap{cursor:pointer}
+  .rt-cell.rt-tap:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+  /* ── Run detail sheet ─────────────────────────────────────────────────────────────────
+     Opened by tapping a lit Runs by Type cell. Body-level so no tile overflow clips it. */
+  .rs-wrap{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.72);
+    display:flex;align-items:center;justify-content:center;padding:16px}
+  .rs-wrap[hidden]{display:none}
+  .rs-card{--rc:var(--dim);width:min(560px,100%);max-height:min(78vh,720px);display:flex;flex-direction:column;
+    background:var(--bg);border:1px solid var(--rc);border-radius:14px;overflow:hidden;
+    box-shadow:0 18px 60px rgba(0,0,0,.7)}
+  .rs-hd{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--panel);border-bottom:1px solid var(--border)}
+  .rs-dot{flex:0 0 auto;width:11px;height:11px;border-radius:3px;background:var(--rc)}
+  .rs-ttl{flex:1 1 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(17px,2vmin,26px);letter-spacing:1.6px}
+  .rs-cnt{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,2.4vmin,32px);color:var(--rc);font-variant-numeric:tabular-nums}
+  .rs-x{flex:0 0 auto;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);
+    font-family:inherit;font-size:14px;line-height:1;padding:7px 10px;min-height:36px;min-width:38px;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .rs-x:hover{color:var(--text);border-color:var(--dim)}
+  .rs-x:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+  .rs-win{padding:7px 14px;font-size:clamp(10px,1vmin,13px);letter-spacing:1px;text-transform:uppercase;
+    color:var(--dim);background:var(--panel2);border-bottom:1px solid var(--border)}
+  .rs-wsec{padding:11px 14px;border-bottom:1px solid var(--border);background:var(--panel2)}
+  .rs-wlbl{font-size:clamp(9px,.95vmin,12px);letter-spacing:1.8px;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+  .rs-wk{display:grid;grid-template-columns:clamp(52px,7vmin,86px) 1fr clamp(20px,2.4vmin,32px);align-items:center;gap:9px;margin-bottom:5px}
+  .rs-wk:last-child{margin-bottom:0}
+  .rs-wu{font-size:clamp(11px,1.15vmin,16px);color:var(--text)}
+  .rs-wbar{height:7px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
+  .rs-wbar span{display:block;height:100%;background:var(--rc);border-radius:4px}
+  .rs-wn{font-size:clamp(11px,1.15vmin,16px);color:var(--rc);text-align:right;font-variant-numeric:tabular-nums}
+  .rs-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .rs-run{display:grid;grid-template-columns:clamp(62px,8vmin,104px) 1fr;grid-template-areas:"t n" "t u" "t a";
+    gap:0 10px;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.55)}
+  .rs-run:last-child{border-bottom:none}
+  .rs-t{grid-area:t;color:var(--dim);font-size:clamp(10px,1.05vmin,14px);font-variant-numeric:tabular-nums;padding-top:1px}
+  .rs-n{grid-area:n;font-size:clamp(11.5px,1.2vmin,17px);color:var(--text)}
+  .rs-u{grid-area:u;display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 2px}
+  .rs-u i{font-style:normal;font-size:clamp(9.5px,1vmin,13px);letter-spacing:.4px;color:var(--rc);
+    border:1px solid var(--rc);background:color-mix(in srgb, var(--rc) 12%, transparent);border-radius:4px;padding:1px 5px}
+  .rs-a{grid-area:a;font-size:clamp(10px,1.05vmin,14px);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rs-empty{padding:22px 14px;text-align:center;color:var(--dim);font-size:13px}
   .rt-cnm{font-family:'Bebas Neue',sans-serif;letter-spacing:.5px;color:var(--rc);font-size:clamp(11px,1.25vmin,20px);line-height:1;white-space:nowrap}
   .rt-cct{font-family:'Bebas Neue',sans-serif;color:var(--rc);font-size:clamp(17px,2.1vmin,34px);line-height:1.05}
 
@@ -993,6 +1032,9 @@
   })();
 </script>
 
+<!-- Run detail sheet — opened by tapping a Runs by Type cell. Lives at body level so it is never
+     clipped by a tile's overflow. Hidden until a cell is tapped; auto-dismisses on the wall. -->
+<div class="rs-wrap" id="rtSheet" hidden></div>
 <script>
   /* ── LINK GUARD ─────────────────────────────────────────────────────────────────────
      A HUNG socket is the failure mode that defeats every fail-loud state in this file.
@@ -1846,13 +1888,86 @@
     /* ── Runs-by-type tally (right half of the sched tile): count this tour's /calls log by call
        type, color-coded, ordered high->low, leading type emphasized. GENERAL is an announcement,
        not a run, so classify()=="k-gen" is dropped upstream. ── */
+    /* ── RUN DETAIL SHEET ────────────────────────────────────────────────────────────────────
+       Tapping a Runs by Type cell opens the runs behind that number. The runs are ALREADY in
+       hand — loadTally fetches every one of them to compute the tally and used to discard the
+       detail, so this costs no extra request.
+
+       Scope deliberately matches the tally (this tour, not the rolling 48h log). The log runs
+       48h BACKWARD while a tour runs 48h FORWARD from 0700, so mid-shift the log still carries
+       the tail of the previous tour — tapping a cell reading 3 would otherwise open 39 rows.
+
+       It opens the apparatus workload first. "We ran 25 EMS" is trivia; "M123 took 10 of them"
+       is the thing crews actually want, and a chronological list buries it.
+
+       On the WALL the sheet auto-dismisses: the TV has a mouse but it is awkward to reach, and a
+       sheet left open would sit on top of Active Calls and weather. A safety board must never be
+       obscured because someone clicked and walked away. Touch tiers stay open until dismissed. */
+    var RT_RUNS={}, RT_SINCE=0, RT_TIMER=null;
+    function rtEsc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
+    function rtClose(){
+      var o=document.getElementById("rtSheet"); if(o) o.hidden=true;
+      if(RT_TIMER){ clearTimeout(RT_TIMER); RT_TIMER=null; }
+    }
+    function rtArm(){
+      if(RT_TIMER) clearTimeout(RT_TIMER);
+      var wall=!!(window.matchMedia && window.matchMedia("(min-width:1500px)").matches);
+      if(wall) RT_TIMER=setTimeout(rtClose,60000);   /* wall only: never leave the board covered */
+    }
+    function rtOpen(key,label,color){
+      var o=document.getElementById("rtSheet"); if(!o) return;
+      var runs=(RT_RUNS[key]||[]).slice().sort(function(a,b){
+        return new Date(b.logged||b.started||0)-new Date(a.logged||a.started||0); });   /* newest first */
+      var work={}, order=[];
+      runs.forEach(function(c){ (c.units||[]).forEach(function(u){
+        if(!work[u]){ work[u]=0; order.push(u); } work[u]++; }); });
+      order.sort(function(a,b){ return work[b]-work[a] || a.localeCompare(b); });
+      var max=order.length?work[order[0]]:1;
+      var hhmm=function(c){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); }catch(e){ return "—"; } };
+      var dow=function(c){ try{ return new Date(c.logged||c.started).toLocaleDateString([],{weekday:"short"}); }catch(e){ return ""; } };
+      var since=RT_SINCE?new Date(RT_SINCE):null;
+      var win=since?("this tour · since "+since.toLocaleDateString([],{weekday:"short"})+" "+
+              since.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",hour12:false})):"this tour";
+      var wk=order.map(function(u){
+        return '<div class="rs-wk"><span class="rs-wu">'+rtEsc(u)+'</span>'+
+               '<span class="rs-wbar"><span style="width:'+Math.round(work[u]/max*100)+'%"></span></span>'+
+               '<span class="rs-wn">'+work[u]+'</span></div>'; }).join("");
+      var rows=runs.map(function(c){
+        var ty=String(c.type||"").replace(/^(MED|FIRE|MVC|RESCUE|ALARM|ASSIST)\s*-\s*/i,"");
+        return '<div class="rs-run"><span class="rs-t">'+rtEsc(dow(c))+' '+rtEsc(hhmm(c))+'</span>'+
+               '<span class="rs-n">'+rtEsc(ty)+'</span>'+
+               '<span class="rs-u">'+(c.units||[]).map(function(u){ return '<i>'+rtEsc(u)+'</i>'; }).join("")+'</span>'+
+               '<span class="rs-a">'+rtEsc(c.address||"")+'</span></div>'; }).join("");
+      o.innerHTML='<div class="rs-card" style="--rc:'+color+'" role="dialog" aria-modal="true" aria-label="'+rtEsc(label)+' runs">'+
+        '<div class="rs-hd"><span class="rs-dot"></span><span class="rs-ttl">'+rtEsc(label)+'</span>'+
+          '<span class="rs-cnt">'+runs.length+'</span>'+
+          '<button type="button" class="rs-x" aria-label="Close">✕</button></div>'+
+        '<div class="rs-win">'+rtEsc(win)+'</div>'+
+        (runs.length
+          ? (order.length?'<div class="rs-wsec"><div class="rs-wlbl">Apparatus workload</div>'+wk+'</div>':'')+
+            '<div class="rs-scroll">'+rows+'</div>'
+          : '<div class="rs-empty">No runs in this category this tour.</div>')+
+        '</div>';
+      o.hidden=false;
+      var x=o.querySelector(".rs-x"); if(x) x.addEventListener("click",rtClose);
+      if(x) try{ x.focus({preventScroll:true}); }catch(e){}   /* keyboard/mouse users land on Close */
+      rtArm();
+    }
+    /* Backdrop click and Escape both close. Any interaction inside re-arms the wall timer so it
+       never yanks the sheet away from someone who is actively reading it. */
+    (function(){
+      var o=document.getElementById("rtSheet"); if(!o) return;
+      o.addEventListener("click",function(e){ if(e.target===o) rtClose(); else rtArm(); });
+      o.addEventListener("scroll",rtArm,true);
+      document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !o.hidden) rtClose(); });
+    })();
     var RT_META={"k-med":["EMS","var(--amber)"],"k-fire":["FIRE","var(--red)"],"k-mvc":["MVC","var(--accent)"],
       "k-rescue":["RESCUE","var(--pink)"],"k-haz":["HAZMAT","var(--lime)"],"k-fuel":["GAS/FUEL","var(--teal)"],
       "k-alarm":["ALARM","var(--purple)"],"k-assist":["ASSIST","var(--blue)"],"":["OTHER","var(--dim)"]};
     function paintRunTypes(tc){                                  /* 3×3 keypad: all 9 categories, sorted by count (top-left = busiest); ties break alphabetical for stability */
       var list=document.getElementById("rtList"); if(!list) return;
       var stamp=document.getElementById("rtStamp");
-      var cells=Object.keys(RT_META).map(function(k){ var m=RT_META[k]; return {label:m[0],color:m[1],n:(tc[k]||0)}; })
+      var cells=Object.keys(RT_META).map(function(k){ var m=RT_META[k]; return {key:k,label:m[0],color:m[1],n:(tc[k]||0)}; })
         .sort(function(a,b){
           var ao=(a.label==="OTHER"&&a.n===0), bo=(b.label==="OTHER"&&b.n===0);   /* a zero OTHER always parks in the last (9th) cell */
           if(ao!==bo) return ao?1:-1;
@@ -1862,8 +1977,22 @@
       if(stamp) stamp.textContent=total?("this tour · "+total):"this tour";
       list.innerHTML=cells.map(function(c,i){
         var cls="rt-cell"+(i===0&&c.n>0?" rt-lead":"")+(c.n===0?" rt-zero":"");
-        return '<div class="'+cls+'" style="--rc:'+c.color+'"><span class="rt-cnm">'+c.label+'</span><span class="rt-cct">'+c.n+'</span></div>';
+        /* Only a cell with runs behind it is interactive — an empty category has nothing to open. */
+        var live=c.n>0;
+        return '<div class="'+cls+(live?" rt-tap":"")+'" style="--rc:'+c.color+'"'+
+               (live?' role="button" tabindex="0" data-rk="'+rtEsc(c.key)+'" data-rl="'+rtEsc(c.label)+'" data-rc="'+rtEsc(c.color)+'" aria-label="'+rtEsc(c.label)+', '+c.n+' runs — show detail"':'')+
+               '><span class="rt-cnm">'+c.label+'</span><span class="rt-cct">'+c.n+'</span></div>';
       }).join("");
+      if(!list.__rtBound){                                        /* delegated once; the grid is re-rendered every poll */
+        list.__rtBound=1;
+        var fire=function(t){ if(t && t.getAttribute("data-rk")!==null) rtOpen(t.getAttribute("data-rk"),t.getAttribute("data-rl"),t.getAttribute("data-rc")); };
+        list.addEventListener("click",function(e){ fire(e.target.closest?e.target.closest(".rt-tap"):null); });
+        list.addEventListener("keydown",function(e){
+          if(e.key!=="Enter" && e.key!==" ") return;
+          var t=e.target && e.target.closest ? e.target.closest(".rt-tap") : null;
+          if(t){ e.preventDefault(); fire(t); }
+        });
+      }
     }
     /* The worker stamps each call with a derived `stations` list, but it comes back EMPTY on some
        rows whose units clearly imply a station — observed live: units ["161D"] yields ["161"] on one
@@ -1900,6 +2029,7 @@
           if(!j||!j.ok||!Array.isArray(j.calls)){ tallyFail(); return; }
           tallyOk=true; tallyFails=0; applyTallyVis();
           var since=tourStart().getTime(), counts={}, typeCounts={}, incident={}, groups=[];
+          RT_RUNS={}; RT_SINCE=since;                            /* rebuilt every poll so the sheet can never show a stale run */
           /* Tally INCIDENTS, not alert rows: A911 re-tones a run as a new alert, so one structure
              fire can sit in the log three times. Sorted ascending so incidentKey's time window
              groups deterministically. */
@@ -1913,7 +2043,10 @@
             var seen={};
             sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
             var cls=classify(c.type);                            /* per-type run tally; GENERAL is an announcement, not a run */
-            if(cls!=="k-gen") typeCounts[cls]=(typeCounts[cls]||0)+1;
+            if(cls!=="k-gen"){
+              typeCounts[cls]=(typeCounts[cls]||0)+1;
+              (RT_RUNS[cls]=RT_RUNS[cls]||[]).push(c);           /* keep the run itself — the detail sheet reads this, no second fetch */
+            }
           });
           paintTally(counts); paintRunTypes(typeCounts);
         })
