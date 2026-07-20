@@ -512,7 +512,21 @@
   /* ── iPad landscape (1181–1400px) — keep TV two-column, allow page scroll so tiles don't crush ── */
   @media (min-width:1181px) and (max-width:1400px){
     html,body{height:auto;overflow:auto}
-    body{height:auto;min-height:100vh;min-height:100dvh}
+    /* iPad LANDSCAPE. This tier was the only one missing safe-area insets, which is why the iOS
+       clock/signal/battery sat on top of the header here and nowhere else — portrait lands in the
+       741-1180 tier, which already had them. viewport-fit=cover + black-translucent means the page
+       draws under the status bar, so the insets are what keep the header clear of it. env() is 0 on
+       the wall TV and in desktop Chrome, so this costs those views nothing. */
+    body{height:auto;min-height:100vh;min-height:100dvh;
+      padding-top:max(clamp(7px,.8vw,14px),env(safe-area-inset-top));
+      padding-left:max(clamp(7px,.8vw,14px),env(safe-area-inset-left));
+      padding-right:max(clamp(7px,.8vw,14px),env(safe-area-inset-right));
+      padding-bottom:max(clamp(7px,.8vw,14px),env(safe-area-inset-bottom))}
+    /* Specialty units: at this width the tile is only ~178px, so three 1fr columns give each chip
+       ~51px of usable room while RESCUE124 needs 67px — it was being clipped from BOTH sides
+       (reading "ESCUE124"), and BOAT124 was shaving too. Two columns give ~82px each with room to
+       spare, and there is ample vertical space for the extra row. */
+    .tile .teams-body{grid-template-columns:repeat(2,1fr)}   /* .tile prefix needed: the base rule sits LATER in the sheet, so equal specificity would lose */
     .quad{min-height:640px}
   }
 
@@ -551,6 +565,10 @@
   .al-band.al-heat-caution .al-ev{color:#F59E0B}
   .al-band.al-heat-danger{border-color:rgba(255,107,53,.6);background:linear-gradient(135deg,rgba(255,107,53,.24),rgba(200,40,0,.13));animation:pulse 3s ease-in-out infinite}
   .al-band.al-heat-danger .al-ev{color:#FF6B35}
+  /* The heat band's sub-line carries the actual instruction (hydrate / mandatory rehab). Ellipsing
+     that away to fit a narrow tile loses the part that matters, so it wraps instead of truncating. */
+  .al-heat-caution .al-ev,.al-heat-danger .al-ev,
+  .al-heat-caution .al-sub,.al-heat-danger .al-sub{white-space:normal;overflow:visible;text-overflow:clip}
   .al-band.al-link{border-color:rgba(255,59,48,.6);background:linear-gradient(135deg,rgba(255,59,48,.22),rgba(140,0,0,.12));animation:pulse 3s ease-in-out infinite}
   .al-band.al-link .al-ev{color:var(--red)}
   .al-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
@@ -1246,8 +1264,13 @@
       var danger=v>=DANGER;
       el.hidden=false;
       el.innerHTML=danger
-        ? '<div class="al-band al-heat-danger"><span class="al-icon">\ud83c\udf21\ufe0f</span><div class="al-body"><div class="al-ev">EXCESSIVE HEAT \u2014 DANGER</div><div class="al-sub">Heat index '+v+'\u00b0F \u00b7 limit exertion \u00b7 mandatory rehab</div></div><span class="al-src">FEELS-LIKE</span></div>'
-        : '<div class="al-band al-heat-caution"><span class="al-icon">\ud83c\udf21\ufe0f</span><div class="al-body"><div class="al-ev">EXCESSIVE HEAT \u2014 CAUTION</div><div class="al-sub">Heat index '+v+'\u00b0F \u00b7 hydrate \u00b7 plan rehab</div></div><span class="al-src">FEELS-LIKE</span></div>';
+        /* The "FEELS-LIKE" source tag was redundant with the sub-line ("FEELS-LIKE" then
+           "Heat index 90F" reads as two labels for one number) AND it consumed 58px of a 277px
+           band on iPad, which is what pushed both lines into an ellipsis. Dropping it puts the
+           phrase in front of the temperature where it reads as a sentence, and hands the width
+           back to the copy \u2014 safety guidance like "mandatory rehab" no longer gets truncated. */
+        ? '<div class="al-band al-heat-danger"><span class="al-icon">\ud83c\udf21\ufe0f</span><div class="al-body"><div class="al-ev">EXCESSIVE HEAT \u2014 DANGER</div><div class="al-sub">Feels like '+v+'\u00b0F \u00b7 limit exertion \u00b7 mandatory rehab</div></div></div>'
+        : '<div class="al-band al-heat-caution"><span class="al-icon">\ud83c\udf21\ufe0f</span><div class="al-body"><div class="al-ev">EXCESSIVE HEAT \u2014 CAUTION</div><div class="al-sub">Feels like '+v+'\u00b0F \u00b7 hydrate \u00b7 plan rehab</div></div></div>';
     };
   })();
   /* NO FABRICATED WEATHER, EVER. The retired wxSample() fed invented 98-100F / 12-15% RH / 22G35
