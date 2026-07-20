@@ -656,6 +656,44 @@ function toDateInput(d){                                       /* -> YYYY-MM-DD 
   if((m=d.match(/^(\d{1,2})\/(\d{1,2})$/))) return (new Date().getFullYear())+'-'+('0'+m[1]).slice(-2)+'-'+('0'+m[2]).slice(-2);
   return '';
 }
+/* ── PAST-EVENT PRUNE ──────────────────────────────────────────────────────────────────
+   The board hides a scheduled event an hour after it ends, but the control editor rendered
+   the raw state.calendar, so ended events piled up here forever — the officer saw days-old
+   entries the wall had long since dropped. This mirrors the board's clear rule EXACTLY so the
+   two agree: an event is removed only when it has a parseable explicit date and ended more
+   than an hour ago. No-date (blank = today, effectively recurring), unparseable-date, future
+   and still-running events are all kept — we never guess a date away.
+   Judged in CENTRAL time, like the board: an officer on another coast must never prune an
+   event that is still on the station wall. */
+function ctNowCtl(){ try{ return new Date(new Date().toLocaleString("en-US",{timeZone:"America/Chicago"})); }catch(e){ return new Date(); } }
+function calParseDate(s){
+  if(!s) return null; s=String(s).trim(); var m;
+  if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)))   return new Date(+m[1],+m[2]-1,+m[3]);
+  if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))) return new Date(+m[3]<100?2000+ +m[3]:+m[3],+m[1]-1,+m[2]);
+  if((m=s.match(/^(\d{1,2})\/(\d{1,2})$/)))           return new Date(ctNowCtl().getFullYear(),+m[1]-1,+m[2]);
+  return null;
+}
+function calParseMin(tm){ if(!tm) return null; var m=String(tm).trim().match(/^(\d{1,2}):?(\d{2})$/); if(!m) return null; var h=+m[1],mi=+m[2]; return (h>23||mi>59)?null:h*60+mi; }
+function calEnded(e){
+  if(!e || (!e.time && !e.desc)) return false;
+  if(!e.date) return false;                              /* blank = today -> never auto-clear */
+  var d=calParseDate(e.date); if(!d) return false;       /* unparseable -> never auto-clear */
+  d.setHours(0,0,0,0);
+  var sMin=calParseMin(e.time), eMin=calParseMin(e.end), endDT;
+  if(sMin==null){ endDT=new Date(d.getTime()+86400000-60000); }            /* all-day */
+  else{
+    var startDT=new Date(d.getTime()+sMin*60000);
+    if(eMin!=null && (eMin>=sMin || ((1440-sMin)+eMin)<=720)){ endDT=new Date(d.getTime()+eMin*60000); if(eMin<sMin) endDT=new Date(endDT.getTime()+86400000); }
+    else endDT=new Date(startDT.getTime()+3600000);                       /* no end: 1h block */
+  }
+  return ctNowCtl().getTime() > endDT.getTime()+3600000;                  /* ended >1h ago */
+}
+function pruneCalendar(){
+  if(!Array.isArray(state.calendar)) return 0;
+  var before=state.calendar.length;
+  state.calendar=state.calendar.filter(function(e){ return !calEnded(e); });
+  return before-state.calendar.length;
+}
 function renderCal(){
   var box=$('calList'); box.innerHTML='';
   state.calendar.forEach(function(e,i){
@@ -913,7 +951,7 @@ function inForm(el){ return el && el.closest && !el.closest('#gate'); }
 document.addEventListener('click',function(e){ var t=(e.target&&e.target.closest)?e.target.closest('button'):null; if(uiReady && t && t.id!=='saveTop' && inForm(t)) setDirty(true); },true);
 window.addEventListener('beforeunload',function(e){ if(uiDirty){ e.preventDefault(); e.returnValue=''; return ''; } });
 setTimeout(function(){ uiReady=true; },2500);   /* backstop: activate the guard even if the initial load errored */
-Store.get().then(function(s){ if(s) state=ensureShape(s); hydrate(); uiReady=true; setDirty(false); lastSaved=clone(state); })
+Store.get().then(function(s){ if(s) state=ensureShape(s); pruneCalendar(); hydrate(); uiReady=true; setDirty(false); lastSaved=clone(state); })   /* drop ended events before first paint; lastSaved AFTER prune so the cleanup is silent, not logged as officer removals, and persists on the next real save */
   .catch(function(){ hydrate(); lastSaved=clone(state); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
 </script>
 <script>
