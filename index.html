@@ -10,6 +10,21 @@
 <meta name="apple-mobile-web-app-title" content="BC2FD Dash">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>BC2FD Station Dashboard</title>
+<!-- Link preview (iMessage / SMS / Slack). Scrapers do NOT resolve relative paths, so these
+     must stay absolute; og:image is 1200x630 JPEG, the size every platform renders large. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bexar County ESD No. 2">
+<meta property="og:title" content="BC2FD Station Dashboard">
+<meta property="og:description" content="All-hazards station board for Bexar County ESD No. 2 — weather, NWS alerts, dispatch, hospital status, and airspace awareness.">
+<meta property="og:url" content="https://afherkdriver.github.io/bcesd2-dashboard/">
+<meta property="og:image" content="https://afherkdriver.github.io/bcesd2-dashboard/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Bexar County ESD No. 2 Fire &amp; EMS shield — Station Dashboard">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BC2FD Station Dashboard">
+<meta name="twitter:description" content="All-hazards station board for Bexar County ESD No. 2.">
+<meta name="twitter:image" content="https://afherkdriver.github.io/bcesd2-dashboard/og-image.jpg">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
 <!-- Leaflet (drone location map) — keyless. Degrades to a placeholder pane if the CDN is unreachable. -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
@@ -323,6 +338,17 @@
   .drone-idle .idle-fallback[hidden]{display:none}   /* fail-loud: shown only if the placeholder PNG fails to load */
   .station-ic{filter:drop-shadow(0 1px 2px rgba(0,0,0,.7))}   /* station emblems pop on both dark + satellite basemaps */
   .drone-overlay{position:absolute;inset:0;z-index:5;background:#000;display:flex;flex-direction:column;border-radius:inherit;overflow:hidden}
+  /* Airspace relay failure. A dead /drones feed used to render EXACTLY like a verified empty sky —
+     idle map, no overlay — which is the false all-clear the golden rules forbid. Deliberately a BAND,
+     not a full cover: if a video stream is still playing it stays visible underneath, because hiding
+     a working picture behind a warning about the tracking relay helps nobody. */
+  .drone-err{position:absolute;left:0;right:0;top:0;z-index:6;display:flex;align-items:center;gap:8px;
+    padding:7px 10px;background:rgba(255,59,48,.94);color:#fff;
+    font-size:clamp(11px,1.15vmin,18px);letter-spacing:.6px;font-weight:700;line-height:1.25;
+    border-bottom:1px solid rgba(0,0,0,.4)}
+  .drone-err[hidden]{display:none}
+  .drone-err .de-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#fff;
+    animation:pulse 2s ease-in-out infinite}
   .drone-overlay[hidden]{display:none}
   /* overlay now shows on all sizes when a stream is live; iOS/small taps the player to start it */
   .dro-banner{flex:0 0 auto;display:flex;align-items:center;gap:clamp(8px,1vmin,16px);padding:clamp(6px,.8vmin,12px) clamp(10px,1.2vmin,18px);
@@ -796,7 +822,7 @@
           <div class="head"><span class="name">Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
           <div class="sched-list" id="schedList"></div>
         </div>
-        <div class="sched-half rt-half">
+        <div class="sched-half rt-half" id="rtHalf">
           <div class="head"><span class="name">Runs by Type</span><span class="stamp src" id="rtStamp"></span></div>
           <div class="rt-list" id="rtList"></div>
         </div>
@@ -840,6 +866,7 @@
         <div class="drone-split">
           <div class="drone-video">
             <div class="drone-idle" id="droneIdle"><img src="drone-idle.png" alt="No active drone feed" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="idle-fallback" hidden>NO ACTIVE FEED</span></div>
+            <div class="drone-err" id="droneErr" hidden><span class="de-dot"></span><span>AIRSPACE FEED DOWN &mdash; CHECK REMOTE CONNECTION</span></div>
             <div class="drone-overlay" id="droneOverlay" hidden>
               <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><div class="dro-btext"><div class="dro-mission" id="droTitle">DRONE LIVE</div><div class="dro-cs" id="droLbls"></div></div></div>
               <div class="dro-frames" id="droFrames"></div>
@@ -1608,18 +1635,46 @@
         var key=next.map(function(s){return s.url;}).join("|"), prev=autoStreams.map(function(s){return s.url;}).join("|");
         if(key!==prev){ autoStreams=next; recompute(); }
       }
+      /* A dead relay must not read as an empty sky. Every path that used to silently hold the last
+         view now counts as a failure; two consecutive failures raise the band. One blip is tolerated
+         so a single dropped poll doesn't flap it. Success clears it and stamps the tile. */
+      var drFails=0;
+      function drDown(down){
+        /* The placeholder art carries the state: NO ACTIVE FEED (relay answered, sky verified empty)
+           vs BROKEN CONNECTION (relay unreachable). Both are the same Fire Hawk plate at the same
+           scale, so the swap reads as one panel changing state rather than two different pictures.
+           The red band is kept ONLY for the case the art can't cover — a live video overlay still
+           playing on top of it. Otherwise the image has already said it and stacking both is noise. */
+        var idle=document.getElementById("droneIdle");
+        var img=idle && idle.querySelector("img");
+        var fb=idle && idle.querySelector(".idle-fallback");
+        var want=down ? "drone-broken.png" : "drone-idle.png";
+        if(img && img.getAttribute("src")!==want){
+          img.src=want; img.hidden=false;                       /* clear any prior onerror state */
+          if(fb) fb.hidden=true;
+        }
+        if(fb) fb.textContent = down ? "BROKEN CONNECTION" : "NO ACTIVE FEED";   /* keep the text fallback honest too */
+        var ov=document.getElementById("droneOverlay");
+        var covered=!!(ov && !ov.hidden);
+        var e=document.getElementById("droneErr"); if(e) e.hidden=!(down && covered);
+        var s=document.getElementById("droneStamp");
+        if(s) s.textContent = down ? "relay unreachable"
+          : ("UAS relay · " + new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}));
+      }
+      function drFail(){ if(++drFails>=2) drDown(true); }
       function load(){
         var pin=window.BOARD_PIN?window.BOARD_PIN():""; if(!pin) return;
         bcFetch(DR_URL+"?pin="+encodeURIComponent(pin))
           .then(function(r){
             if(r.status===501){ return {ok:true, off:true}; }  /* feature off -> no auto streams */
-            if(!r.ok) return null;                             /* transient -> hold current auto view */
+            if(!r.ok) return null;                             /* relay reachable but unhappy */
             return r.json();
           })
           .then(function(j){
-            if(j===null) return;                               /* transient error: hold */
-            if(j.off){ setAuto([]); if(window.BC2FD_DRONE_MAP) window.BC2FD_DRONE_MAP([]); return; }
-            if(!j.ok || !Array.isArray(j.drones)) return;      /* bad shape: hold */
+            if(j===null){ drFail(); return; }                  /* non-OK response */
+            if(j.off){ drFails=0; drDown(false); setAuto([]); if(window.BC2FD_DRONE_MAP) window.BC2FD_DRONE_MAP([]); return; }
+            if(!j.ok || !Array.isArray(j.drones)){ drFail(); return; }   /* bad shape */
+            drFails=0; drDown(false);                          /* verified answer: empty sky is now TRUSTED, not assumed */
             var next=j.drones
               .filter(function(d){ return d && typeof d.video_url==="string" && /^https:\/\//i.test(d.video_url); })
               .slice(0,2)
@@ -1627,7 +1682,7 @@
             setAuto(next);                                     /* authoritative (incl. empty = drone landed) */
             if(window.BC2FD_DRONE_MAP) window.BC2FD_DRONE_MAP(j.drones);   /* map plots every aircraft with a position */
           })
-          .catch(function(){ /* network error: hold current auto view */ });
+          .catch(function(){ drFail(); });                     /* network error / bcFetch timeout */
       }
       load(); setInterval(load, POLL);
     })();
@@ -1646,7 +1701,7 @@
     function elapsed(iso){ try{ var m=Math.floor((Date.now()-new Date(iso).getTime())/60000);
       if(!isFinite(m)||m<0) return ""; return m<60?(m+"m"):(Math.floor(m/60)+"h"+(m%60)+"m"); }catch(e){ return ""; } }
     function show(tileOn){ var tl=document.getElementById("callsTile"); if(tl) tl.hidden=false;   /* Active Calls stays on the board; tileOn only gates the tour tally */
-      var tr=document.getElementById("tallyRow"); if(tr) tr.hidden=!tileOn; }
+      lastTileOn=!!tileOn; applyTallyVis(); }
     /* advisory board, not CAD: rows age out after 10 min */
     var ADVISORY_MIN=15;
     function classify(t){ t=String(t||"").toUpperCase();
@@ -1803,14 +1858,24 @@
       }
       return out;
     }
+    /* The tour tally is only allowed on screen when /calls has actually answered. The chips ship as
+       hardcoded zeros in the markup and used to be unhidden by /dispatch — a DIFFERENT endpoint — so a
+       /calls-only outage painted a confident "S121 0 · S122 0 …" over a busy tour. Absence states
+       nothing; a row of zeros makes a claim. So on failure the row and the Runs by Type panel come off
+       the board entirely rather than assert a quiet shift. One blip is tolerated before hiding. */
+    function applyTallyVis(){
+      var tr=document.getElementById("tallyRow"); if(tr) tr.hidden=!(lastTileOn && tallyOk);
+      var rh=document.getElementById("rtHalf");   if(rh) rh.hidden=!tallyOk;
+    }
+    function tallyFail(){ if(++tallyFails>=2){ tallyOk=false; applyTallyVis(); } }
     function loadTally(){
       var pin=window.BOARD_PIN?window.BOARD_PIN():"";
       if(!pin) return;
       bcFetch(TALLY_URL+"?pin="+encodeURIComponent(pin))
         .then(function(r){ return r.ok?r.json():null; })
         .then(function(j){
-          if(!j||!j.ok||!Array.isArray(j.calls)) return;     /* leave last-known tally on transient errors */
-          tallyOk=true;
+          if(!j||!j.ok||!Array.isArray(j.calls)){ tallyFail(); return; }
+          tallyOk=true; tallyFails=0; applyTallyVis();
           var since=tourStart().getTime(), counts={}, typeCounts={}, incident={}, groups=[];
           /* Tally INCIDENTS, not alert rows: A911 re-tones a run as a new alert, so one structure
              fire can sit in the log three times. Sorted ascending so incidentKey's time window
@@ -1829,9 +1894,9 @@
           });
           paintTally(counts); paintRunTypes(typeCounts);
         })
-        .catch(function(){ /* keep last-known */ });
+        .catch(function(){ tallyFail(); });                  /* network error / bcFetch timeout */
     }
-    var tallyOk=false;
+    var tallyOk=false, tallyFails=0, lastTileOn=false;
     loadTally(); setInterval(loadTally, 5*60*1000);          /* 5-min cadence; tourStart recomputed each pass so 0700 reset lands */
     var fastRetry=setInterval(function(){ if(tallyOk){ clearInterval(fastRetry); } else loadTally(); }, 30000);   /* PIN may land after first paint */
     /* ONE CARD PER INCIDENT. Active911 re-pages/updates a run as a NEW alert (new id, SAME cad_code),
