@@ -332,6 +332,15 @@
   .drone-tile.dt-district .drone-video{display:none}
   .drone-tile.dt-district .drone-map{flex:1 1 100%}
   .call-pin{filter:drop-shadow(0 0 3px rgba(0,0,0,.85))}   /* keeps a pin legible over bright satellite imagery */
+  /* Fresh call: inverse flash — the dark outline goes white and thick, which reads at wall distance
+     without moving anything. FINITE iteration count so it stops itself; a flash left running all
+     shift because a cleanup timer was missed would be worse than no flash at all. */
+  @keyframes pinflash{
+    0%,100%{opacity:1;stroke:#0D1117;stroke-width:2}
+    50%    {opacity:.4;stroke:#FFFFFF;stroke-width:5}
+  }
+  .call-pin.pin-new{animation:pinflash 1s ease-in-out 14}
+  @media (prefers-reduced-motion:reduce){ .call-pin.pin-new{animation:none;stroke:#FFFFFF;stroke-width:4} }
   /* Runs pinned outside the 121-125 frame (161/162, station 120). The map must not imply it is
      showing everything — this is the difference between a tight frame and a quiet omission. */
   .dm-off{position:absolute;left:8px;bottom:8px;z-index:500;pointer-events:none;
@@ -1037,7 +1046,7 @@
        Framing fits the pins rather than the fixed 121-125 box: runs land at 161/162 too, and
        a pin outside the frame is a pin nobody sees. Falls back to the station framing when
        there is nothing to show. ── */
-    var pinLayer=L.layerGroup().addTo(map), pinPts=[], pinsOn=false;
+    var pinLayer=L.layerGroup().addTo(map), pinPts=[], pinsOn=false, hadDrones=false;
     /* Framing stays on stations 121-125 rather than fitting to the pins. Nearly all of the work is
        the west side (District 2), so letting an outlying run drag the viewport out would shrink the
        area that actually matters on most tours. 161/162 stay plotted and are reachable by panning. */
@@ -1066,7 +1075,7 @@
           }).bindTooltip(String(c.label||"")+(c.time?(" · "+c.time):""),{direction:"top",offset:[0,-8]}).addTo(pinLayer);
           pinPts.push([c.lat,c.lng]);
         });
-        if(pinsOn) districtView();
+        if(pinsOn && !focusT) districtView();   /* never yank the view out from under an active focus */
       }catch(e){}
     };
     /* The tile swaps between a full-width district map and the drone split, so Leaflet has to be
@@ -1074,8 +1083,48 @@
        being grey tiles or a map stuck at the old width. */
     window.BC2FD_MAP_MODE=function(district){
       pinsOn=!!district;
+      if(!pinsOn && focusT){ clearTimeout(focusT); focusT=null; }   /* aircraft up: drop any pending return */
       try{ map.invalidateSize(); }catch(e){}
       setTimeout(function(){ try{ map.invalidateSize(); districtView(); }catch(e){} },260);   /* after the CSS transition settles */
+    };
+    /* ── NEW-CALL AUTOFOCUS ──────────────────────────────────────────────────────────────
+       A call drops: pin it immediately, flash it, swing the map to it, then return to the
+       district frame. GOVERNED, because a wall board that lurches on every dispatch during a
+       busy tour is worse than one that never moves at all:
+         · latest call wins — a newer call cancels the pending return and re-targets
+         · MIN_GAP floor between viewport moves
+         · burst suppression — once BURST_N calls land inside BURST_WIN the zooming stops; pins
+           and flashes continue, since neither moves the viewport
+         · never while a drone is up: then the map belongs to the aircraft
+       The pin is added here rather than waiting for the 5-minute tally refresh, which would
+       otherwise be the first time a fresh call appeared on the map. The flash is a FINITE CSS
+       animation so it ends on its own — no timer to leak, and a missed cleanup can't leave a
+       pin blinking on the wall all shift. ── */
+    var focusT=null, lastFocus=0, recent=[];
+    var FOCUS_ZOOM=15.2, HOLD=60000, MIN_GAP=25000, BURST_N=3, BURST_WIN=240000;
+    window.BC2FD_FOCUS_CALL=function(c){
+      if(!c || c.lat==null || c.lng==null) return;
+      if(!pinsOn) return;
+      try{
+        L.circleMarker([c.lat,c.lng],{radius:8,color:"#0D1117",weight:2,opacity:.9,
+          fillColor:c.color||"#8B949E",fillOpacity:.95,className:"call-pin pin-new"})
+          .bindTooltip(String(c.label||"")+(c.time?(" · "+c.time):""),{direction:"top",offset:[0,-9]}).addTo(pinLayer);
+        pinPts.push([c.lat,c.lng]);
+      }catch(e){}
+      var now=Date.now();
+      recent=recent.filter(function(t){ return now-t<BURST_WIN; }); recent.push(now);
+      if(recent.length>=BURST_N){ offscreenNote(); return; }      /* busy tour: pin + flash, hold the view */
+      if(now-lastFocus<MIN_GAP){ offscreenNote(); return; }
+      lastFocus=now;
+      if(focusT){ clearTimeout(focusT); focusT=null; }             /* latest wins */
+      /* animate:false is REQUIRED, not a preference. On this map (zoomSnap 0.1) an animated
+         transition silently does nothing — verified: setView with animate:true and flyTo both
+         leave the centre untouched and throw no error, while animate:false works every time.
+         idleView() carries the same note from an earlier session. On a wall the instant cut is
+         also the better read: nothing to track across the screen, and the pin flash is the cue. */
+      try{ map.setView([c.lat,c.lng],FOCUS_ZOOM,{animate:false}); }catch(e){}
+      focusT=setTimeout(function(){ focusT=null; districtView(); },HOLD);
+      offscreenNote();
     };
     /* list = data.drones from /drones (meters / m/s). Convert for display: m->ft x3.281. */
     window.BC2FD_DRONE_MAP=function(list){
@@ -1092,8 +1141,12 @@
             pts.push([d.poiLat,d.poiLng]);
           }
         });
-        if(pts.length){ map.fitBounds(pts,{padding:[30,30],maxZoom:15}); }
-        else { districtView(); }                                      /* drones gone -> back to the district view (pins if we have them) */
+        /* Re-frame only on the TRANSITION out of a flight, never on every poll. This runs every 15s,
+           so the old unconditional districtView() re-framed the map four times a minute: it stomped
+           the new-call autofocus within seconds, and it meant anyone panning to look at 161/162 got
+           snapped back to the 121-125 frame before they could read it. */
+        if(pts.length){ map.fitBounds(pts,{padding:[30,30],maxZoom:15}); hadDrones=true; }
+        else if(hadDrones){ hadDrones=false; districtView(); }         /* aircraft just left -> back to the district frame */
       }catch(e){}
     };
     setTimeout(function(){ try{ map.invalidateSize(); idleView(); }catch(e){} }, 500);   /* re-fit once the container has its real size, else the first fit picks a wrong zoom */
@@ -2210,6 +2263,33 @@
       });
       return out;
     }
+    /* Fresh-call detection rides the 12s dispatch poll, not the 5-minute tally poll.
+       SEEDED on the first successful poll and never fired from it: on a board reload the active
+       window is full of calls that are not new, and zooming to one of them on every restart (the
+       wall hard-reloads nightly at 04:07) would be a nightly false alarm. */
+    var seenCalls=null;
+    function noticeNewCalls(list){
+      list=list||[];
+      var keyOf=function(c){ return c.cad_code||("id:"+(c&&c.id)); };
+      if(seenCalls===null){ seenCalls={}; list.forEach(function(c){ seenCalls[keyOf(c)]=1; }); return; }
+      var fresh=list.filter(function(c){ return !seenCalls[keyOf(c)]; });
+      list.forEach(function(c){ seenCalls[keyOf(c)]=1; });
+      if(!fresh.length) return;
+      /* Newest only. Several calls can land between polls; focusing each in turn would queue a
+         slideshow, and the governor would swallow all but the first anyway. */
+      fresh.sort(function(a,b){ return new Date(b.logged||b.started||0)-new Date(a.logged||a.started||0); });
+      var c=fresh[0], k=classify(c.type);
+      if(k==="k-gen") return;                     /* burn-ban / general alerts are advisories, not runs */
+      if(c.lat==null || c.lng==null) return;      /* no coordinate, nothing to focus */
+      var meta=RT_META[k]||RT_META[""];
+      try{
+        if(window.BC2FD_FOCUS_CALL) window.BC2FD_FOCUS_CALL({
+          lat:c.lat, lng:c.lng, color:rtColor(meta[1]),
+          label:meta[0]+" · "+String(c.type||"").replace(/^[A-Z]+\s*-\s*/i,""),
+          time:(function(){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); }catch(e){ return ""; } })()
+        });
+      }catch(e){}
+    }
     function load(){
       bcFetch(URL_,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:window.BOARD_PIN?window.BOARD_PIN():""})})
         .then(function(r){
@@ -2225,7 +2305,9 @@
           if(j===null) return;
           if(!j.ok || !Array.isArray(j.calls)) { errDetail=(j&&j.error)||"bad response"; render("err"); return; }
           everConfigured=true; errDetail="";
-          render("ok", dedupeCalls(j.calls));   /* one card per incident, not one per re-page */
+          var incidents=dedupeCalls(j.calls);   /* one card per incident, not one per re-page */
+          render("ok", incidents);
+          try{ noticeNewCalls(incidents); }catch(e){}
         })
         .catch(function(){ render(everConfigured?"err":"off"); });   /* never-configured + unreachable worker -> stay hidden */
     }
