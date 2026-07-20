@@ -692,7 +692,9 @@
   .rt-cell.rt-tap:focus-visible{outline:2px solid var(--text);outline-offset:2px}
   /* ── Run detail sheet ─────────────────────────────────────────────────────────────────
      Opened by tapping a lit Runs by Type cell. Body-level so no tile overflow clips it. */
-  .rs-wrap{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.72);
+  /* z-index must clear LEAFLET, which puts panes up to 700 and its controls at 1000 — at z-index 60
+     the drone map punched straight through the sheet and rendered on top of it. */
+  .rs-wrap{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.72);
     display:flex;align-items:center;justify-content:center;padding:16px}
   .rs-wrap[hidden]{display:none}
   .rs-card{--rc:var(--dim);width:min(560px,100%);max-height:min(78vh,720px);display:flex;flex-direction:column;
@@ -725,6 +727,9 @@
   .rs-u{grid-area:u;display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 2px}
   .rs-u i{font-style:normal;font-size:clamp(9.5px,1vmin,13px);letter-spacing:.4px;color:var(--rc);
     border:1px solid var(--rc);background:color-mix(in srgb, var(--rc) 12%, transparent);border-radius:4px;padding:1px 5px}
+  /* box/still code — kept on the run row (some runs carry nothing else) but visibly not a rig */
+  .rs-u i.rs-box{color:var(--dim);border-style:dashed;border-color:var(--border);background:none}
+  .rs-wk.rs-flat{grid-template-columns:1fr auto}   /* every rig tied — a row of 100% bars says nothing */
   .rs-a{grid-area:a;font-size:clamp(10px,1.05vmin,14px);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rs-empty{padding:22px 14px;text-align:center;color:var(--dim);font-size:13px}
   .rt-cnm{font-family:'Bebas Neue',sans-serif;letter-spacing:.5px;color:var(--rc);font-size:clamp(11px,1.25vmin,20px);line-height:1;white-space:nowrap}
@@ -1905,6 +1910,10 @@
        obscured because someone clicked and walked away. Touch tiers stay open until dismissed. */
     var RT_RUNS={}, RT_SINCE=0, RT_TIMER=null;
     function rtEsc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
+    /* A real callsign is LETTERS then a 3-digit station (E122, M123, AP124, MOF121, UAV124).
+       A box/still code is 3 DIGITS then a letter (121C, 124D, 161E) — a response area, not a rig.
+       Verified against every token in the live log: the split is clean, nothing unclassified. */
+    function rtIsApparatus(u){ return /^[A-Za-z].*\d{3}$/.test(String(u)); }
     function rtClose(){
       var o=document.getElementById("rtSheet"); if(o) o.hidden=true;
       if(RT_TIMER){ clearTimeout(RT_TIMER); RT_TIMER=null; }
@@ -1918,25 +1927,35 @@
       var o=document.getElementById("rtSheet"); if(!o) return;
       var runs=(RT_RUNS[key]||[]).slice().sort(function(a,b){
         return new Date(b.logged||b.started||0)-new Date(a.logged||a.started||0); });   /* newest first */
+      /* WORKLOAD COUNTS RIGS, NOT RESPONSE AREAS. Active911 mixes two kinds of token into `units`:
+         real apparatus, which is LETTERS then a 3-digit station (E122, M123, AP124, BC121, MOF121),
+         and box/still codes, which are 3 DIGITS then a letter (121C, 124D, 161E) — those are the
+         dispatch response area off the initial tones, not something that rolled. Counting them made
+         "124D" look like a rig that ran a call. Same rule the worker's stationsOf() uses.
+         They are still shown on the run rows (dimmed): 8 runs in the current log carry ONLY a box
+         code, and dropping them there would leave those rows with no units at all. */
       var work={}, order=[];
       runs.forEach(function(c){ (c.units||[]).forEach(function(u){
+        if(!rtIsApparatus(u)) return;
         if(!work[u]){ work[u]=0; order.push(u); } work[u]++; }); });
       order.sort(function(a,b){ return work[b]-work[a] || a.localeCompare(b); });
       var max=order.length?work[order[0]]:1;
+      var flat=order.every(function(u){ return work[u]===max; });   /* every rig tied -> bars say nothing */
       var hhmm=function(c){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); }catch(e){ return "—"; } };
       var dow=function(c){ try{ return new Date(c.logged||c.started).toLocaleDateString([],{weekday:"short"}); }catch(e){ return ""; } };
       var since=RT_SINCE?new Date(RT_SINCE):null;
       var win=since?("this tour · since "+since.toLocaleDateString([],{weekday:"short"})+" "+
               since.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",hour12:false})):"this tour";
       var wk=order.map(function(u){
-        return '<div class="rs-wk"><span class="rs-wu">'+rtEsc(u)+'</span>'+
-               '<span class="rs-wbar"><span style="width:'+Math.round(work[u]/max*100)+'%"></span></span>'+
+        return '<div class="rs-wk'+(flat?" rs-flat":"")+'"><span class="rs-wu">'+rtEsc(u)+'</span>'+
+               (flat?'':'<span class="rs-wbar"><span style="width:'+Math.round(work[u]/max*100)+'%"></span></span>')+
                '<span class="rs-wn">'+work[u]+'</span></div>'; }).join("");
       var rows=runs.map(function(c){
         var ty=String(c.type||"").replace(/^(MED|FIRE|MVC|RESCUE|ALARM|ASSIST)\s*-\s*/i,"");
         return '<div class="rs-run"><span class="rs-t">'+rtEsc(dow(c))+' '+rtEsc(hhmm(c))+'</span>'+
                '<span class="rs-n">'+rtEsc(ty)+'</span>'+
-               '<span class="rs-u">'+(c.units||[]).map(function(u){ return '<i>'+rtEsc(u)+'</i>'; }).join("")+'</span>'+
+               '<span class="rs-u">'+(c.units||[]).slice().sort(function(a,b){ return (rtIsApparatus(b)?1:0)-(rtIsApparatus(a)?1:0); })
+                  .map(function(u){ return '<i'+(rtIsApparatus(u)?'':' class="rs-box" title="dispatch response area, not a unit"')+'>'+rtEsc(u)+'</i>'; }).join("")+'</span>'+
                '<span class="rs-a">'+rtEsc(c.address||"")+'</span></div>'; }).join("");
       o.innerHTML='<div class="rs-card" style="--rc:'+color+'" role="dialog" aria-modal="true" aria-label="'+rtEsc(label)+' runs">'+
         '<div class="rs-hd"><span class="rs-dot"></span><span class="rs-ttl">'+rtEsc(label)+'</span>'+
