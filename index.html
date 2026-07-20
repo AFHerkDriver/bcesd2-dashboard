@@ -960,6 +960,27 @@
     return Promise.race([ fetch(u,opt),
       new Promise(function(_,rej){ setTimeout(function(){ rej(new Error("link timeout")); }, ms||9000); }) ]);
   }
+  /* ── INCIDENT IDENTITY ───────────────────────────────────────────────────────────────
+     Active911 re-tones a run as a brand-new alert with a brand-new id, so the feed and the
+     48h log both carry one incident several times over. cad_code is the authoritative case
+     number, but A911 only populates it on a MINORITY of alerts (observed: 9 of 54 rows), so
+     keying on it alone barely helps — a structure fire re-toned 3 times in 13 seconds carried
+     no cad_code at all and counted as three runs.
+     Fall back to address+type inside a 5-minute window (the same rule the worker uses within a
+     single poll). Broadcasts — general alerts, burning recommendations — carry no address and
+     stay distinct on their alert id, which is correct: two separate broadcasts share a type.
+     CALLERS MUST feed rows in ascending time order so the window groups deterministically. ── */
+  function incidentKey(c, groups){
+    if(c && c.cad_code) return "cad:"+c.cad_code;
+    var addr=String((c&&c.address)||"").toLowerCase().replace(/\s+/g," ").trim();
+    if(!addr) return "id:"+((c&&c.id)||"");
+    var key=addr+"|"+String((c&&c.type)||"").toLowerCase().trim();
+    var t=Date.parse((c&&c.started)||"")||0;
+    for(var i=0;i<groups.length;i++)
+      if(groups[i].key===key && Math.abs(groups[i].t-t)<=300000) return groups[i].id;
+    var id="grp:"+groups.length; groups.push({key:key,t:t,id:id}); return id;
+  }
+  function byStarted(a,b){ return (Date.parse((a&&a.started)||"")||0)-(Date.parse((b&&b.started)||"")||0); }
   /* ── BOARD PIN GATE (kiosk). Verify against bc2fd-dash-auth; remember in localStorage.
      Fail policy: previously-verified device + unreachable worker => stay unlocked (display
      availability wins for a read-only wall board); rejected PIN => lock + forget. ── */
@@ -1790,15 +1811,16 @@
         .then(function(j){
           if(!j||!j.ok||!Array.isArray(j.calls)) return;     /* leave last-known tally on transient errors */
           tallyOk=true;
-          var since=tourStart().getTime(), counts={}, typeCounts={}, incident={};
-          j.calls.forEach(function(c){
+          var since=tourStart().getTime(), counts={}, typeCounts={}, incident={}, groups=[];
+          /* Tally INCIDENTS, not alert rows: A911 re-tones a run as a new alert, so one structure
+             fire can sit in the log three times. Sorted ascending so incidentKey's time window
+             groups deterministically. */
+          (j.calls||[]).filter(function(c){
             var ts=c.logged||c.started;
-            if(ts && new Date(ts).getTime()<since) return;
-            /* Active911 re-pages/updates an incident as a NEW alert (new id, SAME cad_code), so the
-               log can hold several rows for one run. Tally INCIDENTS, not alert rows — otherwise a
-               single re-paged rescue reads as two. Rows with no identifier at all still count. */
-            var ikey=c.cad_code||(c.id!=null?("id:"+c.id):null);
-            if(ikey){ if(incident[ikey]) return; incident[ikey]=1; }
+            return !(ts && new Date(ts).getTime()<since);
+          }).sort(byStarted).forEach(function(c){
+            var ikey=incidentKey(c, groups);
+            if(incident[ikey]) return; incident[ikey]=1;
             var sts=stationsFor(c).map(function(s){ return s==="126"?"123":s; });   /* M126 -> Station 123 */
             var seen={};
             sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
@@ -1819,17 +1841,22 @@
        drops the earlier assignment. Rows with no identifier at all are left untouched. */
     function dedupeCalls(list){
       list=list||[];
-      var groups={}, used={}, out=[];
-      var key=function(c){ return c&&(c.cad_code||(c.id!=null?("id:"+c.id):null)); };
+      /* Key every call by INCIDENT (cad_code, else address+type within 5 min), assigning keys in
+         ascending time order so the window is deterministic — then walk the ORIGINAL list so the
+         board's newest-first display order is preserved. */
+      var groups=[], pairs=[];
+      list.slice().sort(byStarted).forEach(function(c){ pairs.push({c:c, k:incidentKey(c, groups)}); });
+      var keyFor=function(c){ for(var i=0;i<pairs.length;i++) if(pairs[i].c===c) return pairs[i].k; return null; };
       var tm=function(r){ return new Date(r.logged||r.started||0).getTime()||0; };
-      list.forEach(function(c){ var k=key(c); if(k) (groups[k]=groups[k]||[]).push(c); });
+      var byKey={}, used={}, out=[];
+      list.forEach(function(c){ var k=keyFor(c); if(k) (byKey[k]=byKey[k]||[]).push(c); });
       list.forEach(function(c){
-        var k=key(c);
+        var k=keyFor(c);
         if(!k){ out.push(c); return; }
         if(used[k]) return; used[k]=1;
-        var rows=groups[k];
+        var rows=byKey[k];
         if(rows.length===1){ out.push(c); return; }
-        var keep=rows.reduce(function(a,b){ return tm(b)>tm(a)?b:a; });
+        var keep=rows.reduce(function(a,b){ return tm(b)>tm(a)?b:a; });   /* newest alert wins */
         var su={},u=[],ss={},s=[];
         rows.forEach(function(r){
           (r.units||[]).forEach(function(x){ if(x&&!su[x]){ su[x]=1; u.push(x); } });

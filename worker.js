@@ -83,6 +83,74 @@ function stationsOf(units) {
   return [...s];
 }
 
+/* Shared PIN gate for every PIN-bearing route, backed by the SAME rl:<ip> failed-attempt counter
+   /verify and /state already use. Previously only those two consulted it, so /calls, /diag, /drones,
+   /dupes and /accesslog were unthrottled brute-force oracles — ten bad PINs to /calls returned 401
+   every time, never 429. A 4-digit PIN is 10,000 candidates.
+
+   Counting FAILURES rather than requests is the important part and is what makes this safe to apply
+   globally: the wall board polls this worker roughly ten times a minute, forever, and those polls
+   SUCCEED — so legitimate traffic can never trip the limit no matter how long the board runs. A
+   guesser's traffic is almost entirely failures, so it trips within seconds. That property is why
+   this needs no Cloudflare Rate Limiting binding to be useful.
+
+   Returns { who } with the parsed PIN record, or { res } — a Response to return immediately. */
+async function pinGate(env, ip, rawPin, json, errMsg) {
+  const rlKey = "rl:" + ip;
+  const fails = parseInt((await env.PINS.get(rlKey)) || "0", 10);
+  const deny = () => json({ ok: false, error: errMsg || "unauthorized" }, 401);
+  if (fails >= 8) return { res: json({ ok: false, error: "rate-limited" }, 429) };
+  const bump = async () => {
+    try { await env.PINS.put(rlKey, String(fails + 1), { expirationTtl: 300 }); } catch (e) { /* never block on the counter */ }
+  };
+  const pin = String(rawPin || "").trim();
+  if (!/^\d{4,8}$/.test(pin)) { await bump(); return { res: deny() }; }
+  const rec = await env.PINS.get("pin:" + pin);
+  if (!rec) { await bump(); return { res: deny() }; }
+  let who = {};
+  try { who = JSON.parse(rec); } catch { /* value not JSON — still a valid PIN */ }
+  return { who };
+}
+
+/* Collapse alert rows into INCIDENTS at read time. Active911 re-tones a run as a brand-new alert
+   with a brand-new id, and only about 1 in 6 alerts carries a cad_code (observed: 9 of 54 rows), so
+   keying the log by cad_code alone cannot fix this — and cannot fix rows already written. Real cases
+   seen live: one structure fire at 1710 Knippa logged THREE times within 13 seconds, a chest pain at
+   23134 Skila Dr twice, both with no cad_code.
+   Group by cad_code when present, else by address+type inside a 5-minute window. Broadcasts (general
+   alerts, burning recommendations) carry no address and are NEVER merged — distinct broadcasts share
+   a generic type. Keeps the earliest `logged` (true first sighting), unions units across the copies,
+   and recomputes stations from the union so no station loses credit for a run it made. */
+function dedupeIncidents(rows) {
+  const ms = (c) => { const t = Date.parse(c.started || ""); return isNaN(t) ? 0 : t; };
+  const seenAt = (c) => { const t = Date.parse(c.logged || c.started || ""); return isNaN(t) ? Infinity : (t || Infinity); };
+  const groups = [];
+  for (const c of [...(rows || [])].sort((a, b) => ms(a) - ms(b))) {
+    if (c.cad_code) {
+      const key = "cad:" + c.cad_code;
+      let g = groups.find(x => x.key === key);
+      if (!g) { g = { key, t: ms(c), rows: [] }; groups.push(g); }
+      g.rows.push(c); continue;
+    }
+    const a = String(c.address || "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (!a) { groups.push({ key: "id:" + c.id, t: ms(c), rows: [c] }); continue; }  /* broadcast: never merged */
+    const key = a + "|" + String(c.type || "").toLowerCase().trim();
+    let g = groups.find(x => x.key === key && Math.abs(x.t - ms(c)) <= 5 * 60 * 1000);
+    if (!g) { g = { key, t: ms(c), rows: [] }; groups.push(g); }
+    g.rows.push(c);
+  }
+  return groups.map(g => {
+    if (g.rows.length === 1) return g.rows[0];
+    const base = g.rows.reduce((a, b) => (seenAt(b) < seenAt(a) ? b : a));   /* earliest first-sighting wins */
+    const seen = {}, units = [];
+    for (const r of g.rows) for (const u of (r.units || [])) {
+      const uk = String(u).toUpperCase();
+      if (u && !seen[uk]) { seen[uk] = 1; units.push(u); }
+    }
+    return { ...base, units, stations: stationsOf(units) };
+  });
+}
+
 /* Control-panel access log — one KV row per control-scope /verify attempt. Key is an inverted timestamp
    ("acc:" + (1e15 - now)) so a prefix list returns newest-first. 30-day TTL. NEVER stores the attempted PIN.
    Logging failures are swallowed so they can never break auth. */
@@ -90,7 +158,8 @@ async function logAccess(env, entry) {
   try {
     const t = Date.now();
     const inv = (1e15 - t).toString().padStart(16, "0");   // ascending key = newest first
-    await env.PINS.put("acc:" + inv, JSON.stringify({ t, ...entry }), { expirationTtl: 2592000 });
+    const suffix = Math.random().toString(36).slice(2, 8); // disambiguate same-ms writes (board saves + logins)
+    await env.PINS.put("acc:" + inv + "-" + suffix, JSON.stringify({ t, ...entry }), { expirationTtl: 2592000 });
   } catch (e) { /* logging must never break auth */ }
 }
 
@@ -118,14 +187,25 @@ export default {
     const url = new URL(req.url);
     const ip  = req.headers.get("CF-Connecting-IP") || "unknown";
 
+    /* Global rate limit covering EVERY route (not just /verify + /state). Uses Cloudflare's native
+       Rate Limiting binding `RL` — atomic, and immune to the KV read-modify-write race. Guarded so the
+       worker still runs if the binding isn't configured yet; add a Rate Limiting binding named RL in the
+       Worker settings to activate. Until then this is a no-op and the per-route KV limiter is the only
+       cover. OPTIONS is already returned above, so preflights aren't counted. */
+    if (env.RL && ip !== "unknown") {
+      try {
+        const { success } = await env.RL.limit({ key: ip });
+        if (!success) return json({ ok: false, error: "rate-limited" }, 429);
+      } catch (e) { /* binding hiccup must not break the feed */ }
+    }
+
     /* ── GET /drones?pin=XXXX — live DroneSense aircraft (Phase 2 auto-detect). Calls the DroneSense
        External API with the server-side X-API-KEY (DRONE_FEED secret) so the key never touches the
        browser, normalizes to one entry per active aircraft with a playable video_url. Empty array =
        nothing flying. No key set -> 501 (feature off; board falls back to manual OpsHub paste). ── */
     if (req.method === "GET" && url.pathname === "/drones") {
-      const pin = String(url.searchParams.get("pin") || "").trim();
-      if (!/^\d{4,8}$/.test(pin) || !(await env.PINS.get("pin:" + pin)))
-        return json({ ok: false, error: "unauthorized" }, 401);
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
       if (!env.DRONE_FEED) return json({ ok: false, error: "not configured" }, 501);
       try {
         const dr = await fetch("https://external.dronesense.com/v1/drones/with-sensors",
@@ -163,9 +243,8 @@ export default {
     /* ── GET /diag?pin=XXXX — open in any browser to see exactly which Active911 step fails.
        Reports statuses and bounded response snippets; never echoes tokens. ── */
     if (req.method === "GET" && url.pathname === "/diag") {
-      const pin = String(url.searchParams.get("pin") || "").trim();
-      if (!/^\d{4,8}$/.test(pin) || !(await env.PINS.get("pin:" + pin)))
-        return json({ ok: false, error: "unauthorized — add ?pin=<station pin>" }, 401);
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json, "unauthorized — add ?pin=<station pin>");
+      if (gate.res) return gate.res;
       const trace = [];
       const snip = async (r) => { try { return (await r.text()).slice(0, 160); } catch { return ""; } };
       /* feed 2 (161-162) exchange-only check, up front so a bad second token is visible, not silent */
@@ -279,9 +358,8 @@ export default {
 
     /* ── GET /calls?pin=XXXX[&station=124] — 48h call log from KV, newest first ── */
     if (req.method === "GET" && url.pathname === "/calls") {
-      const pin = String(url.searchParams.get("pin") || "").trim();
-      if (!/^\d{4,8}$/.test(pin) || !(await env.PINS.get("pin:" + pin)))
-        return json({ ok: false, error: "unauthorized" }, 401);
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
       const stFilter = String(url.searchParams.get("station") || "").trim();
       try {
         const listed = await env.PINS.list({ prefix: "call:", limit: 1000 });
@@ -289,22 +367,24 @@ export default {
         for (const k of listed.keys) {
           const v = await env.PINS.get(k.name);
           if (!v) continue;
-          try {
-            const c = JSON.parse(v);
-            if (!stFilter || (c.stations || []).includes(stFilter)) out.push(c);
-          } catch (e) { /* skip corrupt */ }
+          try { out.push(JSON.parse(v)); } catch (e) { /* skip corrupt */ }
         }
-        out.sort((a, b) => String(b.started).localeCompare(String(a.started)));
-        return json({ ok: true, hours: 48, station: stFilter || "all", count: out.length, calls: out }, 200);
+        /* One row per INCIDENT, not per alert — a re-toned run must not pad the board's tally.
+           Dedupe BEFORE the station filter: merging unions the units, so a copy can contribute a
+           station the filtered row didn't carry on its own. Filtering first would drop it. */
+        const merged = dedupeIncidents(out)
+          .filter(c => !stFilter || (c.stations || []).includes(stFilter));
+        merged.sort((a, b) => String(b.started).localeCompare(String(a.started)));
+        return json({ ok: true, hours: 48, station: stFilter || "all", count: merged.length,
+                      alerts: out.length, calls: merged }, 200);
       } catch (e) {
         return json({ ok: false, error: "log read error" }, 502);
       }
     }
 
     if (req.method === "GET" && url.pathname === "/dupes") {
-      const pin = String(url.searchParams.get("pin") || "").trim();
-      if (!/^\d{4,8}$/.test(pin) || !(await env.PINS.get("pin:" + pin)))
-        return json({ ok: false, error: "unauthorized — add ?pin=<station pin>" }, 401);
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json, "unauthorized — add ?pin=<station pin>");
+      if (gate.res) return gate.res;
       try {
         const listed = await env.PINS.list({ prefix: "call:", limit: 1000 });
         const out = [];
@@ -342,12 +422,9 @@ export default {
     }
 
     if (req.method === "GET" && url.pathname === "/accesslog") {
-      const pin = url.searchParams.get("pin") || "";
-      if (!/^\d{4,8}$/.test(pin)) return json({ ok:false, error:"bad pin" }, 401);
-      const rec = await env.PINS.get("pin:" + pin);
-      if (!rec) return json({ ok:false, error:"bad pin" }, 401);
-      let who = {}; try { who = JSON.parse(rec); } catch {}
-      if ((who.tier || "") !== "admin") return json({ ok:false, error:"admin only" }, 403);
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json, "bad pin");
+      if (gate.res) return gate.res;
+      if ((gate.who.tier || "") !== "admin") return json({ ok:false, error:"admin only" }, 403);
       try {
         const lim = Math.min(200, Math.max(1, parseInt(url.searchParams.get("n") || "50", 10)));
         const listed = await env.PINS.list({ prefix: "acc:", limit: lim });   // newest first
@@ -615,17 +692,30 @@ export default {
            Log failures never break the live feed. */
         for (const c of calls) {
           try {
-            const k = "call:" + c.id;
-            const prev = c.id ? await env.PINS.get(k) : null;
+            /* Key the log by CAD case number when present, so a re-tone that surfaces long after the
+               original aged out of the 15-min window still writes into the SAME row — cross-poll dedup the
+               in-poll address+type merge can't reach. Broadcasts (general alerts, burning recs) carry no
+               cad_code and fall through to id, staying distinct. cad_code can be issued a few seconds AFTER
+               first dispatch, so a call may briefly log under its id; once cad_code appears we migrate by
+               deleting that earlier id-keyed row, so the transition never leaves a stray duplicate. */
+            const k = "call:" + (c.cad_code || c.id);
+            let prev = await env.PINS.get(k);
+            /* Migration read: a call first sighted before its cad_code was issued is already logged
+               under its ALERT ID. Inherit that row, or the key change resets `logged` to now and drops
+               accumulated units — and `logged` is what the board trusts for call age and the 0700 tour
+               boundary, so a 06:55 call migrating at 07:02 would jump into the next tour. */
+            if (!prev && c.cad_code && c.id) prev = await env.PINS.get("call:" + c.id);
             let origLogged = "", prevUnits = [];
             if (prev) { try { const pj = JSON.parse(prev); origLogged = pj.logged || ""; prevUnits = Array.isArray(pj.units) ? pj.units : []; } catch (e) {} }
             c.logged = origLogged || new Date().toISOString();
             const seenU = {}, merged = [];
             for (const u of prevUnits.concat(c.units || [])) { const key = String(u).toUpperCase(); if (u && !seenU[key]) { seenU[key] = 1; merged.push(u); } }
             c.units = merged;
-            if (c.id)
+            if (c.id || c.cad_code) {
               await env.PINS.put(k, JSON.stringify({ ...c, stations: stationsOf(c.units), logged: c.logged }),
                                  { expirationTtl: 48 * 3600 });
+              if (c.cad_code && c.id && ("call:" + c.id) !== k) { try { await env.PINS.delete("call:" + c.id); } catch (e) {} }
+            }
           } catch (e) { c.logged = c.logged || new Date().toISOString(); }
         }
         /* remove the stale log rows for absorbed duplicate ids so the tally isn't padded by copies */
