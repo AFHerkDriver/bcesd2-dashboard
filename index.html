@@ -331,6 +331,36 @@
      idle most of the time, so it carries this tour's runs instead of showing an empty sky. */
   .drone-tile.dt-district .drone-video{display:none}
   .drone-tile.dt-district .drone-map{flex:1 1 100%}
+  /* ── PHASE 3 · DRONE TAKEOVER ─────────────────────────────────────────────────────────
+     The tile becomes the whole wall through position:fixed, so nothing in the grid moves.
+     That is not a style preference: the feeds are IFRAMES, and reparenting an iframe reloads
+     it — a layout that relocated them would restart every stream on entry AND exit. Fixed
+     positioning grows the box around them while they stay put in the DOM.
+     Opt-in only; engages when the officer has switched Drone Takeover on. */
+  .drone-tile.dt-takeover{position:fixed;inset:0;z-index:1500;margin:0;padding:0;gap:0;
+    border:none;border-radius:0;background:var(--bg);display:flex;flex-direction:column}
+  .drone-tile.dt-takeover > .head{display:none}            /* the strip stands in for the tile header */
+  .drone-tile.dt-takeover .tk-strip{display:flex}
+  .drone-tile.dt-takeover .drone-split{flex:1 1 auto;min-height:0;gap:5px;padding:5px}
+  .drone-tile.dt-takeover .drone-video{display:flex;flex:2 1 0}   /* feeds: two thirds */
+  .drone-tile.dt-takeover .drone-map{flex:1 1 0}                  /* map: one third */
+  /* 3-4 aircraft tile 2x2 — each cell lands near 16:9, which a 2-up stack cannot manage */
+  .drone-tile.dt-takeover .dro-frames[data-n="3"],
+  .drone-tile.dt-takeover .dro-frames[data-n="4"]{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+  /* Strip — the board never fully disappears. These are the things that must not be missed
+     while everyone in the bay is watching video. */
+  /* min-height, not content height: sized to content this came out 42px on a 1080p wall, which is
+     unreadable from across the bay. Size is this board's accessibility lever, so the strip gets a
+     floor and type scaled for distance. */
+  .tk-strip{display:none;flex:0 0 auto;min-height:9%;align-items:stretch;gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+  .tk-cell{background:var(--panel);padding:8px 16px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0}
+  .tk-cell .tkl{font-size:clamp(9px,.95vmin,15px);letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+  .tk-cell .tkv{font-size:clamp(15px,1.9vmin,30px);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tk-nws{flex:1.5 1 0} .tk-div{flex:1 1 0} .tk-calls{flex:1.6 1 0}
+  .tk-nws .tkv{color:var(--amber)}
+  .tk-div .tkv{color:var(--red);font-weight:600}
+  .tk-calls .tkv{color:var(--text)}
+  .tk-cell[hidden]{display:none}   /* diversion cell costs nothing on a day with none */
   .call-pin{filter:drop-shadow(0 0 3px rgba(0,0,0,.85))}   /* keeps a pin legible over bright satellite imagery */
   /* Fresh call: inverse flash — the dark outline goes white and thick, which reads at wall distance
      without moving anything. FINITE iteration count so it stops itself; a flash left running all
@@ -946,6 +976,13 @@
            Overlay show/hide + 30s grace handled by the drone module. -->
       <div class="tile drone-tile">
         <div class="head"><span class="name" id="droneTileName">District Map</span><span class="stamp src" id="droneStamp"></span></div>
+        <!-- Takeover strip — hidden until the tile goes full-wall. Mirrors what the board is already
+             showing, so it cannot drift from the tiles it stands in for. -->
+        <div class="tk-strip" id="tkStrip">
+          <div class="tk-cell tk-nws"><span class="tkl">NWS</span><span class="tkv" id="tkNws">—</span></div>
+          <div class="tk-cell tk-div" id="tkDivCell" hidden><span class="tkl">Diversion</span><span class="tkv" id="tkDiv">—</span></div>
+          <div class="tk-cell tk-calls"><span class="tkl">Active calls</span><span class="tkv" id="tkCalls">—</span></div>
+        </div>
         <div class="drone-split">
           <div class="drone-video">
             <div class="drone-idle" id="droneIdle"><img src="drone-idle.png" alt="No active drone feed" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="idle-fallback" hidden>NO ACTIVE FEED</span></div>
@@ -1081,6 +1118,12 @@
     /* The tile swaps between a full-width district map and the drone split, so Leaflet has to be
        told its container changed — it renders at the wrong size otherwise, the classic symptom
        being grey tiles or a map stuck at the old width. */
+    /* The takeover resizes the map container dramatically (a third of the wall vs a tile pane).
+       Leaflet renders at the old size until told otherwise — grey tiles, wrong framing. */
+    window.BC2FD_MAP_RESIZE=function(){
+      try{ map.invalidateSize(); }catch(e){}
+      setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} },280);   /* again once the CSS settles */
+    };
     window.BC2FD_MAP_MODE=function(district){
       pinsOn=!!district;
       if(!pinsOn && focusT){ clearTimeout(focusT); focusT=null; }   /* aircraft up: drop any pending return */
@@ -1791,6 +1834,7 @@
     }
     function buildFrames(streams, bannerOnly){
       var fr=document.getElementById("droFrames"); if(!fr) return;
+      fr.setAttribute("data-n", String(streams.length));   /* 3-4 feeds tile 2x2 in takeover */
       fr.innerHTML = streams.map(function(s){
         if(bannerOnly) return '<div class="dro-link"><div class="big">DRONE LIVE'+(s.label?(' \u2014 '+escA(s.label)):'')+'</div>'+
                               '<div class="url">'+escA(s.url)+'</div></div>';
@@ -1810,6 +1854,57 @@
     /* IDLE = district map, full tile. ACTIVE = the drone split. Driven by the same signal that
        shows the video overlay (including its 30s end-of-flight grace), so the layout can never
        disagree with what is actually on screen. */
+    /* ── TAKEOVER ────────────────────────────────────────────────────────────────────────
+       Engages only when the officer has switched it on AND an aircraft is up. Drops back to
+       the normal tile 15 minutes after the FRESHEST feed — a second aircraft launching restarts
+       that clock, since a second bird means the incident is still developing. Landing and a dead
+       relay both fall through the existing paths, so a broken feed never owns the whole wall. */
+    var takeoverAllowed=false, tkSeen={}, tkTimer=null, tkTimedOut=false, TK_HOLD=15*60*1000;
+    function tkOn(){ var t=document.querySelector(".drone-tile"); return !!(t&&t.classList.contains("dt-takeover")); }
+    function tkApply(){
+      var tile=document.querySelector(".drone-tile"); if(!tile) return;
+      var want = takeoverAllowed && Object.keys(tkSeen).length>0 && !tkTimedOut;
+      if(tile.classList.contains("dt-takeover")===want) return;
+      tile.classList.toggle("dt-takeover", want);
+      if(want) tkSync();
+      try{ if(window.BC2FD_MAP_RESIZE) window.BC2FD_MAP_RESIZE(); }catch(e){}
+    }
+    function tkTrack(streams){
+      var keys={}, fresh=false;
+      (streams||[]).forEach(function(s){ keys[s.url]=1; if(!tkSeen[s.url]) fresh=true; });
+      tkSeen=keys;
+      if(fresh){                                    /* newest feed restarts the 15-minute clock */
+        tkTimedOut=false;
+        if(tkTimer) clearTimeout(tkTimer);
+        tkTimer=setTimeout(function(){ tkTimer=null; tkTimedOut=true; tkApply(); }, TK_HOLD);
+      }
+      tkApply();
+    }
+    function tkClear(){
+      tkSeen={}; tkTimedOut=false;
+      if(tkTimer){ clearTimeout(tkTimer); tkTimer=null; }
+      tkApply();
+    }
+    /* The strip mirrors tiles that are already rendered rather than re-deriving their data, so it
+       can never disagree with the board it is standing in for. */
+    function tkTxt(el){ return el?el.textContent.replace(/\s+/g," ").trim():""; }
+    function tkSync(){
+      if(!tkOn()) return;
+      var ev=document.querySelector("#alertLane .al-band .al-ev") || document.querySelector("#heatBand .al-band .al-ev");
+      var band=ev?ev.closest(".al-band"):null, sub=band?band.querySelector(".al-sub"):null;
+      var nws=ev ? (tkTxt(ev)+(sub?(" · "+tkTxt(sub)):"")) : "No active alerts";
+      var n=document.getElementById("tkNws"); if(n) n.textContent=nws;
+      var hb=document.getElementById("hospBody");
+      var diverting = !!(hb && hb.classList.contains("div"));      /* .ok = all open, .err = unknown */
+      var dc=document.getElementById("tkDivCell"), dv=document.getElementById("tkDiv");
+      if(dc) dc.hidden=!diverting;                                 /* silent when nothing is diverting */
+      if(diverting && dv) dv.textContent=tkTxt(hb).slice(0,160);
+      var cb=document.getElementById("callsBody");
+      var rows=cb?cb.querySelectorAll(".call-e"):[];
+      var c=document.getElementById("tkCalls");
+      if(c) c.textContent = rows.length ? (rows.length+" active · "+tkTxt(rows[0]).slice(0,110)) : (cb?tkTxt(cb).slice(0,110):"—");
+    }
+    setInterval(function(){ try{ tkSync(); }catch(e){} }, 5000);   /* cheap; only does work while engaged */
     var dtMode=null;
     function droneLayout(active){
       if(dtMode===active) return; dtMode=active;
@@ -1827,7 +1922,7 @@
         if(graceT){ clearTimeout(graceT); graceT=null; }
         setEnding(false);
         if(key!==lastKey) buildFrames(streams, bannerOnly);   /* rebuild only on change: no reload flicker */
-        ov.hidden=false; droneLayout(true);
+        ov.hidden=false; droneLayout(true); tkTrack(streams);
         if(badge){ badge.hidden=false; badge.classList.add("live"); badge.href=streams[0].url; }
         lastKey=key; lastStreams=streams; lastBannerOnly=bannerOnly;
       } else {
@@ -1836,8 +1931,8 @@
           setEnding(true);
           graceT=setTimeout(function(){ graceT=null; lastKey="";
             ov.hidden=true; var fr=document.getElementById("droFrames"); if(fr) fr.innerHTML=""; setEnding(false);
-            droneLayout(false); }, 30000);                    /* only revert to the district map once the grace has actually expired */
-        } else if(!lastKey){ ov.hidden=true; droneLayout(false); }
+            droneLayout(false); tkClear(); }, 30000);          /* only revert to the district map once the grace has actually expired */
+        } else if(!lastKey){ ov.hidden=true; droneLayout(false); tkClear(); }
       }
     }
     /* Two sources feed the overlay: officer-pasted OpsHub links (board state) and auto-detected
@@ -1849,6 +1944,7 @@
       if(!ok) return;                                         /* state fetch failed: hold current overlay */
       var d=st&&st.drone;
       officerStreams=activeStreams(st); bannerPref=!!(d&&d.bannerOnly);
+      takeoverAllowed=!!(d&&d.takeover);   /* opt-in; off means the wall behaves exactly as it does today */
       recompute();
     });
     /* ── DroneSense auto-detect (Phase 2): poll the worker /drones relay every 15s. Active aircraft
@@ -1858,6 +1954,10 @@
        Banner Only toggle is honored, so if DroneSense refuses framing it degrades to callsign + link. ── */
     (function(){
       var DR_URL="https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/drones", POLL=15000;
+      /* Was hard-capped at 2, matching the two aircraft in service. DFR takes the fleet to nine with
+         perhaps four up at once, and the takeover tiles 3-4 in a 2x2. Raising the cap here is the
+         whole change — the layout already follows the feed count. */
+      var MAX_FEEDS=4;
       function setAuto(next){
         var key=next.map(function(s){return s.url;}).join("|"), prev=autoStreams.map(function(s){return s.url;}).join("|");
         if(key!==prev){ autoStreams=next; recompute(); }
@@ -1904,7 +2004,7 @@
             drFails=0; drDown(false);                          /* verified answer: empty sky is now TRUSTED, not assumed */
             var next=j.drones
               .filter(function(d){ return d && typeof d.video_url==="string" && /^https:\/\//i.test(d.video_url); })
-              .slice(0,2)
+              .slice(0,MAX_FEEDS)
               .map(function(d){ return { url:d.video_url, label:(d.callSign||d.model||"UAS"), mission:(d.mission||"") }; });
             setAuto(next);                                     /* authoritative (incl. empty = drone landed) */
             if(window.BC2FD_DRONE_MAP) window.BC2FD_DRONE_MAP(j.drones);   /* map plots every aircraft with a position */

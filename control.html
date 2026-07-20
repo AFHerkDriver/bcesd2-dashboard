@@ -361,6 +361,13 @@
           <button data-v="on">On</button><button data-v="off">Off</button>
         </div>
       </div>
+      <div class="field">
+        <label>Drone Takeover</label>
+        <div class="hint">When a drone launches, the feed takes the <b>whole wall</b> &mdash; map on the right, and a strip across the top keeping NWS alerts, any active diversions, and active calls in view. Drops back to the normal tile 15 minutes after the newest feed, or when the aircraft lands. <b>Off</b> keeps today&rsquo;s behavior: the feed stays in its tile and the wall is unchanged.</div>
+        <div class="seg" id="segTakeover">
+          <button data-v="on">On</button><button data-v="off">Off</button>
+        </div>
+      </div>
     </div>
 
     <!-- Access Log — admin PIN only; who opened (or tried to open) this control panel -->
@@ -539,7 +546,7 @@ function defaults(){
   return {
     med:{ mode:'default', custom:{name:'',phone:''}, end:'' },
     hospitals:{},   /* id -> diversion status; absent = OPEN */
-    drone:{ streams:[{url:'',label:''},{url:'',label:''}], bannerOnly:false },   /* OpsHub share links; board pops overlay */
+    drone:{ streams:[{url:'',label:''},{url:'',label:''}], bannerOnly:false, takeover:false },   /* OpsHub share links; board pops overlay. takeover: whole-wall drone view, OFF by default — a behaviour that blanks the board is opt-in, never a surprise */
     fire:{ redFlag:'auto' },
     flood:{ mode:'auto' },
     strikes:{ west:{active:false,callsign:'',phone:''}, east:{active:false,callsign:'',phone:''} },
@@ -669,6 +676,8 @@ function hydrate(){
   while(state.drone.streams.length<2) state.drone.streams.push({url:'',label:''});
   if(!state.display) state.display={pixelShift:true};                       /* older saved state has no display block */
   segSet('segPxShift', state.display.pixelShift===false?'off':'on');
+  if(typeof state.drone.takeover!=='boolean') state.drone.takeover=false;   /* saved state predating takeover defaults OFF */
+  segSet('segTakeover', state.drone.takeover?'on':'off');
 
   segSet('segMed', state.med.mode);
   $('medName').value=state.med.custom.name||''; $('medPhone').value=state.med.custom.phone||'';
@@ -720,6 +729,7 @@ segClick('segWest', function(v){ state.strikes.west.active=(v==='on'); state.tea
 segClick('segEast', function(v){ state.strikes.east.active=(v==='on'); state.teams.east=state.strikes.east.active; });
 segClick('segFlood', function(v){ state.flood.mode=v; if(v==='on') state.fire.redFlag='off'; });
 segClick('segPxShift', function(v){ if(!state.display) state.display={pixelShift:true}; state.display.pixelShift=(v==='on'); });
+segClick('segTakeover', function(v){ if(!state.drone) state.drone={streams:[],bannerOnly:false}; state.drone.takeover=(v==='on'); });
 $('stCsWest').addEventListener('input', function(){ state.strikes.west.callsign=this.value; });
 $('stPhWest').addEventListener('input', function(){ state.strikes.west.phone=this.value; });
 $('stCsEast').addEventListener('input', function(){ state.strikes.east.callsign=this.value; });
@@ -838,6 +848,7 @@ function describeChange(a,b){
   if(b.fire && (a.fire&&a.fire.redFlag)!==b.fire.redFlag) ch.push('Red flag → '+b.fire.redFlag);
   if(b.flood && (a.flood&&a.flood.mode)!==b.flood.mode) ch.push('Flood ops → '+b.flood.mode);
   if(!!(a.display&&a.display.pixelShift)!==!!(b.display&&b.display.pixelShift)) ch.push('Pixel shift '+((b.display&&b.display.pixelShift)?'ON':'OFF'));
+  if(!!(a.drone&&a.drone.takeover)!==!!(b.drone&&b.drone.takeover)) ch.push('Drone takeover '+((b.drone&&b.drone.takeover)?'ON':'OFF'));
   if(JSON.stringify(a.announcements||[])!==JSON.stringify(b.announcements||[])){ var a1=(a.announcements||[]).length, b1=(b.announcements||[]).length; ch.push(b1>a1?'Announcement added':b1<a1?'Announcement removed':'Announcement edited'); }
   if(JSON.stringify(a.calendar||[])!==JSON.stringify(b.calendar||[])){ var a2=(a.calendar||[]).length, b2=(b.calendar||[]).length; ch.push(b2>a2?'Shift event added':b2<a2?'Shift event removed':'Shift event edited'); }
   if(JSON.stringify(a.writeins||[])!==JSON.stringify(b.writeins||[])){ var a3=(a.writeins||[]).length, b3=(b.writeins||[]).length; ch.push(b3>a3?'Ad-hoc unit added':b3<a3?'Ad-hoc unit removed':'Ad-hoc unit edited'); }
