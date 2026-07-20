@@ -1229,10 +1229,38 @@
     if(document.readyState!=="loading") init(); else document.addEventListener("DOMContentLoaded",init);
   })();
 
+  /* ── CENTRAL TIME LOCK ────────────────────────────────────────────────────────────────
+     Every date on this board means SAN ANTONIO time: the 0700 tour boundary, the A/B/C shift,
+     the tally window, the clock. Reading the DEVICE clock breaks all of it the moment the board
+     is opened from another timezone — an officer on the East Coast rolls into the next tour an
+     hour early and sees the wrong shift letter over a wrong tally. The wall TV is local so it
+     never showed the fault; a phone that travels does.
+
+     America/Chicago, NOT a fixed UTC-6: "CST" literally means winter time, and hard-coding it
+     would put the board an hour off from March to November. The IANA zone handles CST/CDT. ── */
+  var CT_ZONE="America/Chicago";
+  /* A Date whose LOCAL getters read as Central wall-clock — for calendar/hour decisions. */
+  function ctNow(){
+    try{ return new Date(new Date().toLocaleString("en-US",{timeZone:CT_ZONE})); }
+    catch(e){ return new Date(); }                      /* no Intl support -> device time beats nothing */
+  }
+  /* Real epoch ms for a Central wall-clock date/time. new Date(y,m,d,h) would build that moment in
+     the DEVICE zone, which is precisely the bug; this corrects by the zone's offset at that instant,
+     so it stays right across DST too. */
+  function ctEpoch(y,mo,d,hh,mm){
+    var guess=Date.UTC(y,mo,d,hh||0,mm||0,0,0);
+    try{
+      var t=new Date(guess);
+      var asCT=new Date(t.toLocaleString("en-US",{timeZone:CT_ZONE}));
+      var asUTC=new Date(t.toLocaleString("en-US",{timeZone:"UTC"}));
+      return guess+(asUTC.getTime()-asCT.getTime());
+    }catch(e){ return new Date(y,mo,d,hh||0,mm||0,0,0).getTime(); }
+  }
+  window.CT_ZONE=CT_ZONE; window.ctNow=ctNow; window.ctEpoch=ctEpoch;
   function tick(){
-    var n=new Date(),p=x=>String(x).padStart(2,'0');
+    var n=ctNow(),p=x=>String(x).padStart(2,'0');
     document.getElementById('clock').textContent=p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());
-    document.getElementById('date').textContent=n.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    document.getElementById('date').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric',timeZone:CT_ZONE});
   }
   tick();setInterval(tick,1000);
 
@@ -1301,7 +1329,7 @@
     return '<svg class="astro-ic" viewBox="0 0 48 48"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="#1c232e" stroke="#3a4552" stroke-width="1"/>'+
            '<path d="'+d+'" fill="#DCE3EA"/></svg>';
   }
-  function hm24(d){ try{ return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return "\u2014"; } }
+  function hm24(d){ try{ return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}); }catch(e){ return "\u2014"; } }
   function renderAstro(){
     try{
       var now=new Date(), s=sunTimes(now,WX_LAT,WX_LNG), m=moonInfo(now);
@@ -1387,7 +1415,7 @@
     document.getElementById("wxHours").innerHTML=html;
     try{ FireWx.hours(fhrs); }catch(e){}
     var fl=document.getElementById("wxFlag"), st=document.getElementById("wxStamp");
-    var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false});
+    var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE});
     if(!flag){fl.hidden=true; st.textContent="NWS \u00b7 5-sta worst-case \u00b7 "+tm;}
     else{fl.hidden=false; fl.textContent=flag; st.textContent=/SAMPLE/.test(flag)?"NWS unavailable":("NWS \u00b7 "+tm);}}
   /* \u2500\u2500 Excessive-heat advisory \u2014 a banner in the NWS Alerts stack, styled like the alert bands.
@@ -1523,7 +1551,7 @@
     function todayShift(){
       /* DST-safe: step back to the 0700 that started this tour using LOCAL calendar fields.
          Subtracting a fixed 7h flips an hour early on fall-back and an hour late on spring-forward. */
-      var _n = new Date(), s = new Date(_n.getFullYear(), _n.getMonth(), _n.getDate());
+      var _n = ctNow(), s = new Date(_n.getFullYear(), _n.getMonth(), _n.getDate());   /* Central wall-clock, not the device's */
       if (_n.getHours() < 7) s.setDate(s.getDate() - 1);
       var d = Math.floor((Date.UTC(s.getFullYear(), s.getMonth(), s.getDate()) - ANCHOR) / 86400000);
       return PATTERN[((d % 6) + 6) % 6];
@@ -1632,7 +1660,7 @@
   (function(){
     var hospRot=null, lastState, lastSetAt;
     function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-    function hhmm(iso){ try{ return new Date(iso).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return ""; } }
+    function hhmm(iso){ try{ return new Date(iso).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}); }catch(e){ return ""; } }
     function render(state, setAt){
       lastState=state; lastSetAt=setAt;
       if(hospRot){ hospRot(); hospRot=null; }               /* tear down any running rotation */
@@ -1712,7 +1740,7 @@
     var DEFAULT_MED={ name:"Dr. Katherine Raczek", role:"Medical Director", phone:"(210) 527-6593" };
     var ALT_MED={ name:"Asst Chief Mark Montgomery", role:"Alternate (backup)", phone:"(210) 268-7591" };
     function esc(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-    function fmtEnd(iso){ try{ var d=new Date(iso); return d.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return ""; } }
+    function fmtEnd(iso){ try{ var d=new Date(iso); return d.toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:CT_ZONE})+" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}); }catch(e){ return ""; } }
     function effective(med){
       if(!med||med.mode==="default") return {who:DEFAULT_MED, note:""};
       if(med.end && new Date() > new Date(med.end)) return {who:DEFAULT_MED, note:"auto-reverted"};   /* window passed */
@@ -1858,7 +1886,7 @@
         var e=document.getElementById("droneErr"); if(e) e.hidden=!(down && covered);
         var s=document.getElementById("droneStamp");
         if(s) s.textContent = down ? "relay unreachable"
-          : ("UAS relay · " + new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}));
+          : ("UAS relay · " + new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}));
       }
       function drFail(){ if(++drFails>=2) drDown(true); }
       function load(){
@@ -1972,7 +2000,7 @@
       rot=autoRotate(body, rows, pg, 7000);
     }
     function dropTime(ts){ try{ if(!ts) return ""; var d=new Date(ts); if(isNaN(d.getTime())) return "";
-      return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return ""; } }
+      return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}); }catch(e){ return ""; } }
     /* strobe engine: every 500ms purge expired fresh flags (survives page rotation re-inserts,
        since the class+expiry live in the HTML), then toggle the inverse state while any remain */
     setInterval(function(){
@@ -1996,11 +2024,14 @@
     var TALLY_ANCHOR=Date.UTC(2026,0,1), STATIONS=["121","122","123","124","125","161","162"];
     function tourStart(){
       /* DST-safe: step back to the 0700 that started this tour using LOCAL calendar fields. */
-      var _n=new Date(), s=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate());
+      var _n=ctNow(), s=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate());   /* Central wall-clock */
       if(_n.getHours()<7) s.setDate(s.getDate()-1);
       var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-TALLY_ANCHOR)/86400000);
       var day1=((d%6)+6)%6%2===0;                            /* even index in AABBCC = day 1 of the pair */
-      return new Date(s.getFullYear(),s.getMonth(),s.getDate()-(day1?0:1),7,0,0,0);
+      s.setDate(s.getDate()-(day1?0:1));
+      /* ctEpoch, not new Date(...): the boundary is 0700 in SAN ANTONIO. Building it with the device's
+         zone is what let an East-Coast phone start the tour an hour early and mis-slice the tally. */
+      return new Date(ctEpoch(s.getFullYear(),s.getMonth(),s.getDate(),7,0));
     }
     function paintTally(counts){
       var row=document.getElementById("tallyRow"); if(!row) return;
@@ -2079,11 +2110,11 @@
       order.sort(function(a,b){ return work[b]-work[a] || a.localeCompare(b); });
       var max=order.length?work[order[0]]:1;
       var flat=order.every(function(u){ return work[u]===max; });   /* every rig tied -> bars say nothing */
-      var hhmm=function(c){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); }catch(e){ return "—"; } };
-      var dow=function(c){ try{ return new Date(c.logged||c.started).toLocaleDateString([],{weekday:"short"}); }catch(e){ return ""; } };
+      var hhmm=function(c){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZone:CT_ZONE}); }catch(e){ return "—"; } };
+      var dow=function(c){ try{ return new Date(c.logged||c.started).toLocaleDateString([],{weekday:"short",timeZone:CT_ZONE}); }catch(e){ return ""; } };
       var since=RT_SINCE?new Date(RT_SINCE):null;
-      var win=since?("this tour · since "+since.toLocaleDateString([],{weekday:"short"})+" "+
-              since.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",hour12:false})):"this tour";
+      var win=since?("this tour · since "+since.toLocaleDateString([],{weekday:"short",timeZone:CT_ZONE})+" "+
+              since.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE})):"this tour";
       var wk=order.map(function(u){
         return '<div class="rs-wk'+(flat?" rs-flat":"")+'"><span class="rs-wu">'+rtEsc(u)+'</span>'+
                (flat?'':'<span class="rs-wbar"><span style="width:'+Math.round(work[u]/max*100)+'%"></span></span>')+
@@ -2217,7 +2248,7 @@
                 RT_RUNS[k].forEach(function(c){
                   if(c.lat==null||c.lng==null) return;
                   pins.push({lat:c.lat, lng:c.lng, color:rtColor(meta[1]), label:meta[0]+" · "+String(c.type||"").replace(/^[A-Z]+\s*-\s*/i,""),
-                             time:(function(){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); }catch(e){ return ""; } })()});
+                             time:(function(){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZone:CT_ZONE}); }catch(e){ return ""; } })()});
                 });
               });
               window.BC2FD_CALL_PINS(pins);
@@ -2286,7 +2317,7 @@
         if(window.BC2FD_FOCUS_CALL) window.BC2FD_FOCUS_CALL({
           lat:c.lat, lng:c.lng, color:rtColor(meta[1]),
           label:meta[0]+" · "+String(c.type||"").replace(/^[A-Z]+\s*-\s*/i,""),
-          time:(function(){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); }catch(e){ return ""; } })()
+          time:(function(){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZone:CT_ZONE}); }catch(e){ return ""; } })()
         });
       }catch(e){}
     }
@@ -2391,12 +2422,12 @@
     var TOUR_ANCHOR=Date.UTC(2026,0,1);                     /* same anchor/flip as the header shift chip */
     function tourHorizon(){                                  /* Date: this tour's end (0700 after day 2) */
       /* DST-safe: step back to the 0700 that started this tour using LOCAL calendar fields. */
-      var _n=new Date(), s=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate());
+      var _n=ctNow(), s=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate());   /* Central wall-clock */
       if(_n.getHours()<7) s.setDate(s.getDate()-1);
       var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-TOUR_ANCHOR)/86400000);
       var day1=((d%6)+6)%6%2===0;                            /* even index in AABBCC = first day of the pair */
-      var end=new Date(s.getFullYear(),s.getMonth(),s.getDate()+(day1?2:1),7,0,0,0);
-      return end;
+      s.setDate(s.getDate()+(day1?2:1));
+      return new Date(ctEpoch(s.getFullYear(),s.getMonth(),s.getDate(),7,0));   /* 0700 in San Antonio, not on this device */
     }
     function resolve(e){                                    /* -> {startDT,endDT,sortKey,valid} */
       var today=new Date(); today.setHours(0,0,0,0);
@@ -2742,9 +2773,9 @@
     function band(a){
       var m=alClass(a.event, a.damageThreat);
       var label=alEsc(a.event)+(m.tag?(" \u2014 "+m.tag):"");
-      var until=a.until?("until "+new Date(a.until).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false})):"until further notice";
+      var until=a.until?("until "+new Date(a.until).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE})):"until further notice";
       var area=a.area?(alEsc(a.area)+" \u00b7 "):"";
-      var t=a.sent?new Date(a.sent):null, src="NWS"+(t&&!isNaN(t.getTime())?(" \u00b7 "+t.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false})):"");
+      var t=a.sent?new Date(a.sent):null, src="NWS"+(t&&!isNaN(t.getTime())?(" \u00b7 "+t.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE})):"");
       return '<div class="al-band '+m.cls+'"><span class="al-icon">'+m.icon+'</span><div class="al-body"><div class="al-ev">'+label+'</div><div class="al-sub">'+area+until+'</div></div><span class="al-src">'+src+'</span></div>';
     }
     var PER=2;                                             /* vertical budget: 2 bands per page keeps the quad stable */
