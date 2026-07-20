@@ -283,6 +283,7 @@
   .cx2.open .cxs{color:var(--green)}                    /* color-code the status word only */
   .cx2.bad .cxs{color:var(--red);font-weight:700}
   .cx2.offline .cxs{color:#8B949E}
+  .cx2.unknown .cxs{color:var(--dim)}                   /* status not reported — gray, never green */
   .cx2.none{color:var(--dim)}
 
   /* ── Fire-weather hourly pills: RH · wind · temp per hour, tier-colored ── */
@@ -524,6 +525,8 @@
   .al-band.al-heat-caution .al-ev{color:#F59E0B}
   .al-band.al-heat-danger{border-color:rgba(255,107,53,.6);background:linear-gradient(135deg,rgba(255,107,53,.24),rgba(200,40,0,.13));animation:pulse 3s ease-in-out infinite}
   .al-band.al-heat-danger .al-ev{color:#FF6B35}
+  .al-band.al-link{border-color:rgba(255,59,48,.6);background:linear-gradient(135deg,rgba(255,59,48,.22),rgba(140,0,0,.12));animation:pulse 3s ease-in-out infinite}
+  .al-band.al-link .al-ev{color:var(--red)}
   .al-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
   .al-more{font-size:clamp(10px,.9vw,14px);color:var(--dim);text-align:center;letter-spacing:1px}
   /* Shift calendar — bottom strip (officer-set) */
@@ -809,6 +812,7 @@
           <div class="head"><span class="name">National Weather Service Alerts</span><span class="stamp src" id="fwStamp"></span></div>
           <div class="alert-lane" id="alertLane"></div>
           <div class="heat-band" id="heatBand" hidden></div>
+          <div class="heat-band" id="linkBand" hidden></div>
           <div class="fw-body" id="fwBody"></div>
           <div class="floodband" id="floodBand" hidden>
             <div class="fb-head"><span class="fb-stamp src" id="fbStamp"></span></div>
@@ -945,6 +949,17 @@
 </script>
 
 <script>
+  /* ── LINK GUARD ─────────────────────────────────────────────────────────────────────
+     A HUNG socket is the failure mode that defeats every fail-loud state in this file.
+     On a blackholed link (captive portal, dead uplink that still accepts connections) the
+     browser holds the request for minutes: .catch never fires, the failure counters never
+     trip, and every panel keeps presenting frozen data as if it were live. Bare fetch() is
+     therefore unsafe here — every data feed goes through bcFetch so a dead link surfaces in
+     seconds and the panels' existing error states can actually run. ── */
+  function bcFetch(u,opt,ms){
+    return Promise.race([ fetch(u,opt),
+      new Promise(function(_,rej){ setTimeout(function(){ rej(new Error("link timeout")); }, ms||9000); }) ]);
+  }
   /* ── BOARD PIN GATE (kiosk). Verify against bc2fd-dash-auth; remember in localStorage.
      Fail policy: previously-verified device + unreachable worker => stay unlocked (display
      availability wins for a read-only wall board); rejected PIN => lock + forget. ── */
@@ -957,7 +972,7 @@
     function unlock(){ var g=$g("gate"); if(g) g.classList.add("hide"); }
     function verify(pin, stored){
       var go=$g("gateGo"); if(go) go.disabled=true;
-      return fetch(DASH_AUTH+"/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:pin,scope:"board"})})
+      return bcFetch(DASH_AUTH+"/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:pin,scope:"board"})})
         .then(function(r){ return r.json().then(function(j){ return {status:r.status,j:j}; }); })
         .then(function(res){
           if(go) go.disabled=false;
@@ -1149,6 +1164,31 @@
   /* \u2500\u2500 Excessive-heat advisory \u2014 a banner in the NWS Alerts stack, styled like the alert bands.
      Keyed off the district heat index (feels-like, worst of the 5 stations): CAUTION >= 90\u00b0F,
      DANGER >= 103\u00b0F (NWS Heat Index bands). Adjust the two constants to tune. \u2500\u2500 */
+  /* ── LINK BAND — one unmissable "this board is not talking to anything" banner. Individual tiles
+     fail loud on their own, but a dead uplink degrades all of them at once, and an officer should
+     not have to infer that from five separate error strings scattered down the wall. Fires on
+     browser-offline or a sustained board-state failure (which now actually trips, thanks to the
+     bcFetch timeouts — a hung socket used to keep every panel frozen but confident). ── */
+  window.updateLinkBand=(function(){
+    var down=false, offline=false;
+    function paint(){
+      var el=document.getElementById("linkBand"); if(!el) return;
+      if(!(offline||down)){ el.hidden=true; el.innerHTML=""; return; }
+      el.hidden=false;
+      el.innerHTML='<div class="al-band al-link"><span class="al-icon">&#128225;</span><div class="al-body">'+
+        '<div class="al-ev">BROKEN LINK — BOARD OFFLINE</div>'+
+        '<div class="al-sub">'+(offline?"No network connection":"Cannot reach board data")+
+        ' · panels below may be stale · verify via CAD / radio</div>'+
+        '</div><span class="al-src">LINK</span></div>';
+    }
+    try{
+      offline=(navigator.onLine===false);
+      window.addEventListener("online",  function(){ offline=false; paint(); });
+      window.addEventListener("offline", function(){ offline=true;  paint(); });
+    }catch(e){}
+    paint();
+    return function(isDown){ down=!!isDown; paint(); };
+  })();
   window.updateHeatFlag=(function(){
     var CAUTION=90, DANGER=103;
     return function(hi){
@@ -1162,16 +1202,25 @@
         : '<div class="al-band al-heat-caution"><span class="al-icon">\ud83c\udf21\ufe0f</span><div class="al-body"><div class="al-ev">EXCESSIVE HEAT \u2014 CAUTION</div><div class="al-sub">Heat index '+v+'\u00b0F \u00b7 hydrate \u00b7 plan rehab</div></div><span class="al-src">FEELS-LIKE</span></div>';
     };
   })();
-  function wxSample(){var b=Date.now();
-    function P(i,t,rh,ws,wg,wd,sf,day,pop){return {startTime:new Date(b+i*3600000).toISOString(),temperature:t,relativeHumidity:{value:rh},windSpeed:ws+" mph",windGust:{value:wg,unitCode:"wmoUnit:mph"},windDirection:wd,shortForecast:sf,isDaytime:day,probabilityOfPrecipitation:{value:pop}};}
-    return [P(0,98,14,"22",35,"WSW","Sunny",true,0),P(1,99,13,"22",32,"WSW","Sunny",true,0),P(2,100,12,"20",35,"W","Sunny",true,10),
-      P(3,98,15,"18",30,"WSW","Partly Cloudy",true,20),P(4,94,22,"15",null,"SW","Mostly Cloudy",true,40),
-      P(5,89,35,"12",null,"S","Thunderstorms",true,60),P(6,85,45,"10",null,"SSE","Thunderstorms",false,40)];}
+  /* NO FABRICATED WEATHER, EVER. The retired wxSample() fed invented 98-100F / 12-15% RH / 22G35
+     readings into renderAggregate on a total NWS outage, which in turn drove the fire-weather
+     hourly pills and the excessive-heat advisory band — panels with no failure indicator of their
+     own. An officer had no way to tell that none of it was real. A dead feed now blanks the
+     readouts, flags loudly, and clears everything downstream that it feeds. */
+  function wxFail(msg){
+    var setH=function(id,h){ var e=document.getElementById(id); if(e) e.innerHTML=h; };
+    setH("wxIcon",""); setH("wxTemp","—&deg;"); setH("wxFeels","—&deg;"); setH("wxWind","—"); setH("wxHours","");
+    var c=document.getElementById("wxCond"); if(c) c.textContent="—";
+    var fl=document.getElementById("wxFlag"); if(fl){ fl.hidden=false; fl.textContent=msg; }
+    var st=document.getElementById("wxStamp"); if(st) st.textContent="NWS unavailable";
+    try{ FireWx.hours([]); }catch(e){}                                        /* no invented fire-weather pills */
+    try{ if(window.updateHeatFlag) window.updateHeatFlag(null); }catch(e){}   /* no invented heat advisory */
+  }
   function loadWeather(){
-    if(typeof fetch!=="function"){renderAggregate([wxSample()],"SAMPLE \u2014 NWS UNREACHABLE (not live data)");return;}
+    if(typeof fetch!=="function"){wxFail("WEATHER FEED UNAVAILABLE \u2014 no live NWS data");return;}
     Promise.all(STATIONS.map(function(st){return stationHourly(st).then(function(hf){var p=hf&&hf.properties&&hf.properties.periods;return (p&&p.length)?p:null;}).catch(function(){return null;});}))
     .then(function(res){var good=res.filter(Boolean);
-      if(!good.length){ if(wxLastGood)renderAggregate(wxLastGood,"STALE \u2014 NWS not refreshing (last good shown)"); else renderAggregate([wxSample()],"SAMPLE \u2014 NWS UNREACHABLE (not live data)"); return; }
+      if(!good.length){ if(wxLastGood)renderAggregate(wxLastGood,"STALE \u2014 NWS not refreshing (last good shown)"); else wxFail("WEATHER FEED UNAVAILABLE \u2014 no live NWS data"); return; }
       wxLastGood=good;
       renderAggregate(good, good.length<STATIONS.length?(good.length+"/"+STATIONS.length+" stations reporting \u2014 partial coverage"):null);});}
   loadWeather(); setInterval(loadWeather,WX_REFRESH);
@@ -1185,7 +1234,9 @@
     var FH_BASE = "https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents";
     var UAV_REFRESH = 5*60*1000, LEAD_PILOT_ID = 1;
     function decodeDay(day){                                  /* mirrors index.html/chief.html decodeDay */
-      var N = function(x){ return x==null ? null : parseInt(x); };
+      /* parseInt("")/parseInt("none") is NaN, and NaN != null is TRUE — that painted UAV124 green
+         (airborne) with no pilot assigned. Collapse any non-number to null: no pilot, no green. */
+      var N = function(x){ if(x==null) return null; var v=parseInt(x,10); return isNaN(v)?null:v; };
       var extra = (day.extra||[]).map(N).filter(function(x){ return x!=null; });
       var u121active, u124rpic;
       if(day.lead !== undefined){                            /* explicit (current) format */
@@ -1212,7 +1263,7 @@
     function load(){
       var now = new Date(), y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
       var url = FH_BASE + "/firehawk/schedule_" + y + "_" + m + "?key=" + FH_KEY;
-      fetch(url).then(function(r){
+      bcFetch(url).then(function(r){
         if(r.status === 404) return { __none:true };          /* no schedule doc this month = nothing staffed */
         if(!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
@@ -1236,7 +1287,10 @@
   (function(){
     var ANCHOR = Date.UTC(2026,0,1), PATTERN = ["A","A","B","B","C","C"];
     function todayShift(){
-      var s = new Date(Date.now() - 7*3600000);              /* -7h holds the prior shift until 0700 */
+      /* DST-safe: step back to the 0700 that started this tour using LOCAL calendar fields.
+         Subtracting a fixed 7h flips an hour early on fall-back and an hour late on spring-forward. */
+      var _n = new Date(), s = new Date(_n.getFullYear(), _n.getMonth(), _n.getDate());
+      if (_n.getHours() < 7) s.setDate(s.getDate() - 1);
       var d = Math.floor((Date.UTC(s.getFullYear(), s.getMonth(), s.getDate()) - ANCHOR) / 86400000);
       return PATTERN[((d % 6) + 6) % 6];
     }
@@ -1300,19 +1354,24 @@
     }
     function load(){
       if(typeof fetch!=="function"){ notify(false,null,null,"fail"); return; }
-      fetch(DOC+"?key="+K).then(function(r){
+      bcFetch(DOC+"?key="+K).then(function(r){
         if(r.status===404) return {__none:true};             /* no doc yet = clean empty state */
         if(!r.ok) throw new Error("HTTP "+r.status);
         return r.json();
       }).then(function(doc){
         failCount=0;
-        if(doc&&doc.__none){ notify(true,{},null,"none"); return; }
+        try{ if(window.updateLinkBand) window.updateLinkBand(false); }catch(e){}   /* link is back */
+        /* A MISSING or EMPTY state doc is an absence of data, NOT a verified all-clear. Reporting it
+           as ok:true rendered "ALL FACILITIES OPEN" stamped "officer-set" — a false all-clear on
+           diversion status. Fail loud instead; the tiles already own the unavailable rendering. */
+        if(doc&&doc.__none){ notify(false,null,null,"nostate"); return; }
         var f=doc&&doc.fields, dj=f&&f.stateJson&&f.stateJson.stringValue;
         var setAt=f&&f.updatedAt&&f.updatedAt.timestampValue;
-        if(!dj){ notify(true,{},setAt,"empty"); return; }
+        if(!dj){ notify(false,null,setAt,"emptystate"); return; }
         var st; try{ st=JSON.parse(dj); }catch(e){ notify(false,null,null,"parsefail"); return; }
         notify(true,st,setAt,dj);                             /* key = raw stateJson: it only changes when an officer actually saved something */
-      }).catch(function(){ if(++failCount>=2) notify(false,null,null,"fail"); });   /* tolerate a single blip; fail-loud only on a sustained outage */
+      }).catch(function(){ if(++failCount>=2){ notify(false,null,null,"fail");
+        try{ if(window.updateLinkBand) window.updateLinkBand(true); }catch(e){} } });   /* tolerate a single blip; fail-loud only on a sustained outage */
     }
     load(); setInterval(load, POLL);
     return function(fn){ subs.push(fn); if(last) fn(last[0],last[1],last[2]); };
@@ -1530,7 +1589,7 @@
       }
       function load(){
         var pin=window.BOARD_PIN?window.BOARD_PIN():""; if(!pin) return;
-        fetch(DR_URL+"?pin="+encodeURIComponent(pin))
+        bcFetch(DR_URL+"?pin="+encodeURIComponent(pin))
           .then(function(r){
             if(r.status===501){ return {ok:true, off:true}; }  /* feature off -> no auto streams */
             if(!r.ok) return null;                             /* transient -> hold current auto view */
@@ -1661,7 +1720,9 @@
     var TALLY_URL=URL_.replace("/dispatch","/calls");
     var TALLY_ANCHOR=Date.UTC(2026,0,1), STATIONS=["121","122","123","124","125","161","162"];
     function tourStart(){
-      var s=new Date(Date.now()-7*3600000);                  /* -7h holds prior tour until 0700 */
+      /* DST-safe: step back to the 0700 that started this tour using LOCAL calendar fields. */
+      var _n=new Date(), s=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate());
+      if(_n.getHours()<7) s.setDate(s.getDate()-1);
       var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-TALLY_ANCHOR)/86400000);
       var day1=((d%6)+6)%6%2===0;                            /* even index in AABBCC = day 1 of the pair */
       return new Date(s.getFullYear(),s.getMonth(),s.getDate()-(day1?0:1),7,0,0,0);
@@ -1705,19 +1766,40 @@
         return '<div class="'+cls+'" style="--rc:'+c.color+'"><span class="rt-cnm">'+c.label+'</span><span class="rt-cct">'+c.n+'</span></div>';
       }).join("");
     }
+    /* The worker stamps each call with a derived `stations` list, but it comes back EMPTY on some
+       rows whose units clearly imply a station — observed live: units ["161D"] yields ["161"] on one
+       row and [] on another, interleaved in time, so it is not a legacy-data artifact. Those runs
+       were silently missing from the station tally. Derive from `units` whenever the worker's list is
+       empty, using the same rule it uses, so a station can never lose credit for a run it made. */
+    function stationsFor(c){
+      var out=(c&&c.stations||[]).slice();
+      if(!out.length){
+        var seen={};
+        (c&&c.units||[]).forEach(function(u){
+          var m=/^(\d{3})[A-F]$/i.exec(String(u))||/(\d{3})$/.exec(String(u));
+          if(m && !seen[m[1]]){ seen[m[1]]=1; out.push(m[1]); }
+        });
+      }
+      return out;
+    }
     function loadTally(){
       var pin=window.BOARD_PIN?window.BOARD_PIN():"";
       if(!pin) return;
-      fetch(TALLY_URL+"?pin="+encodeURIComponent(pin))
+      bcFetch(TALLY_URL+"?pin="+encodeURIComponent(pin))
         .then(function(r){ return r.ok?r.json():null; })
         .then(function(j){
           if(!j||!j.ok||!Array.isArray(j.calls)) return;     /* leave last-known tally on transient errors */
           tallyOk=true;
-          var since=tourStart().getTime(), counts={}, typeCounts={};
+          var since=tourStart().getTime(), counts={}, typeCounts={}, incident={};
           j.calls.forEach(function(c){
             var ts=c.logged||c.started;
             if(ts && new Date(ts).getTime()<since) return;
-            var sts=(c.stations||[]).map(function(s){ return s==="126"?"123":s; });   /* M126 -> Station 123 */
+            /* Active911 re-pages/updates an incident as a NEW alert (new id, SAME cad_code), so the
+               log can hold several rows for one run. Tally INCIDENTS, not alert rows — otherwise a
+               single re-paged rescue reads as two. Rows with no identifier at all still count. */
+            var ikey=c.cad_code||(c.id!=null?("id:"+c.id):null);
+            if(ikey){ if(incident[ikey]) return; incident[ikey]=1; }
+            var sts=stationsFor(c).map(function(s){ return s==="126"?"123":s; });   /* M126 -> Station 123 */
             var seen={};
             sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
             var cls=classify(c.type);                            /* per-type run tally; GENERAL is an announcement, not a run */
@@ -1730,8 +1812,37 @@
     var tallyOk=false;
     loadTally(); setInterval(loadTally, 5*60*1000);          /* 5-min cadence; tourStart recomputed each pass so 0700 reset lands */
     var fastRetry=setInterval(function(){ if(tallyOk){ clearInterval(fastRetry); } else loadTally(); }, 30000);   /* PIN may land after first paint */
+    /* ONE CARD PER INCIDENT. Active911 re-pages/updates a run as a NEW alert (new id, SAME cad_code),
+       so the live feed can carry the same incident twice — the wall would show two identical call
+       cards side by side and an officer would read it as two separate runs. Collapse by CAD number,
+       keep the newest alert, and UNION the unit/station lists so a re-page that ADDS apparatus never
+       drops the earlier assignment. Rows with no identifier at all are left untouched. */
+    function dedupeCalls(list){
+      list=list||[];
+      var groups={}, used={}, out=[];
+      var key=function(c){ return c&&(c.cad_code||(c.id!=null?("id:"+c.id):null)); };
+      var tm=function(r){ return new Date(r.logged||r.started||0).getTime()||0; };
+      list.forEach(function(c){ var k=key(c); if(k) (groups[k]=groups[k]||[]).push(c); });
+      list.forEach(function(c){
+        var k=key(c);
+        if(!k){ out.push(c); return; }
+        if(used[k]) return; used[k]=1;
+        var rows=groups[k];
+        if(rows.length===1){ out.push(c); return; }
+        var keep=rows.reduce(function(a,b){ return tm(b)>tm(a)?b:a; });
+        var su={},u=[],ss={},s=[];
+        rows.forEach(function(r){
+          (r.units||[]).forEach(function(x){ if(x&&!su[x]){ su[x]=1; u.push(x); } });
+          (r.stations||[]).forEach(function(x){ if(x&&!ss[x]){ ss[x]=1; s.push(x); } });
+        });
+        var m={}; for(var p in keep) m[p]=keep[p];
+        m.units=u; m.stations=s;
+        out.push(m);
+      });
+      return out;
+    }
     function load(){
-      fetch(URL_,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:window.BOARD_PIN?window.BOARD_PIN():""})})
+      bcFetch(URL_,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:window.BOARD_PIN?window.BOARD_PIN():""})})
         .then(function(r){
           if(r.status===501||r.status===404){ render("off"); return null; }   /* feature off, not a failure */
           if(r.status===401){ render(everConfigured?"err":"off"); return null; } /* no valid PIN yet -> quiet until unlocked */
@@ -1745,7 +1856,7 @@
           if(j===null) return;
           if(!j.ok || !Array.isArray(j.calls)) { errDetail=(j&&j.error)||"bad response"; render("err"); return; }
           everConfigured=true; errDetail="";
-          render("ok", j.calls);
+          render("ok", dedupeCalls(j.calls));   /* one card per incident, not one per re-page */
         })
         .catch(function(){ render(everConfigured?"err":"off"); });   /* never-configured + unreachable worker -> stay hidden */
     }
@@ -1828,7 +1939,9 @@
     }
     var TOUR_ANCHOR=Date.UTC(2026,0,1);                     /* same anchor/flip as the header shift chip */
     function tourHorizon(){                                  /* Date: this tour's end (0700 after day 2) */
-      var s=new Date(Date.now()-7*3600000);                  /* -7h holds the prior shift until 0700 */
+      /* DST-safe: step back to the 0700 that started this tour using LOCAL calendar fields. */
+      var _n=new Date(), s=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate());
+      if(_n.getHours()<7) s.setDate(s.getDate()-1);
       var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-TOUR_ANCHOR)/86400000);
       var day1=((d%6)+6)%6%2===0;                            /* even index in AABBCC = first day of the pair */
       var end=new Date(s.getFullYear(),s.getMonth(),s.getDate()+(day1?2:1),7,0,0,0);
@@ -1893,7 +2006,7 @@
       if(!c||!v) return; c.className="hchip burn "+cls; v.textContent=val; }
     function load(){
       if(typeof fetch!=="function"){ set("unk","?"); return; }
-      fetch(URL).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      bcFetch(URL).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
       .then(function(j){
         if(j && j.underBan===true) set("on","ON");
         else if(j && j.underBan===false) set("off","OFF");
@@ -1965,7 +2078,7 @@
     }
     function loadNws(){
       if(typeof fetch!=="function"){ nws=null; render(); return; }
-      fetch(WX+"/redflag").then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      bcFetch(WX+"/redflag").then(function(r){ if(!r.ok) throw 0; return r.json(); })
         .then(function(j){ nws=(j&&j.active===true)?true:(j&&j.active===false)?false:null; render(); })
         .catch(function(){ nws=null; render(); });            /* unknown -> loud, never a silent all-clear */
     }
@@ -2034,8 +2147,12 @@
           var groups={D2:[], D6:[]};
           data.filter(function(c){ return c && WATCH[String(c.id)]!==undefined; })
             .forEach(function(c){ var st=c.statusTypeID;
-              var cls=(st===1||st===4)?"bad":st===3?"offline":"open";     /* closed/caution = red · inactive(dead) = gray · open = green */
-              var lbl=st===1?"CLOSED":st===4?"CAUTION":st===3?"OFFLINE":"OPEN";
+              /* Only statusTypeID 2 is a VERIFIED open crossing. Anything unrecognized — null, a
+                 missing field, a new/stringified code — must read UNKNOWN in gray, never a green
+                 OPEN. Defaulting an unknown status to the safe-looking branch is how a wall board
+                 tells a crew a low-water crossing is passable when nobody actually knows. */
+              var cls=(st===1||st===4)?"bad":st===3?"offline":st===2?"open":"unknown";   /* closed/caution = red · inactive = gray · open = green · unknown = gray */
+              var lbl=st===1?"CLOSED":st===4?"CAUTION":st===3?"OFFLINE":st===2?"OPEN":"UNKNOWN";
               groups[WATCH[String(c.id)]].push({name:esc(c.title||"Unnamed crossing"), cls:cls, lbl:lbl, bad:st!==2});
             });
           function col(tag,arr,dcls){

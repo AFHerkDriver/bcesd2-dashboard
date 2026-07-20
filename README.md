@@ -1,45 +1,59 @@
 # BC2FD Station Dashboard
 
-All-hazards station display for **Bexar County ESD No. 2 Fire Department** (Districts 2 & 6).
-Single-file, no-build, PWA-capable. Deploys to GitHub Pages.
+All-hazards wall display for **Bexar County ESD No. 2 Fire Department** (Districts 2 & 6).
 
-## Files (upload all to the repo root)
+An always-on 4K station TV board showing live weather, NWS alerts, dispatch, hospital
+diversion status, unit availability, and drone/airspace awareness — paired with a
+phone-friendly officer control panel that drives it. Single-file, no build step,
+PWA-capable, deployed on GitHub Pages.
+
+**Live board:** https://afherkdriver.github.io/bcesd2-dashboard/
+**Officer panel:** https://afherkdriver.github.io/bcesd2-dashboard/control.html (PIN required)
+
+## What's on the board
+
+| Panel | Source |
+|---|---|
+| District weather + 12-hour outlook | NWS, worst-case across the 5 district stations |
+| NWS alerts, red flag, excessive heat | `api.weather.gov` + `firehawk-wx` proxy |
+| Flood ops + low-water crossings | WPC excessive-rainfall outlook, HALT crossing feed |
+| Active calls + runs this tour | Active911, relayed through the auth worker |
+| Hospital diversion, medical direction | Officer-set in `control.html` |
+| Unit / apparatus status, strike teams | Officer-set, plus the live UAV flight schedule |
+| Announcements ticker, shift calendar | Officer-set in `control.html` |
+
+**Design rule: fail loud.** Every panel has three explicit states — live, stale/degraded
+(flagged), and fetch-failure (bold error). A panel never shows an ambiguous dash or a
+silent all-clear, because on a fire board a false "all clear" is worse than a visible error.
+
+## Files
 
 | File | Purpose |
 |---|---|
-| `index.html` | The wall dashboard (weather, NWS alerts, hospitals, medical direction, etc.) |
-| `control.html` | Officer control panel — sets medical direction, hospital diversion, banner, calendar, fire-weather overrides |
-| `sw.js` | Service worker (offline app shell; **never** caches live NWS data) |
-| `manifest.webmanifest` | PWA manifest (home-screen install) |
-| `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | App icons |
-| `.nojekyll` | Required — tells GitHub Pages not to run Jekyll |
+| `index.html` | The wall dashboard |
+| `control.html` | Officer control panel (phone/tablet) |
+| `sw.js` | Service worker — network-first for HTML, caches the app shell |
+| `worker.js` | Cloudflare Worker: PIN gate, Active911 relay, weather proxy, board-state writes |
+| `manifest.webmanifest`, `icon-*.png` | PWA install assets |
+| `.nojekyll` | Required — stops GitHub Pages running Jekyll |
 
-> If `.nojekyll` doesn't upload from mobile, create an empty file named exactly `.nojekyll` in the repo root.
+## Deploy — two separate targets
 
-## Deploy
+- `index.html`, `control.html`, `sw.js` → **`git push`** to this repo (GitHub Pages serves `main`).
+- `worker.js` → **pasted manually into the Cloudflare dashboard** for worker `bc2fd-dash-auth`.
+  A `git push` does **not** deploy the worker.
 
-1. Create/open repo **`bcesd2-dashboard`**, upload all files to the **root**.
-2. Settings → Pages → Deploy from branch → `main` / root.
-3. Wait for a **green** Actions run, then load `https://afherkdriver.github.io/bcesd2-dashboard/`.
-4. Board opens at the root; officer panel is the **Officer Login** button (bottom-right) → `control.html`.
+**On every board deploy:** bump the `CACHE` constant in `sw.js` (`bc2fd-dash-vNN` → `vNN+1`).
+That bump is what makes an open wall board install the new version and reload itself — without
+it, the TV keeps serving the old HTML.
 
-## Live data
+## Configuration
 
-- **Weather:** NWS hourly forecast, pulled for all **5 stations** (121/122/123/124/125) and shown as **district worst-case** (hottest temp, driest RH, peak gust, worst condition). Direct to `api.weather.gov`, falls back to the `firehawk-wx` worker proxy.
-- **NWS alerts:** `alerts/active?zone=TXZ205,TXC029` (Bexar County). Lane is hidden on a **verified zero**, shows a loud **"unavailable"** if NWS can't be reached — never a false all-clear.
-- **Hospitals / medical direction / banner / calendar / fire-weather overrides:** officer-set in `control.html`.
+Near the top of the `<script>` in `index.html`:
 
-## Configuration (top of the `<script>` in `index.html`)
+- `STATIONS` — station coordinates used for the weather aggregate
+- `ALERT_ZONES` — `"TXZ205,TXC029"` (Bexar County)
+- `WX_REFRESH` (10 min) / `ALERT_REFRESH` (2 min)
 
-- `STATIONS` — the 5 station lat/lons. **Currently estimated from addresses — replace with exact geocodes.**
-- `ALERT_ZONES` — `"TXZ205,TXC029"`.
-- `WX_REFRESH` (10 min) / `ALERT_REFRESH` (2 min).
-
-## Not yet wired
-
-- The board **display side** is live for weather + alerts. Hospital / medical-direction / banner / calendar tiles are still placeholders on the board; the control panel writes state, and the board will read it once the store-binding step is done.
-- **PIN gate** on `control.html` is not built yet (pending a Cloudflare Worker).
-
-## Every deploy
-
-- Bump the `CACHE` constant in `sw.js` (`bc2fd-sw-vN` → `vN+1`) so clients pick up the new shell.
+Credentials live only as Cloudflare Worker secrets — never in this repo. The Firebase web
+key present in the client is public by design; access is governed by Firestore rules.

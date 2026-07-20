@@ -867,7 +867,7 @@ $('saveTop').addEventListener('click',save);
   var K='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ', B='https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents';
   var ANCHOR=Date.UTC(2026,0,1), PAT=['A','A','B','B','C','C'], LEAD=1;
   function todayShift(){ var s=new Date(Date.now()-7*3600000); var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-ANCHOR)/86400000); return PAT[((d%6)+6)%6]; }
-  function decodeDay(day){ var N=function(x){return x==null?null:parseInt(x);}; var ex=(day.extra||[]).map(N).filter(function(x){return x!=null;}); var a,r;
+  function decodeDay(day){ var N=function(x){ if(x==null) return null; var v=parseInt(x,10); return isNaN(v)?null:v; };   /* NaN must read as "no pilot", never as a value */ var ex=(day.extra||[]).map(N).filter(function(x){return x!=null;}); var a,r;
     if(day.lead!==undefined){a=!!day.lead;r=N(day.rpic);} else {var id=N(day.rpic);a=(id===LEAD)||ex.indexOf(LEAD)!==-1;r=(id!=null&&id!==LEAD)?id:null;} return {u121:!!a,u124:r!=null}; }
   function setTxt(id,t){ var e=document.getElementById(id); if(e)e.textContent=t; }
   var _sh=todayShift(); setTxt('advShift', _sh);
@@ -905,6 +905,25 @@ setTimeout(function(){ uiReady=true; },2500);   /* backstop: activate the guard 
 Store.get().then(function(s){ if(s) state=ensureShape(s); hydrate(); uiReady=true; setDirty(false); lastSaved=clone(state); })
   .catch(function(){ hydrate(); lastSaved=clone(state); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
 </script>
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
+<script>
+/* Auto-update, same as the wall board — but the control panel can hold UNSAVED officer edits, and a
+   silent reload would discard them. So a new version reloads only when the form is clean; if the
+   officer is mid-edit we defer and take the update the moment they save. */
+if('serviceWorker' in navigator){
+  var __reloading=false, __pending=false;
+  function __swReload(){
+    if(__reloading) return;
+    if(window.uiDirty){ __pending=true; return; }      /* never blow away unsaved edits */
+    __reloading=true; location.reload();
+  }
+  navigator.serviceWorker.addEventListener('controllerchange', __swReload);
+  setInterval(function(){ if(__pending) __swReload(); }, 5000);          /* take it once the panel goes clean */
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      setInterval(function(){ reg.update(); }, 10*60*1000);              /* check for a new deploy every 10 min */
+    }).catch(function(){});
+  });
+}
+</script>
 </body>
 </html>
