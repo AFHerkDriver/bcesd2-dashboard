@@ -80,7 +80,7 @@
   .acc-line{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:12px;border-top:1px solid rgba(48,54,61,.5)}
   .acc-line:first-child{border-top:none}
   .acc-ico{flex:0 0 auto;width:16px;text-align:center;font-size:11px}
-  .acc-t{flex:0 0 auto;color:var(--dim);font-size:11px;min-width:70px}
+  .acc-t{flex:0 0 auto;color:var(--dim);font-size:11px;min-width:104px}   /* wide enough for the date + time */
   .acc-txt{flex:1 1 auto;color:var(--text);overflow:hidden;text-overflow:ellipsis}
   .acc-line.bad .acc-txt{color:var(--red)}
   .acc-line .acc-ip{flex:0 0 auto;color:var(--dim);font-size:10px}
@@ -397,8 +397,9 @@
     var n=$g('lockNotice'); if(n) n.textContent='🔒 Officer Access \u00b7 '+(name||'Verified');
   }
   function accEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
-  function accWhen(t){ try{ return new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
-  function accTime(t){ try{ return new Date(t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+  /* Central time, matching the board — a login at 11:45 PM Central is 12:45 AM Eastern the NEXT day,
+     so an officer reading the log from another coast would otherwise see the wrong DATE. */
+  function accWhen(t){ try{ return new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'}); }catch(e){ return ''; } }
   var ACC_REASON={ 'bad-pin':'malformed PIN', 'unknown-pin':'unknown PIN', 'display-only':'display-only PIN' };
   function accLine(e){
     var isAction=(e.kind==='action'), bad=!isAction&&!e.ok, ip='', txt;
@@ -407,7 +408,7 @@
     else { txt='Rejected — '+(ACC_REASON[e.reason]||'denied'); ip=e.ip||''; }
     return '<div class="acc-line'+(bad?' bad':'')+'">'+
            '<span class="acc-ico">'+(isAction?'✏️':'🔑')+'</span>'+
-           '<span class="acc-t">'+accEsc(accTime(e.t))+'</span>'+
+           '<span class="acc-t">'+accEsc(accWhen(e.t))+'</span>'+
            '<span class="acc-txt">'+accEsc(txt)+'</span>'+
            (ip?'<span class="acc-ip">'+accEsc(ip)+'</span>':'')+'</div>';
   }
@@ -431,8 +432,10 @@
         var groups={}, order=[];
         for(var i=0;i<entries.length;i++){
           var e=entries[i]||{}, key=e.name?('n:'+e.name):' unknown';
-          if(!groups[key]){ groups[key]={name:e.name||'Unknown / failed', items:[], last:0, unknown:!e.name}; order.push(key); }
-          var g=groups[key]; g.items.push(e); if((e.t||0)>g.last) g.last=e.t||0;
+          if(!groups[key]){ groups[key]={name:e.name||'Unknown / failed', items:[], total:0, last:0, unknown:!e.name}; order.push(key); }
+          var g=groups[key]; g.total++;
+          if(g.items.length<10) g.items.push(e);            /* entries arrive newest-first: keep only each person's last 10 */
+          if((e.t||0)>g.last) g.last=e.t||0;
         }
         var arr=order.map(function(k){ return groups[k]; }), HOUR=3600000, nowms=Date.now();
         arr.sort(function(a,b){
@@ -449,7 +452,7 @@
                 '<button type="button" class="acc-hd">'+
                   '<span class="acc-dot"></span>'+
                   '<span class="acc-name">'+accEsc(grp.name)+'</span>'+
-                  '<span class="acc-meta">'+grp.items.length+' event'+(grp.items.length===1?'':'s')+' · '+accEsc(accWhen(grp.last))+'</span>'+
+                  '<span class="acc-meta">'+(grp.total>10?('last 10 of '+grp.total):(grp.total+' event'+(grp.total===1?'':'s')))+' · '+accEsc(accWhen(grp.last))+'</span>'+
                   '<span class="acc-caret">▸</span>'+
                 '</button><div class="acc-items" hidden>'+lines+'</div></div>';
         }
