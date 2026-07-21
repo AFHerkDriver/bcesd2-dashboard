@@ -2049,6 +2049,11 @@
     var ADVISORY_MIN=15;
     function classify(t){ t=String(t||"").toUpperCase();
       if(/GENERAL|BURNING RECOMMENDATION|BURN BAN/.test(t)) return "k-gen";   /* advisories, not runs — dropped from the run-type tally */
+      /* Mutual aid to a neighbouring county — MUST come before the MED test, because
+         "MUTUAL AIDE - MEDINA CTY" contains "MED" and was being miscounted as an EMS run.
+         Buckets to OTHER, which paints a GRAY map pin (dim), keeping it visually distinct
+         from our own in-district run types. */
+      if(/MUTUAL/.test(t)) return "";
       if(/ALARM/.test(t)) return "k-alarm";
       if(/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "k-mvc";
       if(/FIRE|STRUCTURE|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "k-fire";
@@ -2905,11 +2910,24 @@
   }
   function loadAlerts(){
     if(typeof fetch!=="function"){renderAlerts(null,"nofetch");return;}
+    /* A regional NWS alert (heat, wind) lists many counties in areaDesc, e.g.
+       "Llano; Burnet; ...; Bexar; Comal; ...". We query BY Bexar's zone, so the alert genuinely
+       applies here — but taking the FIRST listed county labelled it "Llano", which reads like a
+       wrong-district alert. Prefer our own county so the label reflects why it's on OUR board, and
+       tag the county count so a multi-county advisory is obviously regional, not Bexar-specific. */
+    function alArea(desc){
+      var parts=String(desc||"").split(";").map(function(s){return s.trim();}).filter(Boolean);
+      if(!parts.length) return "";
+      var pref=["Bexar","Medina","Comal","Atascosa","Wilson","Guadalupe","Kendall","Bandera"], hit=null;
+      for(var i=0;i<pref.length && !hit;i++) for(var j=0;j<parts.length;j++){ if(parts[j].toLowerCase()===pref[i].toLowerCase()){ hit=parts[j]; break; } }
+      var label=hit||parts[0];
+      return parts.length>1 ? (label+" +"+(parts.length-1)) : label;
+    }
     gW("https://api.weather.gov/alerts/active?zone="+ALERT_ZONES).then(function(data){
       var feats=(data&&data.features)||[];
       var alerts=feats.map(function(f){var p=(f&&f.properties)||{};return {
         event:p.event||"Alert", severity:p.severity||"Unknown",
-        area:String(p.areaDesc||"").split(";")[0].trim(), until:(p.ends||p.expires||null),
+        area:alArea(p.areaDesc), until:(p.ends||p.expires||null),
         sent:(p.sent||p.effective||null),
         damageThreat:(p.parameters && p.parameters.flashFloodDamageThreat && p.parameters.flashFloodDamageThreat[0])||"",
         summary:alSummary(p), messageType:p.messageType };}).filter(function(a){return a.messageType!=="Cancel";});
