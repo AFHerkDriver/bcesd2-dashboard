@@ -411,6 +411,17 @@
   .dro-banner.ending{border-bottom-color:var(--amber)}
   .dro-banner.ending .dro-mission{color:var(--amber)}
   .dro-dot{width:clamp(9px,.9vmin,15px);height:clamp(9px,.9vmin,15px);flex:0 0 auto;border-radius:50%;background:var(--red);animation:pulse 1.6s ease-in-out infinite}
+  /* Manual feed reload — force the DroneSense embed to rebuild when it comes up blank. Pushed to the
+     right of the banner; tap-sized for the wall mouse and a phone. */
+  .dro-reload{margin-left:auto;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    min-width:clamp(30px,3.4vmin,44px);min-height:clamp(30px,3.4vmin,44px);padding:0 clamp(6px,.8vmin,12px);
+    font-size:clamp(15px,1.9vmin,26px);line-height:1;color:#fff;background:rgba(0,0,0,.45);
+    border:1px solid rgba(255,255,255,.35);border-radius:8px;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .dro-reload:hover{background:rgba(255,59,48,.55);border-color:var(--red)}
+  .dro-reload:active{transform:translateY(1px)}
+  .dro-reload:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .dro-reload.spin{animation:spin .6s linear}
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
   .dro-banner.ending .dro-dot{background:var(--amber);animation:none}
   .dro-frames{flex:1 1 auto;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);min-height:0}   /* two live feeds stack top/bottom (option 1) */
   .dro-frames iframe{flex:1 1 0;width:100%;height:100%;border:0;background:#000}
@@ -993,7 +1004,7 @@
             <div class="drone-idle" id="droneIdle"><img src="drone-idle.png" alt="No active drone feed" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="idle-fallback" hidden>NO ACTIVE FEED</span></div>
             <div class="drone-err" id="droneErr" hidden><span class="de-dot"></span><span>AIRSPACE FEED DOWN &mdash; CHECK REMOTE CONNECTION</span></div>
             <div class="drone-overlay" id="droneOverlay" hidden>
-              <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><div class="dro-btext"><div class="dro-mission" id="droTitle">DRONE LIVE</div><div class="dro-cs" id="droLbls"></div></div></div>
+              <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><div class="dro-btext"><div class="dro-mission" id="droTitle">DRONE LIVE</div><div class="dro-cs" id="droLbls"></div></div><button class="dro-reload" id="droReload" type="button" title="Reload feed" aria-label="Reload feed">&#8635;</button></div>
               <div class="dro-frames" id="droFrames"></div>
             </div>
           </div>
@@ -1062,14 +1073,15 @@
        marks shows through (the old raster had a filled dark centre). Built as an inline SVG so it
        stays crisp at every zoom; a dark under-stroke keeps the red legible over bright satellite
        imagery. */
-    var POI_SVG='data:image/svg+xml,'+encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="44" height="44">'+
-      '<g fill="none" stroke="#0D1117" stroke-width="6" stroke-linecap="round">'+
-        '<circle cx="22" cy="22" r="13"/><line x1="22" y1="3" x2="22" y2="11"/><line x1="22" y1="33" x2="22" y2="41"/><line x1="3" y1="22" x2="11" y2="22"/><line x1="33" y1="22" x2="41" y2="22"/></g>'+
-      '<g fill="none" stroke="#FF3B30" stroke-width="3" stroke-linecap="round">'+
-        '<circle cx="22" cy="22" r="13"/><line x1="22" y1="3" x2="22" y2="11"/><line x1="22" y1="33" x2="22" y2="41"/><line x1="3" y1="22" x2="11" y2="22"/><line x1="33" y1="22" x2="41" y2="22"/></g>'+
-      '</svg>');
-    var poiIcon=L.icon({iconUrl:POI_SVG,iconSize:[44,44],iconAnchor:[22,22]});
+    /* Ember targeting reticle (poi-marker.png): the black fill is keyed OUT to transparent, so the
+       ground being targeted shows through the ring gaps and centre. Orange arcs + white rim + orange
+       centre dot mark the exact look-at point. */
+    var poiIcon=L.icon({iconUrl:"poi-marker.png",iconRetinaUrl:"poi-marker@2x.png",iconSize:[44,44],iconAnchor:[22,22]});
+    /* Operator mobile stream marker (operator-marker.png): a firefighter operator streaming from their
+       phone (DroneSense mobile), NOT an aircraft. Teal badge so it never reads as a drone. Used when a
+       feed has a GPS position but NO target/POI — a phone has no gimbal aiming at a point, a drone does. */
+    var operatorIcon=L.icon({iconUrl:"operator-marker.png",iconRetinaUrl:"operator-marker@2x.png",iconSize:[40,40],iconAnchor:[20,20]});
+    function isOperatorStream(d){ return !(d && d.poiLat!=null && d.poiLng!=null); }   /* GPS but no target = operator phone */
     var layer=L.layerGroup().addTo(map);
     /* ── BC2FD station emblems — fixed, persistent layer (independent of the drone layer, never cleared).
        Geocoded (ArcGIS, score 98-100). Sits beneath the drone/POI markers. ── */
@@ -1191,12 +1203,14 @@
         layer.clearLayers(); var pts=[];
         (list||[]).forEach(function(d){
           if(d==null||d.lat==null||d.lng==null) return;                  /* no position -> no marker (never 0,0) */
-          var agl=(d.altAgl!=null)?(" · "+Math.round(d.altAgl*3.281)+" ft"):"";
-          L.marker([d.lat,d.lng],{icon:droneIcon}).bindTooltip(String(d.callSign||"UAS")+agl,{permanent:true,direction:"top",offset:[0,-20]}).addTo(layer);
+          var op=isOperatorStream(d);                                    /* operator phone vs aircraft */
+          var agl=(!op && d.altAgl!=null)?(" · "+Math.round(d.altAgl*3.281)+" ft"):"";   /* AGL is meaningless for a phone on the ground */
+          var tip=(op?"◉ ":"")+String(d.callSign||(op?"OPERATOR":"UAS"))+agl;
+          L.marker([d.lat,d.lng],{icon:op?operatorIcon:droneIcon}).bindTooltip(tip,{permanent:true,direction:"top",offset:[0,op?-16:-20]}).addTo(layer);
           pts.push([d.lat,d.lng]);
-          if(d.poiLat!=null&&d.poiLng!=null){                            /* POI only when set (worker maps 0 -> null) */
+          if(d.poiLat!=null&&d.poiLng!=null){                            /* POI only when set (worker maps 0 -> null) — operator streams never have one */
             L.marker([d.poiLat,d.poiLng],{icon:poiIcon}).addTo(layer);
-            L.polyline([[d.lat,d.lng],[d.poiLat,d.poiLng]],{color:"#FF3B30",weight:3,opacity:1}).addTo(layer);   /* solid red look-at line (was dashed) */
+            L.polyline([[d.lat,d.lng],[d.poiLat,d.poiLng]],{color:"#FF6B35",weight:3,opacity:1}).addTo(layer);   /* solid ember look-at line, aircraft -> target */
             pts.push([d.poiLat,d.poiLng]);
           }
         });
@@ -1859,7 +1873,10 @@
       var lb=document.getElementById("droLbls"), ti=document.getElementById("droTitle");
       var missions=streams.map(function(s){ return s.mission; }).filter(Boolean);
       curMission = missions.length ? missions.join("  \u00b7  ") : "";
-      if(ti) ti.textContent = curMission || "DRONE LIVE";
+      /* Title reflects what it is: an operator streaming from their phone reads OPERATOR MOBILE STREAM,
+         a deployed aircraft reads DRONE LIVE (or its mission). Mixed sets favour the aircraft label. */
+      var allOp = streams.length && streams.every(function(s){ return s.operator; });
+      if(ti) ti.textContent = allOp ? ("OPERATOR MOBILE STREAM"+(curMission?("  \u00b7  "+curMission):"")) : (curMission || "DRONE LIVE");
       if(lb) lb.textContent = streams.map(function(s){ return s.label; }).filter(Boolean).join("  \u00b7  ");
     }
     function setEnding(on){
@@ -1937,8 +1954,13 @@
       if(streams.length){
         if(graceT){ clearTimeout(graceT); graceT=null; }
         setEnding(false);
-        if(key!==lastKey) buildFrames(streams, bannerOnly);   /* rebuild only on change: no reload flicker */
+        /* Make the pane VISIBLE before building the iframe. In District Map mode the .drone-video pane
+           is display:none, and a DroneSense player built inside a hidden 0x0 container initialises blank
+           and never recovers — the feed showed nothing though the connection was fine. Unhide + exit
+           district mode first, force a reflow so the pane has real dimensions, THEN build the frames. */
         ov.hidden=false; droneLayout(true); tkTrack(streams);
+        void ov.offsetHeight;                                 /* reflow: the video pane now has a real size */
+        if(key!==lastKey) buildFrames(streams, bannerOnly);   /* rebuild only on change: no reload flicker */
         if(badge){ badge.hidden=false; badge.classList.add("live"); badge.href=streams[0].url; }
         lastKey=key; lastStreams=streams; lastBannerOnly=bannerOnly;
       } else {
@@ -2021,14 +2043,29 @@
             var next=j.drones
               .filter(function(d){ return d && typeof d.video_url==="string" && /^https:\/\//i.test(d.video_url); })
               .slice(0,MAX_FEEDS)
-              .map(function(d){ return { url:d.video_url, label:(d.callSign||d.model||"UAS"), mission:(d.mission||"") }; });
+              .map(function(d){ return { url:d.video_url, label:(d.callSign||d.model||"UAS"), mission:(d.mission||""), operator:isOperatorStream(d) }; });
             setAuto(next);                                     /* authoritative (incl. empty = drone landed) */
             if(window.BC2FD_DRONE_MAP) window.BC2FD_DRONE_MAP(j.drones);   /* map plots every aircraft with a position */
           })
           .catch(function(){ drFail(); });                     /* network error / bcFetch timeout */
       }
       load(); setInterval(load, POLL);
+      /* Manual reload: re-poll /drones for a fresh stream URL AND force the iframe to rebuild even if
+         the URL is unchanged (clearing lastKey). This is the "kick a blank feed" button — a DroneSense
+         embed that came up empty gets torn down and rebuilt into a now-visible, sized pane. */
+      window.BC2FD_DRONE_RELOAD=function(){
+        try{
+          lastKey="";
+          if(lastStreams && lastStreams.length) render(lastStreams, lastBannerOnly);
+          load();
+        }catch(e){}
+      };
     })();
+    var _rb=document.getElementById("droReload");
+    if(_rb) _rb.addEventListener("click", function(){
+      this.classList.remove("spin"); void this.offsetWidth; this.classList.add("spin");
+      if(window.BC2FD_DRONE_RELOAD) window.BC2FD_DRONE_RELOAD();
+    });
   })();
 
   /* ── Active Calls — polls the dedicated dashboard worker (/dispatch), which holds the CAD
