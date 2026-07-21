@@ -575,9 +575,14 @@
       padding-bottom:max(clamp(7px,.8vw,14px),env(safe-area-inset-bottom))}
     /* Specialty units: at this width the tile is only ~178px, so three 1fr columns give each chip
        ~51px of usable room while RESCUE124 needs 67px — it was being clipped from BOTH sides
-       (reading "ESCUE124"), and BOAT124 was shaving too. Two columns give ~82px each with room to
-       spare, and there is ample vertical space for the extra row. */
-    .tile .teams-body{grid-template-columns:repeat(2,1fr)}   /* .tile prefix needed: the base rule sits LATER in the sheet, so equal specificity would lose */
+       (reading "ESCUE124"). Two columns give ~86px each, plenty for RESCUE124.
+       But the pill COUNT is variable — write-ins (DC122, MOF122…) and OOS apparatus push it past the
+       base 7, and at 10 pills the five fixed-height rows overflowed the short iPad tile and clipped
+       UAV121/UAV124. So the rows share the tile's height (auto-rows 1fr) and pills fill their row
+       instead of holding a fixed height: any count now compresses to fit rather than spilling out.
+       .tile prefix is required — the base .teams-body rule sits LATER in the sheet. */
+    .tile .teams-body{grid-template-columns:repeat(2,1fr);grid-auto-rows:minmax(0,1fr);align-content:stretch}
+    .tile .teams-body .tchip{height:auto;min-height:0}
     .quad{min-height:640px}
   }
 
@@ -1053,7 +1058,18 @@
     map.attributionControl.setPrefix(false);   /* drop Leaflet's own prefix; OSM/CARTO/Esri credit stays (tiny, subdued via CSS) */
     L.control.layers({"Satellite":satellite,"Dark":dark,"Positron":positron},null,{collapsed:true,position:"topright"}).addTo(map);
     var droneIcon=L.icon({iconUrl:"drone-marker.png",iconRetinaUrl:"drone-marker@2x.png",iconSize:[46,46],iconAnchor:[23,23]});
-    var poiIcon=L.icon({iconUrl:"poi-marker.png",iconRetinaUrl:"poi-marker@2x.png",iconSize:[44,44],iconAnchor:[22,22]});
+    /* POI reticle — a hollow red targeting ring, transparent through the middle so the ground it
+       marks shows through (the old raster had a filled dark centre). Built as an inline SVG so it
+       stays crisp at every zoom; a dark under-stroke keeps the red legible over bright satellite
+       imagery. */
+    var POI_SVG='data:image/svg+xml,'+encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="44" height="44">'+
+      '<g fill="none" stroke="#0D1117" stroke-width="6" stroke-linecap="round">'+
+        '<circle cx="22" cy="22" r="13"/><line x1="22" y1="3" x2="22" y2="11"/><line x1="22" y1="33" x2="22" y2="41"/><line x1="3" y1="22" x2="11" y2="22"/><line x1="33" y1="22" x2="41" y2="22"/></g>'+
+      '<g fill="none" stroke="#FF3B30" stroke-width="3" stroke-linecap="round">'+
+        '<circle cx="22" cy="22" r="13"/><line x1="22" y1="3" x2="22" y2="11"/><line x1="22" y1="33" x2="22" y2="41"/><line x1="3" y1="22" x2="11" y2="22"/><line x1="33" y1="22" x2="41" y2="22"/></g>'+
+      '</svg>');
+    var poiIcon=L.icon({iconUrl:POI_SVG,iconSize:[44,44],iconAnchor:[22,22]});
     var layer=L.layerGroup().addTo(map);
     /* ── BC2FD station emblems — fixed, persistent layer (independent of the drone layer, never cleared).
        Geocoded (ArcGIS, score 98-100). Sits beneath the drone/POI markers. ── */
@@ -1180,7 +1196,7 @@
           pts.push([d.lat,d.lng]);
           if(d.poiLat!=null&&d.poiLng!=null){                            /* POI only when set (worker maps 0 -> null) */
             L.marker([d.poiLat,d.poiLng],{icon:poiIcon}).addTo(layer);
-            L.polyline([[d.lat,d.lng],[d.poiLat,d.poiLng]],{color:"#FF3B30",weight:2,opacity:.8,dashArray:"6 5"}).addTo(layer);
+            L.polyline([[d.lat,d.lng],[d.poiLat,d.poiLng]],{color:"#FF3B30",weight:3,opacity:1}).addTo(layer);   /* solid red look-at line (was dashed) */
             pts.push([d.poiLat,d.poiLng]);
           }
         });
