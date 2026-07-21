@@ -636,30 +636,40 @@ export default {
            FALLBACK: the legacy west + south two-feed merge, used ONLY when PRIMARY errors — a quiet
            primary (clean fetch, 0 calls) still counts as working. feedSource records which served so
            we can confirm the consolidated token is carrying the load before retiring the old two. */
+        /* UNION EVERY HEALTHY FEED, don't pick one. The consolidated (primary) token was used
+           EXCLUSIVELY while it was healthy, and the original west token only as a fallback — but the
+           UAS team pages through a group the ORIGINAL token sees and the consolidated feed drops the
+           unit attachments for. Result: a drone (UAV124) that attached to a call in Active911 never
+           reached the board, because the one feed carrying it was never consulted while primary was
+           up. Fetch all configured feeds and union their units per incident (by cad_code, else id),
+           so whichever token carries a unit contributes it. Costs a few more Active911 calls per poll
+           than primary-only, but the two-feed fallback already did this — capturing every responding
+           unit on a safety board is worth it. */
         const PRIMARY_TOKEN = env["A911_REFRESH_TOKEN_#"];
-        let calls = null, feedSource = "";
+        const feeds = [];
+        if (PRIMARY_TOKEN)             feeds.push([PRIMARY_TOKEN,           "a911:access_all", "primary"]);
+        if (env.A911_REFRESH_TOKEN)    feeds.push([env.A911_REFRESH_TOKEN,  "a911:access",     "west"]);   /* the ORIGINAL token — carries the UAS-team unit attachments */
+        if (env.A911_REFRESH_TOKEN_2)  feeds.push([env.A911_REFRESH_TOKEN_2,"a911:access2",    "south"]);
 
-        if (PRIMARY_TOKEN) {
-          const pr = await fetchFeed(PRIMARY_TOKEN, "a911:access_all").catch(() => ({ ok: false, error: "primary error" }));
-          if (pr.ok) { calls = pr.calls; feedSource = "primary"; }
-        }
+        const results = await Promise.all(feeds.map(f =>
+          fetchFeed(f[0], f[1]).then(r => ({ ...r, src: f[2] })).catch(() => ({ ok: false, src: f[2], error: "feed error" }))));
+        const okFeeds = results.filter(r => r.ok);
+        if (!okFeeds.length)
+          return json({ ok: false, error: (results[0] && results[0].error) || "relay error" }, 502);
 
-        if (calls === null) {
-          const feeds = [[env.A911_REFRESH_TOKEN, "a911:access"]];
-          if (env.A911_REFRESH_TOKEN_2) feeds.push([env.A911_REFRESH_TOKEN_2, "a911:access2"]);
-          const results = await Promise.all(feeds.map(f =>
-            fetchFeed(f[0], f[1]).catch(() => ({ ok: false, error: "feed error" }))));
-          const okFeeds = results.filter(r => r.ok);
-          if (!okFeeds.length)
-            return json({ ok: false, error: (results[0] && results[0].error) || "relay error" }, 502);
-          const seen = {}; calls = [];
-          for (const r of okFeeds) for (const c of r.calls) {
-            if (c.id && seen[c.id]) continue;
-            if (c.id) seen[c.id] = 1;
-            calls.push(c);
+        const byKey = new Map(), order = [];
+        for (const r of okFeeds) for (const c of (r.calls || [])) {
+          const k = c.cad_code || ("id:" + c.id);
+          if (!byKey.has(k)) { byKey.set(k, { ...c, units: (c.units || []).slice() }); order.push(k); }
+          else {
+            const g = byKey.get(k), seenU = {};
+            g.units.forEach(u => { seenU[String(u).toUpperCase()] = 1; });
+            for (const u of (c.units || [])) { const uk = String(u).toUpperCase(); if (u && !seenU[uk]) { seenU[uk] = 1; g.units.push(u); } }
+            for (const f of ["cad_code", "address", "channel", "started", "type"]) if (!g[f] && c[f]) g[f] = c[f];   /* fill blanks from another feed's view */
           }
-          feedSource = PRIMARY_TOKEN ? "fallback" : "fallback-noprimary";
         }
+        let calls = order.map(k => byKey.get(k));
+        const feedSource = [...new Set(okFeeds.map(r => r.src))].join("+");
 
         /* Collapse same-incident duplicates. The consolidated feed sees one incident under several alert
            IDs (a re-tone on a problem change, or multi-agency simultaneous tones). Merge only when the
