@@ -183,6 +183,11 @@
   .strike .s .p{font-family:'DM Mono',monospace;font-size:clamp(10px,1vmin,16px);color:var(--text);line-height:1}
   .strike .s.on{border-color:var(--red);background:rgba(255,59,48,.12)}
   .strike .s.on .v{color:var(--red)}
+  /* Strike pills when they live in the Hospital tile: a top rule separates them from Medical
+     Direction, and an empty row (no active STENs) collapses so it steals nothing. */
+  .hosp-strike{flex:0 0 auto;border-top:1px solid var(--border);
+    margin-top:clamp(5px,.6vmin,11px);padding-top:clamp(5px,.6vmin,11px)}
+  .hosp-strike:empty{display:none}
 
   /* Q4 Weather + Calendar (split quadrant) */
   .q4{display:flex;flex-direction:column;gap:clamp(5px,.55vmin,10px);min-height:0}
@@ -365,12 +370,33 @@
   /* Fresh call: inverse flash — the dark outline goes white and thick, which reads at wall distance
      without moving anything. FINITE iteration count so it stops itself; a flash left running all
      shift because a cleanup timer was missed would be worse than no flash at all. */
+  /* The dot itself stays solid — its category color and dark ring, never inverted — and just
+     pulses in time with each sonar ring launch, so the eye lands on the pin at the ripples' center. */
   @keyframes pinflash{
-    0%,100%{opacity:1;stroke:#0D1117;stroke-width:2}
-    50%    {opacity:.4;stroke:#FFFFFF;stroke-width:5}
+    0%     {opacity:1}
+    25%    {opacity:.4}
+    60%,100%{opacity:1}
   }
-  .call-pin.pin-new{animation:pinflash 1s ease-in-out 14}
-  @media (prefers-reduced-motion:reduce){ .call-pin.pin-new{animation:none;stroke:#FFFFFF;stroke-width:4} }
+  .call-pin.pin-new{animation:pinflash 1s ease-out 60}
+  /* Sonar ping: two rings ripple outward from a fresh call's pin, staggered a half-cycle apart so
+     one is always mid-expansion — the double-ripple pulls the eye from across the bay. FINITE: 30
+     cycles ≈ the same 60s window as the pin flash and map focus, then it stops itself. A JS timer also
+     removes the marker, so nothing is left rippling all shift if a refresh is missed. */
+  .pin-sonar-wrap{background:transparent;border:0}
+  .pin-sonar{position:relative;width:0;height:0;pointer-events:none}
+  .pin-sonar span{position:absolute;left:0;top:0;width:18px;height:18px;margin:-9px 0 0 -9px;
+    border-radius:50%;border:2px solid #FFFFFF;opacity:0;
+    box-shadow:0 0 4px rgba(0,0,0,.7);animation:pinsonar 2s ease-out 30}
+  .pin-sonar span:nth-child(2){animation-delay:1s}
+  @keyframes pinsonar{
+    0%  {transform:scale(.45);opacity:.9}
+    70% {opacity:.22}
+    100%{transform:scale(4.4);opacity:0}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .call-pin.pin-new{animation:none;stroke:#FFFFFF;stroke-width:4}
+    .pin-sonar span{animation:none;display:none}
+  }
   /* Runs pinned outside the 121-125 frame (161/162, station 120). The map must not imply it is
      showing everything — this is the difference between a tight frame and a quiet omission. */
   .dm-off{position:absolute;left:8px;bottom:8px;z-index:500;pointer-events:none;
@@ -545,7 +571,7 @@
     .sched-split{flex-direction:column;gap:10px}             /* phone: stack events over the run-type tally; the two halves split the tile height evenly */
     .rt-half{border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:8px}
     .sched-tile:not(:has(.sched-list > *)):not(:has(.rt-cell:not(.rt-zero))){display:none}   /* hide only when there are no events AND no logged runs (all keypad tiles zero) */
-    .rrow > .nws-tile:not(:has(.alert-lane > *)):not(:has(.heat-band > *)):not(:has(.fw-body > *)):not(:has(.floodband:not([hidden]))):not(:has(.strike > *)){display:none}   /* no alerts / heat / red flag / flood / strike teams (keeps NWS-unavailable + red-flag-unknown) */
+    .rrow > .nws-tile:not(:has(.alert-lane > *)):not(:has(.heat-band > *)):not(:has(.fw-body > *)):not(:has(.floodband:not([hidden]))){display:none}   /* no alerts / heat / red flag / flood (keeps NWS-unavailable + red-flag-unknown). Strike pills moved to the Hospital tile, so they no longer keep this tile alive. */
   }
 
   /* ── Tablet: iPad portrait & phone landscape (741–1180px) — stacked scroll, rows stay 2-up ── */
@@ -974,9 +1000,11 @@
             <div class="fb-rain" id="fbRain">checking station rain (MRMS)…</div>
             <div class="fb-cx" id="fbCx"></div>
           </div>
-          <div class="strike" id="strikeRow"></div>
         </div>
-        <!-- Hospital Status + Medical Direction — right half -->
+        <!-- Hospital Status + Medical Direction — right half. Strike-team pills live HERE (not in the
+             NWS footer): when STENs are active the NWS tile is already carrying heat advisory + heat
+             grid and overflows, while this tile has slack. The pills sit at the bottom; the hospital
+             body flexes so Hospital Status + Medical Direction slide up to make room. -->
         <div class="tile hosp-tile">
           <div class="head"><span class="name">Hospital Status</span><span class="stamp src" id="hospStamp">Loading&hellip;</span></div>
           <div class="hosp-body" id="hospBody"></div>
@@ -985,6 +1013,7 @@
             <div class="med-strip-hd"><span class="med-strip-lbl">Medical Direction</span></div>
             <div class="med-body" id="medBody"></div>
           </div>
+          <div class="strike hosp-strike" id="strikeRow"></div>
         </div>
       </div>
 
@@ -1154,7 +1183,7 @@
     };
     window.BC2FD_MAP_MODE=function(district){
       pinsOn=!!district;
-      if(!pinsOn && focusT){ clearTimeout(focusT); focusT=null; }   /* aircraft up: drop any pending return */
+      if(!pinsOn && focusT){ clearTimeout(focusT); focusT=null; focusPts=[]; }   /* aircraft up: drop any pending return */
       try{ map.invalidateSize(); }catch(e){}
       setTimeout(function(){ try{ map.invalidateSize(); districtView(); }catch(e){} },260);   /* after the CSS transition settles */
     };
@@ -1162,8 +1191,11 @@
        A call drops: pin it immediately, flash it, swing the map to it, then return to the
        district frame. GOVERNED, because a wall board that lurches on every dispatch during a
        busy tour is worse than one that never moves at all:
-         · latest call wins — a newer call cancels the pending return and re-targets
-         · MIN_GAP floor between viewport moves
+         · second call during the hold — the frame WIDENS to keep both (all) still-pulsing calls in
+           view (fitBounds, capped at FOCUS_ZOOM so two close calls don't over-zoom). Each call keeps
+           its OWN 1-min pulse; as the earlier call's pulse ends the view collapses back onto whatever
+           is still pulsing, then to the district frame once none are
+         · MIN_GAP floor between viewport moves (fresh focus only — joining a live frame always re-frames)
          · burst suppression — once BURST_N calls land inside BURST_WIN the zooming stops; pins
            and flashes continue, since neither moves the viewport
          · never while a drone is up: then the map belongs to the aircraft
@@ -1171,8 +1203,29 @@
        otherwise be the first time a fresh call appeared on the map. The flash is a FINITE CSS
        animation so it ends on its own — no timer to leak, and a missed cleanup can't leave a
        pin blinking on the wall all shift. ── */
-    var focusT=null, lastFocus=0, recent=[];
+    var focusT=null, lastFocus=0, recent=[], focusPts=[];
     var FOCUS_ZOOM=15.2, HOLD=60000, MIN_GAP=25000, BURST_N=3, BURST_WIN=240000;
+    /* Frame the map to the calls still pulsing (exp in the future): 2+ -> fitBounds to hold them all,
+       1 -> zoom to it, 0 -> back to the district frame. Re-runs itself when the soonest call's pulse
+       ends, so a two-call frame collapses onto the last pulser when the older one times out, then to
+       the district view when that one ends too.
+       animate:false is REQUIRED, not a preference. On this map (zoomSnap 0.1) an animated transition
+       silently does nothing — setView with animate:true and flyTo both leave the centre untouched and
+       throw no error, while animate:false works every time. On a wall the instant cut is also the
+       better read: nothing to track across the screen, and the pin flash is the cue. */
+    function reframe(){
+      var now=Date.now();
+      focusPts=focusPts.filter(function(p){ return p.exp>now; });   /* keep only calls still pulsing */
+      if(focusT){ clearTimeout(focusT); focusT=null; }
+      if(!focusPts.length){ districtView(); offscreenNote(); return; }
+      try{
+        if(focusPts.length===1) map.setView(focusPts[0].ll,FOCUS_ZOOM,{animate:false});
+        else map.fitBounds(L.latLngBounds(focusPts.map(function(p){ return p.ll; })).pad(0.35),{animate:false,maxZoom:FOCUS_ZOOM});
+      }catch(e){}
+      var next=focusPts.reduce(function(m,p){ return Math.min(m,p.exp); },Infinity)-now;
+      focusT=setTimeout(reframe, Math.max(250,next));   /* re-evaluate when the next pulse ends */
+      offscreenNote();
+    }
     window.BC2FD_FOCUS_CALL=function(c){
       if(!c || c.lat==null || c.lng==null) return;
       if(!pinsOn) return;
@@ -1181,21 +1234,25 @@
           fillColor:c.color||"#8B949E",fillOpacity:.95,className:"call-pin pin-new"})
           .bindTooltip(String(c.label||"")+(c.time?(" · "+c.time):""),{direction:"top",offset:[0,-9]}).addTo(pinLayer);
         pinPts.push([c.lat,c.lng]);
+        /* Sonar rings, anchored on the same point (a 0-size divIcon so the ripple centres on the pin).
+           Removed after the 60s window so a stale, spent ring can't linger between pin refreshes. */
+        var sonar=L.marker([c.lat,c.lng],{icon:L.divIcon({className:"pin-sonar-wrap",
+          html:'<div class="pin-sonar"><span></span><span></span></div>',iconSize:[0,0],iconAnchor:[0,0]}),
+          interactive:false,keyboard:false}).addTo(pinLayer);
+        setTimeout(function(){ try{ pinLayer.removeLayer(sonar); }catch(e){} },61000);
       }catch(e){}
       var now=Date.now();
       recent=recent.filter(function(t){ return now-t<BURST_WIN; }); recent.push(now);
       if(recent.length>=BURST_N){ offscreenNote(); return; }      /* busy tour: pin + flash, hold the view */
-      if(now-lastFocus<MIN_GAP){ offscreenNote(); return; }
+      var active=focusPts.some(function(p){ return p.exp>now; });
+      /* A fresh focus (nothing currently pulsing) is gated by MIN_GAP. A call JOINING calls that are
+         still pulsing always re-frames — that's the whole point — so it bypasses the gap. Each call
+         carries its own pulse-end (now+HOLD); reframe() then keeps the view on whatever is still
+         pulsing and collapses onto the last pulser as the earlier calls time out. */
+      if(!active && now-lastFocus<MIN_GAP){ offscreenNote(); return; }
       lastFocus=now;
-      if(focusT){ clearTimeout(focusT); focusT=null; }             /* latest wins */
-      /* animate:false is REQUIRED, not a preference. On this map (zoomSnap 0.1) an animated
-         transition silently does nothing — verified: setView with animate:true and flyTo both
-         leave the centre untouched and throw no error, while animate:false works every time.
-         idleView() carries the same note from an earlier session. On a wall the instant cut is
-         also the better read: nothing to track across the screen, and the pin flash is the cue. */
-      try{ map.setView([c.lat,c.lng],FOCUS_ZOOM,{animate:false}); }catch(e){}
-      focusT=setTimeout(function(){ focusT=null; districtView(); },HOLD);
-      offscreenNote();
+      focusPts.push({ll:[c.lat,c.lng],exp:now+HOLD});
+      reframe();
     };
     /* list = data.drones from /drones (meters / m/s). Convert for display: m->ft x3.281. */
     window.BC2FD_DRONE_MAP=function(list){
@@ -2385,7 +2442,7 @@
           }).sort(byStarted).forEach(function(c){
             var ikey=incidentKey(c, groups);
             if(incident[ikey]) return; incident[ikey]=1;
-            var sts=stationsFor(c).map(function(s){ return s==="126"?"123":s; });   /* M126 -> Station 123 */
+            var sts=stationsFor(c).map(function(s){ return s==="126"?"123":s==="120"?"121":(s==="119"||s==="127")?"124":s; });   /* extra ambulances ride with a staffed station: M126 -> 123, M120 -> 121, M119/M127 -> 124 (none have a tally chip of their own) */
             var seen={};
             sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
             var cls=classify(c.type);                            /* per-type run tally; GENERAL is an announcement, not a run */
