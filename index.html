@@ -2171,7 +2171,7 @@
        the current live view so a network blip never blanks a flight. video_url embed vs. the officer's
        Banner Only toggle is honored, so if DroneSense refuses framing it degrades to callsign + link. ── */
     (function(){
-      var DR_URL="https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/drones", POLL=15000;
+      var DR_URL="https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/drones", POLL=4000;   /* 4s so the operator heading/look-cone tracks live instead of lurching every 15s (worker fetches DroneSense uncached) */
       /* Was hard-capped at 2, matching the two aircraft in service. DFR takes the fleet to nine with
          perhaps four up at once, and the takeover tiles 3-4 in a 2x2. Raising the cap here is the
          whole change — the layout already follows the feed count. */
