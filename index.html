@@ -281,7 +281,7 @@
   /* flex:0 1 auto + overflow:hidden makes the flood band the tile's flexible SINK: alert/heat bands are
      rigid above it, so when the NWS tile is over-full THIS shrinks. Crossings render hazards-first, so a
      shrink clips OPEN crossings at the bottom (already summarised by "+N more open"), never a closure. */
-  .floodband{flex:0 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);
+  .floodband{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);
     padding:clamp(4px,.5vmin,9px) 0}   /* blue bounding removed — blends into the NWS tile */
   .floodband[hidden]{display:none}                        /* author display:flex beats the hidden attr without this */
   .fb-head{display:flex;align-items:center;gap:12px}
@@ -642,6 +642,10 @@
      shrunk to make room for the flood band below it. When the NWS tile is over-full the flood crossings
      (capped, hazards-first) yield instead — losing an OPEN crossing beats losing a tornado warning. */
   .alert-lane{flex:0 0 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(4px,.4vw,8px)}
+  /* Rotating banner slot — fixed to one band's height, one predictable location. The lower area
+     (forecast / flood) fills the rest deterministically, so there are no gaps or clipped stacks. */
+  .nws-banner{flex:0 0 auto;min-height:0}
+  .nws-banner[hidden]{display:none}
   .alert-lane .al-none{color:var(--dim);font-size:clamp(11px,1vmin,16px);text-align:center;padding:clamp(2px,.3vmin,5px) 0}
   .alert-lane[hidden]{display:none}
   /* Compact NWS banners (Firehawk Ops style): icon · label + area/until · NWS source. Colored by type. */
@@ -677,7 +681,7 @@
   .al-heat-caution .al-sub,.al-heat-danger .al-sub{white-space:normal;overflow:visible;text-overflow:clip}
   .al-band.al-link{border-color:rgba(255,59,48,.6);background:linear-gradient(135deg,rgba(255,59,48,.22),rgba(140,0,0,.12));animation:pulse 3s ease-in-out infinite}
   .al-band.al-link .al-ev{color:var(--red)}
-  .al-page,.cx-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
+  .al-page,.cx-page,.nb-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
   .al-more{font-size:clamp(10px,.9vw,14px);color:var(--dim);text-align:center;letter-spacing:1px}
   /* Shift calendar — bottom strip (officer-set) */
 
@@ -866,6 +870,7 @@
   /* "safe center": centered when the forecast fits, but falls back to top-aligned when the tile is
      tight (red-flag + heat day, 3-row grid) so the SOONEST hours never clip — only the latest do. */
   .fw-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:safe center;gap:clamp(3px,.4vmin,8px)}
+  .nws-tile:has(.floodband:not([hidden])) .fw-body{display:none}   /* flood owns the lower area — the forecast hides so it can't grow into a gap */
   .fw-idle{color:var(--dim);font-size:clamp(11px,1vmin,16px)}
   .fw-flag{font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vmin,34px);letter-spacing:1px;color:var(--red);line-height:1}
   .fw-flag.unk{color:var(--amber)}
@@ -1009,9 +1014,14 @@
         <!-- NWS Alerts — now the left half of the top row -->
         <div class="tile nws-tile">
           <div class="head"><span class="name">National Weather Service Alerts</span><span class="stamp src" id="fwStamp"></span></div>
-          <div class="alert-lane" id="alertLane"></div>
-          <div class="heat-band" id="heatBand" hidden></div>
-          <div class="heat-band" id="linkBand" hidden></div>
+          <!-- Rotating banner slot: shows ONE active NWS band at a time (warnings first + longer dwell),
+               fed by the hidden source bands below. One predictable location; fixed height. -->
+          <div class="nws-banner" id="nwsBanner" hidden></div>
+          <div id="nwsSrc" hidden>
+            <div class="alert-lane" id="alertLane"></div>
+            <div class="heat-band" id="heatBand" hidden></div>
+            <div class="heat-band" id="linkBand" hidden></div>
+          </div>
           <div class="fw-body" id="fwBody"></div>
           <div class="floodband" id="floodBand" hidden>
             <div class="fb-head"><span class="fb-stamp src" id="fbStamp"></span></div>
@@ -1573,6 +1583,44 @@
     var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE});
     if(!flag){fl.hidden=true; st.textContent="NWS \u00b7 5-sta worst-case \u00b7 "+tm;}
     else{fl.hidden=false; fl.textContent=flag; st.textContent=/SAMPLE/.test(flag)?"NWS unavailable":("NWS \u00b7 "+tm);}}
+  /* \u2500\u2500 NWS BANNER CAROUSEL \u2014 one predictable slot showing ONE active band at a time. Reads the hidden
+     source bands (#alertLane / #heatBand / #linkBand), sorts warnings first, and rotates: warnings
+     dwell ~3x longer (15s vs 5s) so a life-threat is never off-screen for long. Every source render
+     calls .refresh(). If this ever throws, the raw source stack is shown as a fallback \u2014 a band is
+     never lost to a carousel bug. \u2500\u2500 */
+  var NWSCarousel=(function(){
+    var rot=null, bands=[], idx=0;
+    function isWarn(cls){ return /al-warn|al-cat|al-redflag|al-heat-danger|al-link|sev-error/.test(cls||""); }
+    function collect(){
+      var out=[];
+      ["alertLane","heatBand","linkBand"].forEach(function(id){
+        var src=document.getElementById(id); if(!src||src.hidden) return;
+        var list=src.querySelectorAll(".al-band");
+        for(var i=0;i<list.length;i++){ out.push({html:list[i].outerHTML, warn:isWarn(list[i].className)}); }
+      });
+      return out;
+    }
+    function show(slot){
+      if(idx>=bands.length) idx=0;
+      var b=bands[idx];
+      slot.innerHTML=b.html + (bands.length>1?('<div class="nb-page">'+(idx+1)+" / "+bands.length+'</div>'):'');
+      if(bands.length>1){ rot=setTimeout(function(){ idx=(idx+1)%bands.length; show(slot); }, b.warn?15000:5000); }
+    }
+    function refresh(){
+      var slot=document.getElementById("nwsBanner"), src=document.getElementById("nwsSrc");
+      if(!slot) return;
+      if(rot){ clearTimeout(rot); rot=null; }
+      try{
+        bands=collect();
+        bands.sort(function(a,b){ return (b.warn?1:0)-(a.warn?1:0); });   /* warnings lead */
+        if(!bands.length){ slot.hidden=true; slot.innerHTML=""; idx=0; if(src) src.hidden=true; return; }
+        if(src) src.hidden=true;                                          /* carousel owns the display */
+        slot.hidden=false; if(idx>=bands.length) idx=0; show(slot);
+      }catch(e){ if(src) src.hidden=false; slot.hidden=true; }            /* fail-loud fallback: show the raw stack */
+    }
+    return { refresh:refresh };
+  })();
+  window.NWSCarousel=NWSCarousel;
   /* \u2500\u2500 Excessive-heat advisory \u2014 a banner in the NWS Alerts stack, styled like the alert bands.
      Keyed off the district heat index (feels-like, worst of the 5 stations): CAUTION >= 90\u00b0F,
      DANGER >= 103\u00b0F (NWS Heat Index bands). Adjust the two constants to tune. \u2500\u2500 */
@@ -1585,13 +1633,16 @@
     var down=false, offline=false;
     function paint(){
       var el=document.getElementById("linkBand"); if(!el) return;
-      if(!(offline||down)){ el.hidden=true; el.innerHTML=""; return; }
-      el.hidden=false;
-      el.innerHTML='<div class="al-band al-link"><span class="al-icon">&#128225;</span><div class="al-body">'+
-        '<div class="al-ev">BROKEN LINK — BOARD OFFLINE</div>'+
-        '<div class="al-sub">'+(offline?"No network connection":"Cannot reach board data")+
-        ' · panels below may be stale · verify via CAD / radio</div>'+
-        '</div><span class="al-src">LINK</span></div>';
+      if(!(offline||down)){ el.hidden=true; el.innerHTML=""; }
+      else {
+        el.hidden=false;
+        el.innerHTML='<div class="al-band al-link"><span class="al-icon">&#128225;</span><div class="al-body">'+
+          '<div class="al-ev">BROKEN LINK — BOARD OFFLINE</div>'+
+          '<div class="al-sub">'+(offline?"No network connection":"Cannot reach board data")+
+          ' · panels below may be stale · verify via CAD / radio</div>'+
+          '</div><span class="al-src">LINK</span></div>';
+      }
+      try{ NWSCarousel.refresh(); }catch(e){}
     }
     try{
       offline=(navigator.onLine===false);
@@ -1606,7 +1657,7 @@
     return function(hi){
       var el=document.getElementById("heatBand"); if(!el) return;
       var v=(hi==null||isNaN(hi))?null:Math.round(hi);
-      if(v==null || v<CAUTION){ el.hidden=true; el.innerHTML=""; return; }
+      if(v==null || v<CAUTION){ el.hidden=true; el.innerHTML=""; try{NWSCarousel.refresh();}catch(e){} return; }
       var danger=v>=DANGER;
       el.hidden=false;
       el.innerHTML=danger
@@ -1617,6 +1668,7 @@
            back to the copy \u2014 safety guidance like "mandatory rehab" no longer gets truncated. */
         ? '<div class="al-band al-heat-danger"><span class="al-icon">\ud83c\udf21\ufe0f</span><div class="al-body"><div class="al-ev">EXCESSIVE HEAT \u2014 DANGER</div><div class="al-sub">Feels like '+v+'\u00b0F \u00b7 limit exertion \u00b7 mandatory rehab</div></div></div>'
         : '<div class="al-band al-heat-caution"><span class="al-icon">\ud83c\udf21\ufe0f</span><div class="al-body"><div class="al-ev">EXCESSIVE HEAT \u2014 CAUTION</div><div class="al-sub">Feels like '+v+'\u00b0F \u00b7 hydrate \u00b7 plan rehab</div></div></div>';
+      try{ NWSCarousel.refresh(); }catch(e){}
     };
   })();
   /* NO FABRICATED WEATHER, EVER. The retired wxSample() fed invented 98-100F / 12-15% RH / 22G35
@@ -2372,8 +2424,10 @@
           '<button type="button" class="rs-x" aria-label="Close">✕</button></div>'+
         '<div class="rs-win">'+rtEsc(win)+'</div>'+
         (runs.length
-          ? (order.length?'<div class="rs-wsec"><div class="rs-wlbl">Apparatus workload</div>'+wk+'</div>':'')+
-            '<div class="rs-scroll">'+rows+'</div>'
+          ? '<div class="rs-scroll">'+                                     /* workload INSIDE the scroll — a long EMS list (16+ apparatus) was pushing the rows into a cramped, un-scrollable strip */
+              (order.length?'<div class="rs-wsec"><div class="rs-wlbl">Apparatus workload</div>'+wk+'</div>':'')+
+              rows+
+            '</div>'
           : '<div class="rs-empty">No runs in this category this tour.</div>')+
         '</div>';
       o.hidden=false;
@@ -3023,8 +3077,8 @@
     if(alRot){ clearInterval(alRot); alRot=null; }
     if(err){ lane.hidden=false;
       lane.innerHTML='<div class="al-band sev-error"><span class="al-icon">\u26a0\ufe0f</span><div class="al-body"><div class="al-ev">NWS Alerts Unavailable</div>'+
-        '<div class="al-sub">could not reach NWS \u00b7 verify active warnings manually</div></div></div>'; return; }
-    if(!alerts||!alerts.length){ lane.hidden=true; lane.innerHTML=""; return; }   /* verified zero -> clean cell; the err branch above still shouts on failure */
+        '<div class="al-sub">could not reach NWS \u00b7 verify active warnings manually</div></div></div>'; try{NWSCarousel.refresh();}catch(e){} return; }
+    if(!alerts||!alerts.length){ lane.hidden=true; lane.innerHTML=""; try{NWSCarousel.refresh();}catch(e){} return; }   /* verified zero -> clean cell; the err branch above still shouts on failure */
     var rank={extreme:0,severe:1,moderate:2,minor:3,unknown:4};
     alerts.sort(function(a,b){return (rank[String(a.severity).toLowerCase()]==null?4:rank[String(a.severity).toLowerCase()])-(rank[String(b.severity).toLowerCase()]==null?4:rank[String(b.severity).toLowerCase()]);});
     function alClass(ev,dt){ var e=String(ev||"").toLowerCase(), d=String(dt||"").toUpperCase();   /* type -> color/icon, per the Firehawk NWS banner spec */
@@ -3040,14 +3094,11 @@
       var t=a.sent?new Date(a.sent):null, src="NWS"+(t&&!isNaN(t.getTime())?(" \u00b7 "+t.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE})):"");
       return '<div class="al-band '+m.cls+'"><span class="al-icon">'+m.icon+'</span><div class="al-body"><div class="al-ev">'+label+'</div><div class="al-sub">'+area+until+'</div></div><span class="al-src">'+src+'</span></div>';
     }
-    var PER=2;                                             /* vertical budget: 2 bands per page keeps the quad stable */
+    /* Render EVERY band into the (hidden) source lane; the NWS carousel shows one at a time, warnings
+       first + longer dwell. No internal pagination \u2014 the carousel owns rotation across alerts+heat+link. */
     lane.hidden=false;
-    if(alerts.length<=PER){ lane.innerHTML=alerts.map(band).join(""); return; }
-    var pages=[]; for(var i=0;i<alerts.length;i+=PER) pages.push(alerts.slice(i,i+PER));
-    var idx=0;
-    function show(i){ lane.innerHTML=pages[i].map(band).join("")+'<div class="al-page">'+(i+1)+" / "+pages.length+" \u00b7 "+alerts.length+" active</div>"; }
-    show(0);
-    alRot=setInterval(function(){ idx=(idx+1)%pages.length; show(idx); }, 7000);
+    lane.innerHTML=alerts.map(band).join("");
+    try{ NWSCarousel.refresh(); }catch(e){}
   }
   function loadAlerts(){
     if(typeof fetch!=="function"){renderAlerts(null,"nofetch");return;}
