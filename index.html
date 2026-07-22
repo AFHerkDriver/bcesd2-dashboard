@@ -187,7 +187,8 @@
      Direction, and an empty row (no active STENs) collapses so it steals nothing. */
   .hosp-strike{flex:0 0 auto;border-top:1px solid var(--border);
     margin-top:clamp(5px,.6vmin,11px);padding-top:clamp(5px,.6vmin,11px)}
-  .hosp-strike:empty{display:none}
+  .hosp-strike[hidden]{display:none}
+  .strike-block .strike{margin-top:0}   /* header supplies the gap; don't double it */
 
   /* Q4 Weather + Calendar (split quadrant) */
   .q4{display:flex;flex-direction:column;gap:clamp(5px,.55vmin,10px);min-height:0}
@@ -621,6 +622,12 @@
     .tile .teams-body{grid-template-columns:repeat(2,1fr);grid-auto-rows:minmax(0,1fr);align-content:stretch}
     .tile .teams-body .tchip{height:auto;min-height:0}
     .quad{min-height:640px}
+    /* Flood ops on: the crossing list makes the NWS tile overflow at this height (the flood band is
+       clipped below the tile edge). Give the NWS+Hospital row a bigger vertical slice and shrink the
+       District Map to match — the map is the more compressible of the two. Scoped to :has(flood) so
+       the map keeps its full size on a dry day. */
+    .rcol:has(.floodband:not([hidden])) > .rrow{flex:1.25 1 0}
+    .rcol:has(.floodband:not([hidden])) > .drone-tile{flex:.95 1 0}
   }
 
   .ph-strip{border-style:dashed !important;border-left-color:var(--border) !important;opacity:.7}
@@ -1013,7 +1020,10 @@
             <div class="med-strip-hd"><span class="med-strip-lbl">Medical Direction</span></div>
             <div class="med-body" id="medBody"></div>
           </div>
-          <div class="strike hosp-strike" id="strikeRow"></div>
+          <div class="strike-block hosp-strike" id="strikeWrap" hidden>
+            <div class="med-strip-hd"><span class="med-strip-lbl">Wildland Strike Team</span></div>
+            <div class="strike" id="strikeRow"></div>
+          </div>
         </div>
       </div>
 
@@ -2946,7 +2956,8 @@
                  (ph?('<span class="p">'+ph+'</span>'):'')+'</div>');
       });
       row.innerHTML=out.join("");
-      row.style.display=out.length?"":"none";
+      var wrap=document.getElementById("strikeWrap");   /* hide the header too when no team is active */
+      if(wrap) wrap.hidden=!out.length; else row.style.display=out.length?"":"none";
     }
     onBoardState(function(ok,st){ render(ok,st); });
   })();
