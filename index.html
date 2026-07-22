@@ -393,8 +393,8 @@
   .pin-sonar-wrap{background:transparent;border:0}
   .pin-sonar{position:relative;width:0;height:0;pointer-events:none}
   .pin-sonar span{position:absolute;left:0;top:0;width:18px;height:18px;margin:-9px 0 0 -9px;
-    border-radius:50%;border:2px solid #FFFFFF;opacity:0;
-    box-shadow:0 0 4px rgba(0,0,0,.7);animation:pinsonar 2s ease-out 30}
+    border-radius:50%;border:2px solid var(--sonar,#FFFFFF);opacity:0;   /* rings take the call-type color (set inline), fall back to white */
+    box-shadow:0 0 4px rgba(0,0,0,.85);animation:pinsonar 2s ease-out 30}
   .pin-sonar span:nth-child(2){animation-delay:1s}
   @keyframes pinsonar{
     0%  {transform:scale(.45);opacity:.9}
@@ -1290,7 +1290,7 @@
         /* Sonar rings, anchored on the same point (a 0-size divIcon so the ripple centres on the pin).
            In the fresh layer with the pin, so the tally rebuild can't wipe them mid-pulse. */
         var sonar=L.marker([c.lat,c.lng],{icon:L.divIcon({className:"pin-sonar-wrap",
-          html:'<div class="pin-sonar"><span></span><span></span></div>',iconSize:[0,0],iconAnchor:[0,0]}),
+          html:'<div class="pin-sonar" style="--sonar:'+(c.color||'#FFFFFF')+'"><span></span><span></span></div>',iconSize:[0,0],iconAnchor:[0,0]}),
           interactive:false,keyboard:false}).addTo(freshLayer);
         var rec={mk:mk, sonar:sonar, lat:c.lat, lng:c.lng};
         rec.son=setTimeout(function(){ try{ freshLayer.removeLayer(sonar); }catch(e){} rec.sonar=null; },61000);       /* spent sonar goes; the pin stays put */
