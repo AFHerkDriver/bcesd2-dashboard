@@ -131,6 +131,7 @@
   .sched-tile{flex:1.02 1 0;min-height:0}
   .rcol{flex:.85 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rcol > .tile{flex:1.2 1 0;min-height:0}          /* now the Drone Video tile */
+  .rcol > .strike-tile{flex:0 0 auto}               /* Wildland Strike Team tile is content-height, not a map-sized pane */
   .rcol > .rrow{flex:1 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   .rrow > .nws-tile{flex:1 1 0;min-width:0}         /* NWS left half */
   .rrow > .hosp-tile{flex:1 1 0;min-width:0}        /* Hospital right half */
@@ -183,12 +184,9 @@
   .strike .s .p{font-family:'DM Mono',monospace;font-size:clamp(10px,1vmin,16px);color:var(--text);line-height:1}
   .strike .s.on{border-color:var(--red);background:rgba(255,59,48,.12)}
   .strike .s.on .v{color:var(--red)}
-  /* Strike pills when they live in the Hospital tile: a top rule separates them from Medical
-     Direction, and an empty row (no active STENs) collapses so it steals nothing. */
-  .hosp-strike{flex:0 0 auto;border-top:1px solid var(--border);
-    margin-top:clamp(5px,.6vmin,11px);padding-top:clamp(5px,.6vmin,11px)}
-  .hosp-strike[hidden]{display:none}
-  .strike-block .strike{margin-top:0}   /* header supplies the gap; don't double it */
+  /* Wildland Strike Team — its own right-column tile, shown only while a STEN is active. */
+  .strike-tile[hidden]{display:none}    /* beats .tile's display:flex so an inactive tile truly collapses */
+  .strike-tile .strike{margin-top:0;flex:1 1 auto}   /* pills fill the tile body under the header */
 
   /* Q4 Weather + Calendar (split quadrant) */
   .q4{display:flex;flex-direction:column;gap:clamp(5px,.55vmin,10px);min-height:0}
@@ -1020,11 +1018,15 @@
             <div class="med-strip-hd"><span class="med-strip-lbl">Medical Direction</span></div>
             <div class="med-body" id="medBody"></div>
           </div>
-          <div class="strike-block hosp-strike" id="strikeWrap" hidden>
-            <div class="med-strip-hd"><span class="med-strip-lbl">Wildland Strike Team</span></div>
-            <div class="strike" id="strikeRow"></div>
-          </div>
         </div>
+      </div>
+
+      <!-- Wildland Strike Team — its OWN tile so an active strike team can't be lost inside another
+           panel. Appears only while a STEN is active (render toggles [hidden]); collapses entirely
+           otherwise, so it costs no space on a normal day. -->
+      <div class="tile strike-tile" id="strikeTile" hidden>
+        <div class="head"><span class="name">Wildland Strike Team</span></div>
+        <div class="strike" id="strikeRow"></div>
       </div>
 
       <!-- Drone Video — dedicated section (was the NWS slot). Stream fills the whole tile.
@@ -2956,8 +2958,8 @@
                  (ph?('<span class="p">'+ph+'</span>'):'')+'</div>');
       });
       row.innerHTML=out.join("");
-      var wrap=document.getElementById("strikeWrap");   /* hide the header too when no team is active */
-      if(wrap) wrap.hidden=!out.length; else row.style.display=out.length?"":"none";
+      var tile=document.getElementById("strikeTile");   /* show/hide the whole tile with the pills */
+      if(tile) tile.hidden=!out.length; else row.style.display=out.length?"":"none";
     }
     onBoardState(function(ok,st){ render(ok,st); });
   })();
