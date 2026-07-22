@@ -46,6 +46,11 @@
 
   .notice{margin:12px 0;padding:10px 14px;border:1px solid var(--amber);border-radius:9px;
     background:rgba(255,193,7,.08);font-size:12px;color:var(--amber)}
+  .tok-warn{margin:10px 0;padding:11px 14px;border:1px solid var(--amber);border-radius:10px;
+    background:rgba(255,193,7,.12);font-size:13px;line-height:1.45;color:var(--amber)}
+  .tok-warn.crit{border-color:var(--red);background:rgba(255,59,48,.14);color:var(--red)}
+  .tok-warn b{font-weight:700}
+  .tok-warn[hidden]{display:none}
 
   /* Live preview */
   .preview{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--green);
@@ -236,6 +241,9 @@
 
     <div class="notice" id="lockNotice">🔒 Checking Access&hellip;</div>
 
+    <!-- Active911 token-expiry reminder — admin owner (Capt Sanchez) only, from 30 days out. -->
+    <div class="tok-warn" id="tokWarn" hidden></div>
+
     <!-- Shift & UAV — auto from Firehawk, not editable here -->
     <div class="card">
       <h2>Shift &amp; UAV <span class="tag live">AUTO · FIREHAWK</span></h2>
@@ -393,8 +401,24 @@
   function msg(txt, cls){ var m=$g('gateMsg'); if(m){ m.textContent=txt||''; m.className='gate-msg'+(cls?(' '+cls):''); } }
   function unlock(name, tier, pin){
     if(tier==='admin') loadAccessLog(pin);   /* access log is yours alone — admin PIN only */
-    var g=$g('gate'); if(g) g.classList.add('hide');
+    var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
     var n=$g('lockNotice'); if(n) n.textContent='🔒 Officer Access \u00b7 '+(name||'Verified');
+  }
+  /* Active911 token-expiry heads-up. Shown ONLY to the token owner (Capt Sanchez), starting 30 days
+     out, and it stays up (incl. an EXPIRED state) until the tokens are recycled. When you recycle
+     them, update A911_EXPIRE to the new expiry date and the reminder resets itself. */
+  function tokenReminder(name){
+    var el=$g('tokWarn'); if(!el) return; el.hidden=true;
+    if(String(name||'').trim().toLowerCase()!=='capt sanchez') return;   /* owner only — no clutter for other officers */
+    var A911_EXPIRE=Date.UTC(2027,6,17);          /* Active911 refresh tokens expire 2027-07-17 (UTC) */
+    var LEAD=30*86400000, now=Date.now(), left=A911_EXPIRE-now;
+    if(left>LEAD) return;                          /* more than 30 days out -> silent */
+    var days=Math.ceil(left/86400000);
+    if(days>0){ el.className='tok-warn';
+      el.innerHTML='&#9888; <b>Active911 tokens expire in '+days+' day'+(days===1?'':'s')+'</b> (Jul 17, 2027). Recycle them before they lapse &mdash; dispatch data stops when they do.'; }
+    else { el.className='tok-warn crit'; var ago=Math.abs(days);
+      el.innerHTML='&#9940; <b>Active911 tokens EXPIRED</b> ('+(ago===0?'today':(ago+' day'+(ago===1?'':'s')+' ago'))+', Jul 17, 2027). Recycle them now &mdash; dispatch data may be down.'; }
+    el.hidden=false;
   }
   function accEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   /* Central time, matching the board — a login at 11:45 PM Central is 12:45 AM Eastern the NEXT day,

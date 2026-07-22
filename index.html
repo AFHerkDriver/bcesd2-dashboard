@@ -1614,7 +1614,15 @@
         bands.sort(function(a,b){ return (b.warn?1:0)-(a.warn?1:0); });   /* warnings lead */
         if(!bands.length){ slot.hidden=true; slot.innerHTML=""; idx=0; if(src) src.hidden=true; return; }
         if(src) src.hidden=true;                                          /* carousel owns the display */
-        slot.hidden=false; if(idx>=bands.length) idx=0; show(slot);
+        slot.hidden=false;
+        /* Lower-area priority is flood > red-flag forecast > banners. When the lower area is BUSY
+           (flood section or the fire-weather forecast is showing) the banner slot holds ONE band and
+           rotates. When it's FREE, stack every band into that space instead of rotating one over
+           emptiness — warnings stay first, so if the stack ever overruns, only advisories clip. */
+        var flood=document.getElementById("floodBand"), fw=document.getElementById("fwBody");
+        var lowerBusy=(flood && !flood.hidden) || (fw && fw.querySelector(".fwp, .fw-flag"));
+        if(lowerBusy){ if(idx>=bands.length) idx=0; show(slot); }
+        else { slot.innerHTML=bands.map(function(b){ return b.html; }).join(""); }
       }catch(e){ if(src) src.hidden=false; slot.hidden=true; }            /* fail-loud fallback: show the raw stack */
     }
     return { refresh:refresh };
@@ -2836,7 +2844,7 @@
                '<span class="pW">'+wind+'</span></div>';
       }).join("")+'</div>';
     }
-    function render(){
+    function renderInner(){
       var body=document.getElementById("fwBody"), stamp=document.getElementById("fwStamp");
       if(!body) return;
       if(window.FLOOD_ACTIVE){ body.innerHTML=""; if(stamp) stamp.textContent="flood ops active"; return; }   /* one slot: flood takes it */
@@ -2851,6 +2859,7 @@
       body.innerHTML=flag+pills();                          /* pills carry the 12h detail; no separate "current" box */
       if(stamp) stamp.textContent = (mode==="on"?"officer: forced on":"NWS")+" · worst of 5 stations";
     }
+    function render(){ renderInner(); try{ if(window.NWSCarousel) NWSCarousel.refresh(); }catch(e){} }   /* re-run the banner carousel (stack vs rotate) whenever the forecast/flood state changes */
     function loadNws(){
       if(typeof fetch!=="function"){ nws=null; render(); return; }
       bcFetch(WX+"/redflag").then(function(r){ if(!r.ok) throw 0; return r.json(); })
