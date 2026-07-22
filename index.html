@@ -133,6 +133,11 @@
   .rcol > .tile{flex:1.2 1 0;min-height:0}          /* now the Drone Video tile */
   .rcol > .strike-tile{flex:0 0 auto}               /* Wildland Strike Team tile is content-height, not a map-sized pane */
   .rcol > .rrow{flex:1 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
+  /* Flood ops on: the NWS row needs more height for the crossings than its default share. Give it a
+     bigger slice and shrink the District Map (the more compressible pane). ALL tiers (was iPad-only) —
+     the wall and the 1401-1499 gap were overflowing without it. Dry day -> map keeps full size. */
+  .rcol:has(.floodband:not([hidden])) > .rrow{flex:1.25 1 0}
+  .rcol:has(.floodband:not([hidden])) > .drone-tile{flex:.95 1 0}   /* map only — NOT the strike-tile */
   .rrow > .nws-tile{flex:1 1 0;min-width:0}         /* NWS left half */
   .rrow > .hosp-tile{flex:1 1 0;min-width:0}        /* Hospital right half */
   .rrow > .med-tile{flex:1 1 0;min-width:0}
@@ -163,15 +168,8 @@
   .med-bk .ph{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.5vmin,24px);color:var(--text);letter-spacing:1.5px}
   .med-foot{font-size:clamp(8px,.75vmin,12px);color:var(--dim);margin-top:auto;padding-top:6px}
 
-  /* Q2 Hospitals */
-  .hosp-list{display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);flex:1;min-height:0;justify-content:flex-start}
-  .hrow{display:flex;align-items:center;gap:8px;padding:clamp(2px,.35vmin,6px) clamp(7px,.75vmin,11px);
-    border-radius:7px;background:var(--panel2);border-left:4px solid var(--green)}
-  .hrow.divert{border-left-color:var(--red)}
-  .hrow.partial{border-left-color:var(--amber)}
-  .hrow .hn{font-size:clamp(10px,.95vmin,15px);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hrow .hn .spec{color:var(--dim);font-size:.78em;letter-spacing:.3px}
-  .hrow .st{flex:0 0 auto}
+  /* Hospital diversion rows are styled by the live .hosp-list .hrow block further down (red diversion
+     design). The old green/.divert/.partial/.spec/.st rules were removed — the render never emits them. */
 
   /* Q3 Fire weather */
   .redflag{text-align:center;padding:clamp(4px,.45vmin,9px);border:2px solid var(--red);border-radius:9px;
@@ -277,7 +275,10 @@
   .tile.ph .pname{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.7vmin,28px);letter-spacing:1.5px;color:var(--text);opacity:.75}
   .tile.ph .pidea{font-size:clamp(10px,.95vmin,14px);color:var(--dim);margin-top:6px;max-width:78%;line-height:1.4}
   /* ── Flood ops band ── */
-  .floodband{flex:0 0 auto;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);
+  /* flex:0 1 auto + overflow:hidden makes the flood band the tile's flexible SINK: alert/heat bands are
+     rigid above it, so when the NWS tile is over-full THIS shrinks. Crossings render hazards-first, so a
+     shrink clips OPEN crossings at the bottom (already summarised by "+N more open"), never a closure. */
+  .floodband{flex:0 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);
     padding:clamp(4px,.5vmin,9px) 0}   /* blue bounding removed — blends into the NWS tile */
   .floodband[hidden]{display:none}                        /* author display:flex beats the hidden attr without this */
   .fb-head{display:flex;align-items:center;gap:12px}
@@ -304,6 +305,7 @@
   .cx2.offline .cxs{color:#8B949E}
   .cx2.unknown .cxs{color:var(--dim)}                   /* status not reported — gray, never green */
   .cx2.none{color:var(--dim)}
+  .cx2.more{color:var(--dim);font-style:italic}          /* "+N more open" — capped opens; hazards are never capped */
 
   /* ── Fire-weather hourly pills: RH · wind · temp per hour, tier-colored ── */
   .fw-pills{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(3px,.35vmin,6px);
@@ -547,6 +549,7 @@
     .tally{flex-wrap:wrap;justify-content:center}            /* phone: 7 station chips wrap instead of overflowing off the right edge */
     .tally .tchip2{flex:0 0 auto}
     .wx-hours{flex:none;height:150px}
+    .wx-hours .hcol:nth-child(n+9){display:none}   /* phone: 11 hourly cols overflow ~390px; show the first 8 (rest clip the LATEST hours off-screen otherwise) */
     .rcol,.rcol > .rrow{display:contents}                    /* iPhone: flatten the right column so its tiles join the single stack and can be reordered */
     .nws-tile{order:-1}                                      /* iPhone: NWS Alerts to the very top, above District Weather */
     .rcol{flex:none;width:100%}
@@ -624,8 +627,7 @@
        clipped below the tile edge). Give the NWS+Hospital row a bigger vertical slice and shrink the
        District Map to match — the map is the more compressible of the two. Scoped to :has(flood) so
        the map keeps its full size on a dry day. */
-    .rcol:has(.floodband:not([hidden])) > .rrow{flex:1.25 1 0}
-    .rcol:has(.floodband:not([hidden])) > .drone-tile{flex:.95 1 0}
+    /* (flood NWS/map rebalance now lives in the base .rcol rules — applies to every tier) */
   }
 
   .ph-strip{border-style:dashed !important;border-left-color:var(--border) !important;opacity:.7}
@@ -633,7 +635,10 @@
   .ph-strip .note{color:var(--dim) !important;font-style:italic}
   .ph-chip{border-color:var(--border) !important;background:var(--panel2) !important}
   .ph-chip .st{color:var(--dim) !important}
-  .alert-lane{flex:0 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(4px,.4vw,8px)}
+  /* flex:0 0 auto (NOT 0 1 auto): the alert lane holds tornado/severe-warning bands and must NEVER be
+     shrunk to make room for the flood band below it. When the NWS tile is over-full the flood crossings
+     (capped, hazards-first) yield instead — losing an OPEN crossing beats losing a tornado warning. */
+  .alert-lane{flex:0 0 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(4px,.4vw,8px)}
   .alert-lane .al-none{color:var(--dim);font-size:clamp(11px,1vmin,16px);text-align:center;padding:clamp(2px,.3vmin,5px) 0}
   .alert-lane[hidden]{display:none}
   /* Compact NWS banners (Firehawk Ops style): icon · label + area/until · NWS source. Colored by type. */
@@ -658,7 +663,7 @@
   .al-band.sev-error .al-ev{color:var(--red)}
   /* Excessive-heat advisory bands (heat index): caution = amber, danger = hot orange + pulse */
   .heat-band[hidden]{display:none}
-  .heat-band{margin-top:clamp(4px,.4vw,8px)}
+  .heat-band{flex:0 0 auto;margin-top:clamp(4px,.4vw,8px)}   /* rigid like the alert lane — the heat instruction never yields to the flood band */
   .al-band.al-heat-caution{border-color:rgba(245,158,11,.5);background:linear-gradient(135deg,rgba(245,158,11,.20),rgba(180,90,0,.10))}
   .al-band.al-heat-caution .al-ev{color:#F59E0B}
   .al-band.al-heat-danger{border-color:rgba(255,107,53,.6);background:linear-gradient(135deg,rgba(255,107,53,.24),rgba(200,40,0,.13));animation:pulse 3s ease-in-out infinite}
@@ -676,9 +681,8 @@
   /* Matched header status chips (shift + UAV, identical footprint) */
   .hchip{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
     border:2px solid var(--border);border-radius:10px;background:var(--panel2);
-    padding:clamp(5px,.6vmin,11px) clamp(10px,1.1vmin,18px);min-width:clamp(60px,6vmin,94px)}
+    padding:clamp(5px,.6vmin,11px) clamp(10px,1.1vmin,18px);min-width:clamp(78px,7.4vw,124px)}
   .hchip .lbl{font-size:clamp(7px,.65vw,10px);letter-spacing:2px;color:var(--dim);line-height:1;font-weight:700}
-  .hchip{min-width:clamp(78px,7.4vw,124px)}
   .hchip .val{font-family:'Bebas Neue',sans-serif;font-size:clamp(19px,2vw,32px);letter-spacing:1px;line-height:1;margin-top:2px;white-space:nowrap}
   .hchip.shift{border-color:var(--shiftA);background:rgba(255,59,48,.12)}
   .hchip.shift .val{color:var(--shiftA)}
@@ -706,11 +710,15 @@
   .med-strip .med-body .mnote{flex-basis:100%}        /* revert/backup notes wrap to their own line */
   /* Active Calls tile */
   .calls-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px)}
-  .call-e{display:flex;align-items:baseline;gap:clamp(8px,1vmin,18px);padding:clamp(3px,.4vmin,7px) clamp(6px,.7vmin,12px);
+  /* flex-wrap so a big call (structure fire with many apparatus) drops the overflowing units to a
+     second line instead of shoving the channel off the right edge. A 1-2 unit call still fits on one. */
+  .call-e{display:flex;flex-wrap:wrap;align-items:baseline;gap:clamp(8px,1vmin,18px);row-gap:clamp(1px,.25vmin,5px);
+    padding:clamp(3px,.4vmin,7px) clamp(6px,.7vmin,12px);
     border-left:4px solid var(--red);border-radius:7px;background:rgba(255,59,48,.10)}
   .call-e .ct{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.6vmin,26px);letter-spacing:1px;color:var(--red);flex:0 0 auto;white-space:nowrap}
   .call-e .ca{font-size:clamp(12px,1.2vmin,19px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .call-e .cu{margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--green);flex:0 0 auto;white-space:nowrap}   /* units sized to match the call TYPE */
+  .call-e .cu{margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--green);flex:0 1 auto;min-width:0;white-space:normal;text-align:right}   /* units sized to match the call TYPE; wrap to a 2nd line on a big call */
+  .call-e .cu .u{white-space:nowrap}   /* a single apparatus id never breaks mid-token */
   .call-e .cc{font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--text);flex:0 0 auto;white-space:nowrap}   /* channel — same size as units, white */
   .call-e .cw{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.3vmin,21px);letter-spacing:1px;color:var(--text)}
   .call-e .ce{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vmin,22px);letter-spacing:1px;color:var(--accent)}
@@ -830,7 +838,7 @@
   .rs-wk.rs-flat{grid-template-columns:1fr auto}   /* every rig tied — a row of 100% bars says nothing */
   .rs-a{grid-area:a;font-size:clamp(10px,1.05vmin,14px);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rs-empty{padding:22px 14px;text-align:center;color:var(--dim);font-size:13px}
-  .rt-cnm{font-family:'Bebas Neue',sans-serif;letter-spacing:.5px;color:var(--rc);font-size:clamp(11px,1.25vmin,20px);line-height:1;white-space:nowrap}
+  .rt-cnm{font-family:'Bebas Neue',sans-serif;letter-spacing:.5px;color:var(--rc);font-size:clamp(11px,1.25vmin,20px);line-height:1;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}   /* ellipsis, never a mid-word clip on a narrow cell */
   .rt-cct{font-family:'Bebas Neue',sans-serif;color:var(--rc);font-size:clamp(17px,2.1vmin,34px);line-height:1.05}
 
   /* Unit Status tile (UAV live + officer-set teams) */
@@ -852,7 +860,9 @@
   .trow.on .ts{color:var(--green)}
   .teams-body.err .trow .ts{color:var(--amber)}
   /* Fire Weather tile */
-  .fw-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:clamp(3px,.4vmin,8px)}
+  /* "safe center": centered when the forecast fits, but falls back to top-aligned when the tile is
+     tight (red-flag + heat day, 3-row grid) so the SOONEST hours never clip — only the latest do. */
+  .fw-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:safe center;gap:clamp(3px,.4vmin,8px)}
   .fw-idle{color:var(--dim);font-size:clamp(11px,1vmin,16px)}
   .fw-flag{font-family:'Bebas Neue',sans-serif;font-size:clamp(18px,2vmin,34px);letter-spacing:1px;color:var(--red);line-height:1}
   .fw-flag.unk{color:var(--amber)}
@@ -2825,14 +2835,21 @@
       }).catch(function(){ return {name:"STA "+st.id, inches:null}; });
     }
     function loadRain(){
-      var mrms=STATIONS.map(function(st){                     /* past 6h — MRMS observed (inches) */
+      var mrms=STATIONS.map(function(st){                     /* past 6h — MRMS QPE observed, mm -> inches */
         var geom=encodeURIComponent(JSON.stringify({x:st.lon,y:st.lat,spatialReference:{wkid:4326}}));
-        var rule=encodeURIComponent(JSON.stringify({rasterFunction:"rft_6hr"}));
-        var u="https://mapservices.weather.noaa.gov/raster/rest/services/obs/mrms_qpe/ImageServer/identify?geometry="+geom+"&geometryType=esriGeometryPoint&renderingRule="+rule+"&returnGeometry=false&f=json";
+        /* NO renderingRule. The rft_* "raster functions" on this ImageServer are display COLORMAPS,
+           not accumulations: identify against one returns the color-class index (always "1" here),
+           which the board was printing as 1.00". Instead pull the raw mosaic (returnCatalogItems) and
+           read the conus_QPE_06H item's real pixel value from properties.Values. MRMS is mm; /25.4. */
+        var u="https://mapservices.weather.noaa.gov/raster/rest/services/obs/mrms_qpe/ImageServer/identify?geometry="+geom+"&geometryType=esriGeometryPoint&returnCatalogItems=true&returnGeometry=false&f=json";
         return tfetch(WX+"/?url="+encodeURIComponent(u)+"&_cb="+Date.now(),{cache:"no-store"})
           .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-          .then(function(j){ var v=(j&&j.value!=null)?parseFloat(j.value):(j&&j.values&&j.values.length?parseFloat(j.values[0]):NaN);
-            return {name:"STA "+st.id, inches:(isFinite(v)&&v>=0)?v:null}; })
+          .then(function(j){
+            var feats=(j&&j.catalogItems&&j.catalogItems.features)||[], vals=(j&&j.properties&&j.properties.Values)||[], mm=null;
+            for(var i=0;i<feats.length;i++){ var a=feats[i]&&feats[i].attributes;
+              if(a&&a.idp_subset==="conus_QPE_06H"){ var pv=parseFloat(vals[i]); if(isFinite(pv)&&pv>=0) mm=pv; break; } }
+            return {name:"STA "+st.id, inches:(mm!=null)?mm/25.4:null};   /* pv<0 is MRMS NoData -> null -> fail loud */
+          })
           .catch(function(){ return {name:"STA "+st.id, inches:null}; });
       });
       function worst(rs){ var v=rs.filter(function(r){return r.inches!=null;}); return v.length?v.reduce(function(a,b){return b.inches>a.inches?b:a;}):null; }
@@ -2866,8 +2883,14 @@
             });
           function col(tag,arr,dcls){
             arr.sort(function(a,b){ return (b.bad?1:0)-(a.bad?1:0); });    /* problems first */
-            var rows=arr.length ? arr.map(function(r){ return '<div class="cx2 '+r.cls+'"><span class="cxs">'+r.lbl+'</span>\u2014 '+r.name+'</div>'; }).join("")
+            /* Show EVERY hazard (closed/caution/offline/unknown), but cap OPEN crossings so a long
+               watch list can't push the flood band over the alert/heat bands above it. Hidden opens are
+               summarised \u2014 hazards are never summarised away. */
+            var OPEN_CAP=3, shown=[], openHidden=0;
+            arr.forEach(function(r){ if(r.bad || (shown.filter(function(x){return !x.bad;}).length<OPEN_CAP)) shown.push(r); else openHidden++; });
+            var rows=arr.length ? shown.map(function(r){ return '<div class="cx2 '+r.cls+'"><span class="cxs">'+r.lbl+'</span>\u2014 '+r.name+'</div>'; }).join("")
                                 : '<div class="cx2 none">\u2014 none watched</div>';
+            if(openHidden) rows+='<div class="cx2 more">+'+openHidden+' more open</div>';
             return '<div class="fb-col"><div class="fb-coltag '+dcls+'">'+tag+'</div>'+rows+'</div>';
           }
           if(!groups.D2.length && !groups.D6.length){ box.innerHTML='<span class="cx-err">⚠ watched crossings not in HALT feed — verify manually</span>'; return; }
