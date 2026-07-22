@@ -134,10 +134,13 @@
   .rcol > .strike-tile{flex:0 0 auto}               /* Wildland Strike Team tile is content-height, not a map-sized pane */
   .rcol > .rrow{flex:1 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
   /* Flood ops on: the NWS row needs more height for the crossings than its default share. Give it a
-     bigger slice and shrink the District Map (the more compressible pane). ALL tiers (was iPad-only) —
-     the wall and the 1401-1499 gap were overflowing without it. Dry day -> map keeps full size. */
-  .rcol:has(.floodband:not([hidden])) > .rrow{flex:1.25 1 0}
-  .rcol:has(.floodband:not([hidden])) > .drone-tile{flex:.95 1 0}   /* map only — NOT the strike-tile */
+     bigger slice and shrink the District Map (the more compressible pane). GATED to >=1181px — the
+     2-up, fixed-height tiers. Below that the layout STACKS with auto-height, where a flex-basis:0
+     grow item collapses to 0 (this hid NWS + Hospital on portrait iPad); stacked tiers keep flex:none. */
+  @media (min-width:1181px){
+    .rcol:has(.floodband:not([hidden])) > .rrow{flex:1.25 1 0}
+    .rcol:has(.floodband:not([hidden])) > .drone-tile{flex:.95 1 0}   /* map only — NOT the strike-tile */
+  }
   .rrow > .nws-tile{flex:1 1 0;min-width:0}         /* NWS left half */
   .rrow > .hosp-tile{flex:1 1 0;min-width:0}        /* Hospital right half */
   .rrow > .med-tile{flex:1 1 0;min-width:0}
@@ -674,7 +677,7 @@
   .al-heat-caution .al-sub,.al-heat-danger .al-sub{white-space:normal;overflow:visible;text-overflow:clip}
   .al-band.al-link{border-color:rgba(255,59,48,.6);background:linear-gradient(135deg,rgba(255,59,48,.22),rgba(140,0,0,.12));animation:pulse 3s ease-in-out infinite}
   .al-band.al-link .al-ev{color:var(--red)}
-  .al-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
+  .al-page,.cx-page{text-align:center;font-family:'DM Mono',monospace;font-size:clamp(9px,.8vw,13px);color:var(--dim);letter-spacing:1px;padding-top:2px}
   .al-more{font-size:clamp(10px,.9vw,14px);color:var(--dim);text-align:center;letter-spacing:1px}
   /* Shift calendar — bottom strip (officer-set) */
 
@@ -2810,7 +2813,7 @@
     var WX="https://firehawk-wx.usafsentinel-45e.workers.dev";
     var CX_URL="https://api.bexarflood.org/api/sensors/GetAll";
     var WATCH={"2311":"D2","2325":"D2","2322":"D2","2321":"D2","2308":"D6","2561":"D6","2580":"D6","2377":"D6"};
-    var POLL=5*60*1000, active=false, timer=null, evName="";
+    var POLL=5*60*1000, active=false, timer=null, evName="", cxRot=null;   /* cxRot cycles the crossings between District 2 and District 6 */
     function tfetch(u,opt){ return Promise.race([ fetch(u,opt),
       new Promise(function(_,rej){ setTimeout(function(){rej(new Error("timeout"));},12000); }) ]); }
     function esc(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -2893,8 +2896,16 @@
             if(openHidden) rows+='<div class="cx2 more">+'+openHidden+' more open</div>';
             return '<div class="fb-col"><div class="fb-coltag '+dcls+'">'+tag+'</div>'+rows+'</div>';
           }
+          if(cxRot){ clearInterval(cxRot); cxRot=null; }
           if(!groups.D2.length && !groups.D6.length){ box.innerHTML='<span class="cx-err">⚠ watched crossings not in HALT feed — verify manually</span>'; return; }
-          box.innerHTML='<div class="fb-cols">'+col("DISTRICT 2",groups.D2,"d2")+col("DISTRICT 6",groups.D6,"d6")+'</div>';
+          /* Cycle between the districts instead of stacking both — keeps the flood band short so it
+             never crowds the alert/heat bands above it. One district at a time, swapping every 7s. */
+          var pages=[];
+          if(groups.D2.length) pages.push(col("DISTRICT 2",groups.D2,"d2"));
+          if(groups.D6.length) pages.push(col("DISTRICT 6",groups.D6,"d6"));
+          function cxShow(i){ box.innerHTML='<div class="fb-cols">'+pages[i]+(pages.length>1?('<div class="cx-page">'+(i+1)+" / "+pages.length+'</div>'):'')+'</div>'; }
+          cxShow(0);
+          if(pages.length>1){ var ci=0; cxRot=setInterval(function(){ if(!active){ clearInterval(cxRot); cxRot=null; return; } ci=(ci+1)%pages.length; cxShow(ci); }, 7000); }
         })
         .catch(function(){ var box=el("fbCx"); if(box&&active) box.innerHTML='<span class="cx-err">⚠ HALT CROSSING FEED UNAVAILABLE \u2014 verify closures manually</span>'; });
     }
@@ -2908,7 +2919,7 @@
       if(eff && !active){ active=true; evName=lastName;
         var st=el("fbStamp"); if(st) st.textContent=stampText();
         band.hidden=false; poll(); timer=setInterval(poll, POLL);
-      } else if(!eff && active){ active=false; band.hidden=true; if(timer){clearInterval(timer);timer=null;} }
+      } else if(!eff && active){ active=false; band.hidden=true; if(timer){clearInterval(timer);timer=null;} if(cxRot){clearInterval(cxRot);cxRot=null;} }
       else if(eff && active){ var s2=el("fbStamp"); if(s2) s2.textContent=stampText(); evName=lastName; }
       try{ FireWx.refresh(); }catch(e){}                          /* re-render fire panel around the new flood state */
     }
@@ -3043,15 +3054,14 @@
     /* A regional NWS alert (heat, wind) lists many counties in areaDesc, e.g.
        "Llano; Burnet; ...; Bexar; Comal; ...". We query BY Bexar's zone, so the alert genuinely
        applies here — but taking the FIRST listed county labelled it "Llano", which reads like a
-       wrong-district alert. Prefer our own county so the label reflects why it's on OUR board, and
-       tag the county count so a multi-county advisory is obviously regional, not Bexar-specific. */
+       wrong-district alert. Prefer our own county so the label reflects why it's on OUR board. (The
+       "+N other counties" tag was dropped — the officer only cares that it applies to Bexar.) */
     function alArea(desc){
       var parts=String(desc||"").split(";").map(function(s){return s.trim();}).filter(Boolean);
       if(!parts.length) return "";
       var pref=["Bexar","Medina","Comal","Atascosa","Wilson","Guadalupe","Kendall","Bandera"], hit=null;
       for(var i=0;i<pref.length && !hit;i++) for(var j=0;j<parts.length;j++){ if(parts[j].toLowerCase()===pref[i].toLowerCase()){ hit=parts[j]; break; } }
-      var label=hit||parts[0];
-      return parts.length>1 ? (label+" +"+(parts.length-1)) : label;
+      return hit||parts[0];   /* just our county (Bexar when present); the "+N other counties" tag was noise — we only care about Bexar */
     }
     gW("https://api.weather.gov/alerts/active?zone="+ALERT_ZONES).then(function(data){
       var feats=(data&&data.features)||[];

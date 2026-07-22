@@ -59,7 +59,7 @@
   /* Cards */
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin:10px 0}
   .card > h2{font-size:17px;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px}
-  .card > .hint{font-size:11px;color:var(--dim);margin-bottom:8px}
+  .card .hint{font-size:11px;color:var(--dim);margin-bottom:8px}   /* descendant, not child: also catches hints nested inside a .field (e.g. Drone Takeover) so all descriptions match */
   /* Access Log (admin PIN only) — control-panel activity grouped by person, expandable */
   #accCard{display:none}
   .acc-body{max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
