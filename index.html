@@ -130,9 +130,9 @@
   .wxrow > .teams-tile{flex:.55 1 0}
   .sched-tile{flex:1.02 1 0;min-height:0}
   .rcol{flex:.85 1 0;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,.6vmin,10px);min-height:0}
-  .rcol > .tile{flex:1.2 1 0;min-height:0}          /* now the Drone Video tile */
+  .rcol > .tile{flex:1.5 1 0;min-height:0}          /* District Map — takes the lion's share; NWS+Hospital only need room for their bounded content, so the map gets the rest */
   .rcol > .strike-tile{flex:0 0 auto}               /* Wildland Strike Team tile is content-height, not a map-sized pane */
-  .rcol > .rrow{flex:1 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}
+  .rcol > .rrow{flex:.85 1 0;display:flex;gap:clamp(6px,.6vmin,10px);min-height:0}   /* NWS+Hospital: sized to the forecast/diversion floor. Flood ops bump this back up via the :has rule below. */
   /* Flood ops on: the NWS row needs more height for the crossings than its default share. Give it a
      bigger slice and shrink the District Map (the more compressible pane). GATED to >=1181px — the
      2-up, fixed-height tiers. Below that the layout STACKS with auto-height, where a flex-basis:0
@@ -278,9 +278,9 @@
   .tile.ph .pname{font-family:'Bebas Neue',sans-serif;font-size:clamp(16px,1.7vmin,28px);letter-spacing:1.5px;color:var(--text);opacity:.75}
   .tile.ph .pidea{font-size:clamp(10px,.95vmin,14px);color:var(--dim);margin-top:6px;max-width:78%;line-height:1.4}
   /* ── Flood ops band ── */
-  /* flex:0 1 auto + overflow:hidden makes the flood band the tile's flexible SINK: alert/heat bands are
-     rigid above it, so when the NWS tile is over-full THIS shrinks. Crossings render hazards-first, so a
-     shrink clips OPEN crossings at the bottom (already summarised by "+N more open"), never a closure. */
+  /* flex:1 1 auto: the flood band fills the NWS tile's lower area (below the banner carousel). overflow
+     hidden + hazards-first ordering means that IF a tile is ever too short, it clips OPEN crossings at
+     the bottom, never a closure. */
   .floodband{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:clamp(3px,.4vmin,7px);
     padding:clamp(4px,.5vmin,9px) 0}   /* blue bounding removed — blends into the NWS tile */
   .floodband[hidden]{display:none}                        /* author display:flex beats the hidden attr without this */
@@ -308,7 +308,6 @@
   .cx2.offline .cxs{color:#8B949E}
   .cx2.unknown .cxs{color:var(--dim)}                   /* status not reported — gray, never green */
   .cx2.none{color:var(--dim)}
-  .cx2.more{color:var(--dim);font-style:italic}          /* "+N more open" — capped opens; hazards are never capped */
 
   /* ── Fire-weather hourly pills: RH · wind · temp per hour, tier-colored ── */
   .fw-pills{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(3px,.35vmin,6px);
@@ -2867,7 +2866,7 @@
     var WX="https://firehawk-wx.usafsentinel-45e.workers.dev";
     var CX_URL="https://api.bexarflood.org/api/sensors/GetAll";
     var WATCH={"2311":"D2","2325":"D2","2322":"D2","2321":"D2","2308":"D6","2561":"D6","2580":"D6","2377":"D6"};
-    var POLL=5*60*1000, active=false, timer=null, evName="", cxRot=null;   /* cxRot cycles the crossings between District 2 and District 6 */
+    var POLL=5*60*1000, active=false, timer=null, evName="";
     function tfetch(u,opt){ return Promise.race([ fetch(u,opt),
       new Promise(function(_,rej){ setTimeout(function(){rej(new Error("timeout"));},12000); }) ]); }
     function esc(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -2940,26 +2939,17 @@
             });
           function col(tag,arr,dcls){
             arr.sort(function(a,b){ return (b.bad?1:0)-(a.bad?1:0); });    /* problems first */
-            /* Show EVERY hazard (closed/caution/offline/unknown), but cap OPEN crossings so a long
-               watch list can't push the flood band over the alert/heat bands above it. Hidden opens are
-               summarised \u2014 hazards are never summarised away. */
-            var OPEN_CAP=3, shown=[], openHidden=0;
-            arr.forEach(function(r){ if(r.bad || (shown.filter(function(x){return !x.bad;}).length<OPEN_CAP)) shown.push(r); else openHidden++; });
-            var rows=arr.length ? shown.map(function(r){ return '<div class="cx2 '+r.cls+'"><span class="cxs">'+r.lbl+'</span>\u2014 '+r.name+'</div>'; }).join("")
+            /* Show EVERY watched crossing \u2014 the list is a fixed 4 per district and both districts fit
+               the dedicated flood area at every tier, so nothing is summarised away. */
+            var rows=arr.length ? arr.map(function(r){ return '<div class="cx2 '+r.cls+'"><span class="cxs">'+r.lbl+'</span>\u2014 '+r.name+'</div>'; }).join("")
                                 : '<div class="cx2 none">\u2014 none watched</div>';
-            if(openHidden) rows+='<div class="cx2 more">+'+openHidden+' more open</div>';
             return '<div class="fb-col"><div class="fb-coltag '+dcls+'">'+tag+'</div>'+rows+'</div>';
           }
-          if(cxRot){ clearInterval(cxRot); cxRot=null; }
           if(!groups.D2.length && !groups.D6.length){ box.innerHTML='<span class="cx-err">⚠ watched crossings not in HALT feed — verify manually</span>'; return; }
-          /* Cycle between the districts instead of stacking both — keeps the flood band short so it
-             never crowds the alert/heat bands above it. One district at a time, swapping every 7s. */
-          var pages=[];
-          if(groups.D2.length) pages.push(col("DISTRICT 2",groups.D2,"d2"));
-          if(groups.D6.length) pages.push(col("DISTRICT 6",groups.D6,"d6"));
-          function cxShow(i){ box.innerHTML='<div class="fb-cols">'+pages[i]+(pages.length>1?('<div class="cx-page">'+(i+1)+" / "+pages.length+'</div>'):'')+'</div>'; }
-          cxShow(0);
-          if(pages.length>1){ var ci=0; cxRot=setInterval(function(){ if(!active){ clearInterval(cxRot); cxRot=null; return; } ci=(ci+1)%pages.length; cxShow(ci); }, 7000); }
+          /* Show BOTH districts stacked. The NWS carousel gave the crossings their own fixed lower area,
+             so they fit at every tier (verified wall / iPad landscape / portrait) — no need to cycle.
+             The per-column open-cap + hazards-first ordering remain as the safety net for an extreme day. */
+          box.innerHTML='<div class="fb-cols">'+col("DISTRICT 2",groups.D2,"d2")+col("DISTRICT 6",groups.D6,"d6")+'</div>';
         })
         .catch(function(){ var box=el("fbCx"); if(box&&active) box.innerHTML='<span class="cx-err">⚠ HALT CROSSING FEED UNAVAILABLE \u2014 verify closures manually</span>'; });
     }
@@ -2973,7 +2963,7 @@
       if(eff && !active){ active=true; evName=lastName;
         var st=el("fbStamp"); if(st) st.textContent=stampText();
         band.hidden=false; poll(); timer=setInterval(poll, POLL);
-      } else if(!eff && active){ active=false; band.hidden=true; if(timer){clearInterval(timer);timer=null;} if(cxRot){clearInterval(cxRot);cxRot=null;} }
+      } else if(!eff && active){ active=false; band.hidden=true; if(timer){clearInterval(timer);timer=null;} }
       else if(eff && active){ var s2=el("fbStamp"); if(s2) s2.textContent=stampText(); evName=lastName; }
       try{ FireWx.refresh(); }catch(e){}                          /* re-render fire panel around the new flood state */
     }
