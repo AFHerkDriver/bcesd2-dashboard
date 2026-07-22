@@ -553,9 +553,12 @@ var Store={
   set:function(s, action){
     var pin=""; try{ var a=JSON.parse(sessionStorage.getItem('bc2fd_ctl_auth')||"null"); pin=(a&&a.pin)||""; }catch(e){}
     var stateJson=JSON.stringify(s);
-    function direct(){   /* LEGACY fallback — only until the worker /state route is live + Firestore rules are locked, then delete */
+    function direct(){   /* Fallback: writes Firestore directly (public key). It bypasses the worker, so it also reports the edit to /logaction so the access-log audit trail still records it. */
       var body=JSON.stringify({fields:{stateJson:{stringValue:stateJson},updatedAt:{timestampValue:new Date().toISOString()}}});
-      return fetch(FS_DOC+'?key='+FS_KEY,{method:'PATCH',headers:{'Content-Type':'application/json'},body:body}).then(function(r){ return r.ok; }).catch(function(){ return false; });
+      return fetch(FS_DOC+'?key='+FS_KEY,{method:'PATCH',headers:{'Content-Type':'application/json'},body:body}).then(function(r){
+        if(r.ok && pin){ try{ fetch(CTL_AUTH+'/logaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin,action:action||''})}); }catch(e){} }   /* fire-and-forget action log */
+        return r.ok;
+      }).catch(function(){ return false; });
     }
     if(!pin) return direct();
     /* Secure path: worker verifies the control PIN, then writes to Firestore server-side. */

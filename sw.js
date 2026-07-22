@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════
    BC2FD STATION DASHBOARD — SERVICE WORKER
-   CACHE: bc2fd-dash-v106   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
+   CACHE: bc2fd-dash-v107   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
    The bump is what makes the wall TV self-update: new bytes here →
    browser installs the new SW → skipWaiting/claim → the board's
    controllerchange listener silently reloads. No hands on the TV.
@@ -12,7 +12,7 @@
    own fail-loud semantics.
    ═══════════════════════════════════════════════════════════════════ */
 
-var CACHE = 'bc2fd-dash-v106';
+var CACHE = 'bc2fd-dash-v107';
 /* drone-broken.png is precached deliberately: it is the art shown when the relay is UNREACHABLE,
    so fetching it on demand would mean requesting it at exactly the moment the network is failing.
    Its pair is precached too so the two states swap without a flash on first failure. */
