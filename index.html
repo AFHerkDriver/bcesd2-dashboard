@@ -364,11 +364,16 @@
   .tk-cell{background:var(--panel);padding:8px 16px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0}
   .tk-cell .tkl{font-size:clamp(9px,.95vmin,15px);letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
   .tk-cell .tkv{font-size:clamp(15px,1.9vmin,30px);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .tk-nws{flex:1.5 1 0} .tk-div{flex:1 1 0} .tk-calls{flex:1.6 1 0}
-  .tk-nws .tkv{color:var(--amber)}
+  .tk-nws{flex:1.6 1 0} .tk-div{flex:1 1 0} .tk-calls{flex:2 1 0}
   .tk-div .tkv{color:var(--red);font-weight:600}
-  .tk-calls .tkv{color:var(--text)}
   .tk-cell[hidden]{display:none}   /* diversion cell costs nothing on a day with none */
+  /* NWS + Active Calls mirror the tiles by cloning their styled band / call row into the strip. */
+  .tk-cell .tkslot{min-width:0;display:flex;align-items:center}
+  .tk-empty{color:var(--dim);font-size:clamp(13px,1.6vmin,24px)}
+  .tk-more{flex:0 0 auto;color:var(--dim);font-size:clamp(10px,1.1vmin,16px);white-space:nowrap;margin-left:10px}
+  .tk-strip .al-band{width:100%;padding:5px 11px;gap:9px;border-radius:8px}
+  .tk-strip .al-src{display:none}                       /* drop the "NWS · time" tag — no room in the strip */
+  .tk-strip .call-e{width:100%;flex-wrap:nowrap;padding:5px 11px;gap:11px;margin:0}   /* one clean styled line, no wrap */
   .call-pin{filter:drop-shadow(0 0 3px rgba(0,0,0,.85))}   /* keeps a pin legible over bright satellite imagery */
   /* Fresh call: inverse flash — the dark outline goes white and thick, which reads at wall distance
      without moving anything. FINITE iteration count so it stops itself; a flash left running all
@@ -725,6 +730,7 @@
   .call-e .ca{font-size:clamp(12px,1.2vmin,19px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .call-e .cu{margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--green);flex:0 1 auto;min-width:0;white-space:normal;text-align:right}   /* units sized to match the call TYPE; wrap to a 2nd line on a big call */
   .call-e .cu .u{white-space:nowrap}   /* a single apparatus id never breaks mid-token */
+  .call-e .cu .u.box{color:var(--dim);font-weight:400;border:1px dashed var(--border);border-radius:5px;padding:0 6px}   /* box/still code shown as its station, dashed — a response area, not a rig */
   .call-e .cc{font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--text);flex:0 0 auto;white-space:nowrap}   /* channel — same size as units, white */
   .call-e .cw{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.3vmin,21px);letter-spacing:1px;color:var(--text)}
   .call-e .ce{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(13px,1.4vmin,22px);letter-spacing:1px;color:var(--accent)}
@@ -1058,9 +1064,9 @@
         <!-- Takeover strip — hidden until the tile goes full-wall. Mirrors what the board is already
              showing, so it cannot drift from the tiles it stands in for. -->
         <div class="tk-strip" id="tkStrip">
-          <div class="tk-cell tk-nws"><span class="tkl">NWS</span><span class="tkv" id="tkNws">—</span></div>
+          <div class="tk-cell tk-nws"><span class="tkl">NWS</span><div class="tkslot" id="tkNws"></div></div>
           <div class="tk-cell tk-div" id="tkDivCell" hidden><span class="tkl">Diversion</span><span class="tkv" id="tkDiv">—</span></div>
-          <div class="tk-cell tk-calls"><span class="tkl">Active calls</span><span class="tkv" id="tkCalls">—</span></div>
+          <div class="tk-cell tk-calls"><span class="tkl">Active calls</span><div class="tkslot" id="tkCalls"></div></div>
         </div>
         <div class="drone-split">
           <div class="drone-video">
@@ -1175,6 +1181,12 @@
        a pin outside the frame is a pin nobody sees. Falls back to the station framing when
        there is nothing to show. ── */
     var pinLayer=L.layerGroup().addTo(map), pinPts=[], pinsOn=false, hadDrones=false;
+    /* Fresh new-call pins live in their OWN layer so the 5-min tally rebuild (BC2FD_CALL_PINS, which
+       clearLayers() on pinLayer) can't wipe a pin the tally hasn't caught up to yet — that was making
+       a just-dropped call flash its sonar and then vanish. A fresh pin is retired only once the tally
+       adopts its coordinate (regular pin now covers it), or after a backstop timeout. */
+    var freshLayer=L.layerGroup().addTo(map), freshMarks=[];
+    function dropFresh(rec){ try{ freshLayer.removeLayer(rec.mk); if(rec.sonar) freshLayer.removeLayer(rec.sonar); }catch(e){} if(rec.tmr) clearTimeout(rec.tmr); if(rec.son) clearTimeout(rec.son); }
     /* Framing stays on stations 121-125 rather than fitting to the pins. Nearly all of the work is
        the west side (District 2), so letting an outlying run drag the viewport out would shrink the
        area that actually matters on most tours. 161/162 stay plotted and are reachable by panning. */
@@ -1202,6 +1214,13 @@
             fillColor:c.color||"#8B949E", fillOpacity:.92, className:"call-pin"
           }).bindTooltip(String(c.label||"")+(c.time?(" · "+c.time):""),{direction:"top",offset:[0,-8]}).addTo(pinLayer);
           pinPts.push([c.lat,c.lng]);
+        });
+        /* Retire fresh pins the tally has now adopted (a regular pin sits at their coordinate); keep —
+           and keep counting toward the off-screen tally — the ones the tally hasn't caught up to yet. */
+        freshMarks=freshMarks.filter(function(r){
+          var adopted=(list||[]).some(function(c){ return c && c.lat===r.lat && c.lng===r.lng; });
+          if(adopted){ dropFresh(r); return false; }
+          pinPts.push([r.lat,r.lng]); return true;
         });
         if(pinsOn && !focusT) districtView();   /* never yank the view out from under an active focus */
       }catch(e){}
@@ -1264,16 +1283,19 @@
       if(!c || c.lat==null || c.lng==null) return;
       if(!pinsOn) return;
       try{
-        L.circleMarker([c.lat,c.lng],{radius:8,color:"#0D1117",weight:2,opacity:.9,
+        var mk=L.circleMarker([c.lat,c.lng],{radius:8,color:"#0D1117",weight:2,opacity:.9,
           fillColor:c.color||"#8B949E",fillOpacity:.95,className:"call-pin pin-new"})
-          .bindTooltip(String(c.label||"")+(c.time?(" · "+c.time):""),{direction:"top",offset:[0,-9]}).addTo(pinLayer);
+          .bindTooltip(String(c.label||"")+(c.time?(" · "+c.time):""),{direction:"top",offset:[0,-9]}).addTo(freshLayer);
         pinPts.push([c.lat,c.lng]);
         /* Sonar rings, anchored on the same point (a 0-size divIcon so the ripple centres on the pin).
-           Removed after the 60s window so a stale, spent ring can't linger between pin refreshes. */
+           In the fresh layer with the pin, so the tally rebuild can't wipe them mid-pulse. */
         var sonar=L.marker([c.lat,c.lng],{icon:L.divIcon({className:"pin-sonar-wrap",
           html:'<div class="pin-sonar"><span></span><span></span></div>',iconSize:[0,0],iconAnchor:[0,0]}),
-          interactive:false,keyboard:false}).addTo(pinLayer);
-        setTimeout(function(){ try{ pinLayer.removeLayer(sonar); }catch(e){} },61000);
+          interactive:false,keyboard:false}).addTo(freshLayer);
+        var rec={mk:mk, sonar:sonar, lat:c.lat, lng:c.lng};
+        rec.son=setTimeout(function(){ try{ freshLayer.removeLayer(sonar); }catch(e){} rec.sonar=null; },61000);       /* spent sonar goes; the pin stays put */
+        rec.tmr=setTimeout(function(){ dropFresh(rec); freshMarks=freshMarks.filter(function(r){return r!==rec;}); },7*60000);   /* backstop: retire after a full tally cycle even if the tally never adopts it */
+        freshMarks.push(rec);
       }catch(e){}
       var now=Date.now();
       recent=recent.filter(function(t){ return now-t<BURST_WIN; }); recent.push(now);
@@ -1288,6 +1310,11 @@
       focusPts.push({ll:[c.lat,c.lng],exp:now+HOLD});
       reframe();
     };
+    /* Point `m` metres from lat/lng along a compass bearing — used to draw the operator look-cone. */
+    function dest(lat,lng,brgDeg,m){ var R=6378137,br=brgDeg*Math.PI/180,dr=m/R,la=lat*Math.PI/180,lo=lng*Math.PI/180;
+      var la2=Math.asin(Math.sin(la)*Math.cos(dr)+Math.cos(la)*Math.sin(dr)*Math.cos(br));
+      var lo2=lo+Math.atan2(Math.sin(br)*Math.sin(dr)*Math.cos(la),Math.cos(dr)-Math.sin(la)*Math.sin(la2));
+      return [la2*180/Math.PI, lo2*180/Math.PI]; }
     /* list = data.drones from /drones (meters / m/s). Convert for display: m->ft x3.281. */
     window.BC2FD_DRONE_MAP=function(list){
       try{
@@ -1297,6 +1324,11 @@
           var op=isOperatorStream(d);                                    /* operator phone vs aircraft */
           var agl=(!op && d.altAgl!=null)?(" · "+Math.round(d.altAgl*3.281)+" ft"):"";   /* AGL is meaningless for a phone on the ground */
           var tip=(op?"◉ ":"")+String(d.callSign||(op?"OPERATOR":"UAS"))+agl;
+          if(op && d.heading!=null && isFinite(+d.heading)){            /* phone has no POI, but it has a heading — show a 45° green cone so the room sees which way the operator is looking */
+            var hdg=+d.heading, cone=[[d.lat,d.lng]];
+            for(var a=-22.5;a<=22.5;a+=11.25) cone.push(dest(d.lat,d.lng,hdg+a,250));   /* ~250 m look-cone */
+            L.polygon(cone,{color:"#34C759",weight:1.5,opacity:.9,fillColor:"#34C759",fillOpacity:.18,interactive:false}).addTo(layer);
+          }
           L.marker([d.lat,d.lng],{icon:op?operatorIcon:droneIcon}).bindTooltip(tip,{permanent:true,direction:"top",offset:[0,op?-16:-20]}).addTo(layer);
           pts.push([d.lat,d.lng]);
           if(d.poiLat!=null&&d.poiLng!=null){                            /* POI only when set (worker maps 0 -> null) — operator streams never have one */
@@ -2064,10 +2096,12 @@
     function tkTxt(el){ return el?el.textContent.replace(/\s+/g," ").trim():""; }
     function tkSync(){
       if(!tkOn()) return;
-      var ev=document.querySelector("#alertLane .al-band .al-ev") || document.querySelector("#heatBand .al-band .al-ev");
-      var band=ev?ev.closest(".al-band"):null, sub=band?band.querySelector(".al-sub"):null;
-      var nws=ev ? (tkTxt(ev)+(sub?(" · "+tkTxt(sub)):"")) : "No active alerts";
-      var n=document.getElementById("tkNws"); if(n) n.textContent=nws;
+      /* Mirror the REAL rendered elements: CLONE the current NWS banner and the newest call row so the
+         strip reads exactly like the tiles it stands in for — styled banner + styled call line — not a
+         flattened run-together text blob. */
+      var band=document.querySelector("#nwsBanner .al-band") || document.querySelector("#alertLane .al-band") || document.querySelector("#heatBand .al-band");
+      var n=document.getElementById("tkNws");
+      if(n) n.innerHTML = band ? band.outerHTML : '<span class="tk-empty">No active alerts</span>';
       var hb=document.getElementById("hospBody");
       var diverting = !!(hb && hb.classList.contains("div"));      /* .ok = all open, .err = unknown */
       var dc=document.getElementById("tkDivCell"), dv=document.getElementById("tkDiv");
@@ -2076,7 +2110,12 @@
       var cb=document.getElementById("callsBody");
       var rows=cb?cb.querySelectorAll(".call-e"):[];
       var c=document.getElementById("tkCalls");
-      if(c) c.textContent = rows.length ? (rows.length+" active · "+tkTxt(rows[0]).slice(0,110)) : (cb?tkTxt(cb).slice(0,110):"—");
+      if(c){
+        if(rows.length){
+          var clone=rows[0].cloneNode(true); clone.classList.remove("fresh");   /* no flash replay in the strip */
+          c.innerHTML = clone.outerHTML + (rows.length>1?('<span class="tk-more">+'+(rows.length-1)+' more</span>'):'');
+        } else c.innerHTML='<span class="tk-empty">No active calls</span>';
+      }
     }
     setInterval(function(){ try{ tkSync(); }catch(e){} }, 5000);   /* cheap; only does work while engaged */
     var dtMode=null;
@@ -2286,8 +2325,18 @@
         var age=ts?(Date.now()-new Date(ts).getTime()):NaN;
         var isFresh=isFinite(age)&&age>=-120000&&age<FRESH_MS;   /* small negative tolerance for clock skew */
         var exp=isFresh?(Date.now()+Math.max(1000,FRESH_MS-Math.max(0,age))):0;
-        var unitsHtml=uarr.length?('<span class="cu">'+uarr.map(function(u){ var fu=uflash[u];   /* one span per apparatus so only the new one blinks */
-          return '<span class="u'+(fu?' fresh-u':'')+'"'+(fu?(' data-ufx="'+fu+'"'):'')+'>'+esc(u)+'</span>'; }).join(" ")+'</span>'):'';
+        var unitsHtml=uarr.length?('<span class="cu">'+(function(){
+          var seen={}, sp=[];
+          uarr.forEach(function(u){
+            if(/^\d{3}[A-F]$/i.test(u)){                     /* box/still code -> just the station in a dashed box; the letter has no meaning */
+              var st=u.replace(/[A-Za-z]+$/,''); if(!st||seen[st]) return; seen[st]=1;
+              sp.push('<span class="u box" title="dispatch response area, not a rig">'+esc(st)+'</span>'); return;
+            }
+            var fu=uflash[u];                                /* one span per apparatus so only the new one blinks */
+            sp.push('<span class="u'+(fu?' fresh-u':'')+'"'+(fu?(' data-ufx="'+fu+'"'):'')+'>'+esc(u)+'</span>');
+          });
+          return sp.join(" ");
+        })()+'</span>'):'';
         return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'">'+
                '<span class="cw">'+dropTime(ts)+'</span>'+                          /* time — far left */
                '<span class="ct">'+esc(c.type||"CALL")+'</span>'+
@@ -2422,8 +2471,16 @@
         var ty=String(c.type||"").replace(/^(MED|FIRE|MVC|RESCUE|ALARM|ASSIST)\s*-\s*/i,"");
         return '<div class="rs-run"><span class="rs-t">'+rtEsc(dow(c))+' '+rtEsc(hhmm(c))+'</span>'+
                '<span class="rs-n">'+rtEsc(ty)+'</span>'+
-               '<span class="rs-u">'+(c.units||[]).slice().sort(function(a,b){ return (rtIsApparatus(b)?1:0)-(rtIsApparatus(a)?1:0); })
-                  .map(function(u){ return '<i'+(rtIsApparatus(u)?'':' class="rs-box" title="dispatch response area, not a unit"')+'>'+rtEsc(u)+'</i>'; }).join("")+'</span>'+
+               '<span class="rs-u">'+(function(){
+                  var seen={}, out=[];
+                  (c.units||[]).slice().sort(function(a,b){ return (rtIsApparatus(b)?1:0)-(rtIsApparatus(a)?1:0); }).forEach(function(u){
+                    if(rtIsApparatus(u)){ out.push('<i>'+rtEsc(u)+'</i>'); return; }
+                    var st=String(u).replace(/[A-Za-z]+$/,'');   /* box/still: 123A/123C/123E -> 123 (the box letter has no meaning here) */
+                    if(!st || seen[st]) return; seen[st]=1;
+                    out.push('<i class="rs-box" title="dispatch response area, not a rig">'+rtEsc(st)+'</i>');
+                  });
+                  return out.join("");
+                })()+'</span>'+
                '<span class="rs-a">'+rtEsc(c.address||"")+'</span></div>'; }).join("");
       o.innerHTML='<div class="rs-card" style="--rc:'+color+'" role="dialog" aria-modal="true" aria-label="'+rtEsc(label)+' runs">'+
         '<div class="rs-hd"><span class="rs-dot"></span><span class="rs-ttl">'+rtEsc(label)+'</span>'+
