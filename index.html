@@ -2043,7 +2043,7 @@
             var next=j.drones
               .filter(function(d){ return d && typeof d.video_url==="string" && /^https:\/\//i.test(d.video_url); })
               .slice(0,MAX_FEEDS)
-              .map(function(d){ return { url:d.video_url, label:(d.callSign||d.model||"UAS"), mission:(d.mission||""), operator:isOperatorStream(d) }; });
+              .map(function(d){ return { url:d.video_url, label:(d.callSign||d.model||"UAS"), mission:(d.mission||""), operator:!(d && d.poiLat!=null && d.poiLng!=null) }; });   /* inline: isOperatorStream lives in the map module's scope, not here — calling it threw and killed the whole poll whenever a drone was up */
             setAuto(next);                                     /* authoritative (incl. empty = drone landed) */
             if(window.BC2FD_DRONE_MAP) window.BC2FD_DRONE_MAP(j.drones);   /* map plots every aircraft with a position */
           })
