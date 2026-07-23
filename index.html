@@ -1259,7 +1259,62 @@
         if(map.getZoom()>=ADDR_Z) addrPaint(j.features,bbox);
       }).catch(function(){});
     }
-    map.on("moveend zoomend",function(){ if(addrDeb)clearTimeout(addrDeb); addrDeb=setTimeout(addrUpdate,400); });
+    map.on("moveend zoomend",function(){ if(addrDeb)clearTimeout(addrDeb); addrDeb=setTimeout(function(){ addrUpdate(); hydUpdate(); },400); });
+    /* ── STORM RADAR OVERLAY — NEXRAD composite tiles (Iowa Environmental Mesonet, keyless).
+       AUTO: appears when a storm-tier NWS band is active (warnings / watches / flood — NOT heat or
+       red-flag) or flood ops are on; disappears when clear. 50% opacity in its own pane UNDER pins
+       and labels, so a cell can never obscure a call. Tiles re-pull every 5 min while visible. ── */
+    map.createPane("radarPane"); map.getPane("radarPane").style.zIndex=350; map.getPane("radarPane").style.pointerEvents="none";
+    var RADAR_URL="https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png";
+    var radar=L.tileLayer(RADAR_URL,{pane:"radarPane",opacity:0.5,maxZoom:19,updateWhenIdle:true,updateWhenZooming:false,keepBuffer:2});
+    var radarBucket=0;
+    function stormActive(){
+      if(window.FLOOD_ACTIVE) return true;
+      /* Match the EVENT TEXT, not band classes — "Heat Advisory" wears the default warning class, and
+         class-matching would paint radar over a 100° clear day. Radar is for precip/wind events only. */
+      var b=document.querySelectorAll("#nwsSrc .al-band .al-ev");
+      for(var i=0;i<b.length;i++){ if(/TORNADO|THUNDER|FLOOD|SEVERE|STORM|HURRICANE|TROPICAL|HAIL|WIND/i.test(b[i].textContent||"")) return true; }
+      return false;
+    }
+    function radarTick(){
+      var want=false; try{ want=stormActive(); }catch(e){}
+      var has=map.hasLayer(radar);
+      if(want&&!has){ try{ map.addLayer(radar); }catch(e){} }
+      else if(!want&&has){ try{ map.removeLayer(radar); }catch(e){} }
+      if(want){ var bk=Math.floor(Date.now()/300000);
+        if(bk!==radarBucket){ radarBucket=bk; try{ radar.setUrl(RADAR_URL+"?_="+bk); }catch(e){} } }   /* fresh sweep every 5 min */
+    }
+    setTimeout(radarTick,15000); setInterval(radarTick,60000);
+    /* ── HYDRANTS — the CAD hydrant layer (SAFD/SAWS "CADHydrants", SA open-data hub; coverage
+       verified in the unincorporated district). Teal dots past HYD_Z, bigger for 10"+ mains, with the
+       address numbers — one zoom nudge from a call focus shows water supply around the fire. Same
+       enhancement failure mode as addresses: source down -> dots simply absent. ── */
+    var HYD_URL="https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query";
+    var hydLayer=L.layerGroup().addTo(map), HYD_Z=16.2, hydCache={}, hydKeys=[], hydSeq=0, hydPainted="";
+    function hydPaint(feats,key){
+      if(key&&key===hydPainted) return; hydPainted=key||"";
+      hydLayer.clearLayers();
+      feats.slice(0,500).forEach(function(f){
+        var g=f.geometry; if(!g||g.x==null||g.y==null) return;
+        var big=(+((f.attributes||{}).Main_Size)||0)>=10;
+        L.circleMarker([g.y,g.x],{radius:big?4.5:3,color:"#0D1117",weight:1,opacity:.9,
+          fillColor:big?"#5EEAD4":"#2DD4BF",fillOpacity:.95,interactive:false,keyboard:false}).addTo(hydLayer);
+      });
+    }
+    function hydUpdate(){
+      if(map.getZoom()<HYD_Z){ hydLayer.clearLayers(); hydPainted=""; return; }
+      var b=map.getBounds().pad(0.12);
+      var bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(function(x){return x.toFixed(4);}).join(",");
+      if(hydCache[bbox]){ hydPaint(hydCache[bbox],bbox); return; }
+      var seq=++hydSeq;
+      fetch(HYD_URL+"?geometry="+bbox+"&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Main_Size&returnGeometry=true&resultRecordCount=800&f=json")
+        .then(function(r){ return r.ok?r.json():null; }).then(function(j){
+          if(seq!==hydSeq||!j||!Array.isArray(j.features)) return;
+          hydCache[bbox]=j.features; hydKeys.push(bbox);
+          if(hydKeys.length>40) delete hydCache[hydKeys.shift()];
+          if(map.getZoom()>=HYD_Z) hydPaint(j.features,bbox);
+        }).catch(function(){});
+    }
     /* Fresh new-call pins live in their OWN layer so the 5-min tally rebuild (BC2FD_CALL_PINS, which
        clearLayers() on pinLayer) can't wipe a pin the tally hasn't caught up to yet — that was making
        a just-dropped call flash its sonar and then vanish. A fresh pin is retired only once the tally

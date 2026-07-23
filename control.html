@@ -67,6 +67,16 @@
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin:10px 0}
   .card > h2{font-size:17px;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px}
   .card .hint{font-size:11px;color:var(--dim);margin-bottom:8px}   /* descendant, not child: also catches hints nested inside a .field (e.g. Drone Takeover) so all descriptions match */
+  /* Chute Times (admin gee-whiz) */
+  .chute-body{font-family:'DM Mono',monospace;font-size:13px}
+  .chute-hero{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 12px}
+  .chute-hero .cb{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 14px;text-align:center;flex:1 1 100px}
+  .chute-hero .cb b{display:block;font-size:20px;color:#2DD4BF;font-weight:700}
+  .chute-hero .cb span{font-size:10px;letter-spacing:1px;color:var(--dim);text-transform:uppercase}
+  .chute-tbl{width:100%;border-collapse:collapse}
+  .chute-tbl td,.chute-tbl th{padding:5px 8px;border-top:1px solid var(--border);text-align:left;font-weight:400}
+  .chute-tbl th{color:var(--dim);font-size:11px;letter-spacing:1px;text-transform:uppercase;border-top:none}
+  .chute-tbl td.num{color:#2DD4BF}
   /* Access Log (admin PIN only) — control-panel activity grouped by person, expandable */
   #accCard{display:none}
   .acc-body{max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
@@ -384,6 +394,13 @@
       </div>
     </div>
 
+    <!-- Chute Times — admin-only gee-whiz: turnout stats from the 48h call log -->
+    <div class="card" id="chuteCard" style="display:none">
+      <h2>Chute Times</h2>
+      <div class="hint">Turnout measured dispatch &rarr; FIRST apparatus attaching, from the 48h call log. Calls where dispatch auto-assigned an apparatus can&rsquo;t be measured and are skipped. NFPA 1710 turnout benchmarks: 60s EMS / 80s fire at the 90th percentile.</div>
+      <div id="chuteBody" class="chute-body">Loading&hellip;</div>
+    </div>
+
     <!-- Access Log — admin PIN only; who opened (or tried to open) this control panel -->
     <div class="card" id="accCard">
       <h2>Access Log</h2>
@@ -407,7 +424,7 @@
   function $g(id){ return document.getElementById(id); }
   function msg(txt, cls){ var m=$g('gateMsg'); if(m){ m.textContent=txt||''; m.className='gate-msg'+(cls?(' '+cls):''); } }
   function unlock(name, tier, pin){
-    if(tier==='admin'){ loadAccessLog(pin); wireReset(); }   /* access log is yours alone — admin PIN only */
+    if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadChuteStats(pin); }   /* access log + chute gee-whiz are yours alone — admin PIN only */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
     /* MAC121 dispatch prefill needs the PIN (this unlock) AND loaded state — retry covers the race */
     try{ if(window.macAutoPrefill){ window.macAutoPrefill(); setTimeout(window.macAutoPrefill,3000); setTimeout(window.macAutoPrefill,8000); } }catch(e){}
@@ -444,6 +461,39 @@
            '<span class="acc-t">'+accEsc(accWhen(e.t))+'</span>'+
            '<span class="acc-txt">'+accEsc(txt)+'</span>'+
            (ip?'<span class="acc-ip">'+accEsc(ip)+'</span>':'')+'</div>';
+  }
+  /* Chute gee-whiz: pull the 48h log, keep calls the worker stamped with a chute, and show the
+     numbers that matter — average, median, NFPA-style 90th percentile, fastest — plus a per-station
+     breakdown keyed by the FIRST responding apparatus. Quietly hides when nothing is measurable yet. */
+  function loadChuteStats(pin){
+    var card=$g('chuteCard'), body=$g('chuteBody'); if(!card||!body) return;
+    fetch(AUTH_URL+'/calls?pin='+encodeURIComponent(pin))
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(j){
+        if(!j||!j.ok||!Array.isArray(j.calls)) return;             /* stay hidden on failure — gee-whiz, not safety */
+        var runs=j.calls.filter(function(c){ return c.chute>=1; });
+        if(!runs.length){ card.style.display='block'; body.textContent='No measurable chutes in the last 48h yet — stats appear once an apparatus attaches after the first tone.'; return; }
+        var fmt=function(s){ return Math.floor(s/60)+':'+('0'+Math.round(s%60)).slice(-2); };
+        var vals=runs.map(function(c){ return c.chute; }).sort(function(a,b){ return a-b; });
+        var avg=vals.reduce(function(a,b){ return a+b; },0)/vals.length;
+        var med=vals[Math.floor((vals.length-1)/2)];
+        var p90=vals[Math.min(vals.length-1, Math.ceil(vals.length*0.9)-1)];
+        var fast=runs.reduce(function(a,b){ return b.chute<a.chute?b:a; });
+        var st={}; runs.forEach(function(c){ var m=/(\d{3})$/.exec(String(c.chuteUnit||'')); var k=m?('S'+m[1]):'?';
+          (st[k]=st[k]||[]).push(c.chute); });
+        var rows=Object.keys(st).sort().map(function(k){ var v=st[k];
+          return '<tr><td>'+k+'</td><td class="num">'+fmt(v.reduce(function(a,b){return a+b;},0)/v.length)+'</td><td>'+v.length+'</td></tr>'; }).join('');
+        body.innerHTML=
+          '<div class="chute-hero">'+
+            '<div class="cb"><b>'+fmt(avg)+'</b><span>average</span></div>'+
+            '<div class="cb"><b>'+fmt(med)+'</b><span>median</span></div>'+
+            '<div class="cb"><b>'+fmt(p90)+'</b><span>90th pct</span></div>'+
+            '<div class="cb"><b>'+fmt(fast.chute)+'</b><span>fastest ('+accEsc(fast.chuteUnit||'?')+')</span></div>'+
+            '<div class="cb"><b>'+vals.length+'</b><span>measured</span></div>'+
+          '</div>'+
+          '<table class="chute-tbl"><tr><th>Station</th><th>Avg</th><th>N</th></tr>'+rows+'</table>';
+        card.style.display='block';
+      }).catch(function(){});
   }
   function loadAccessLog(pin){
     var card=$g('accCard'), body=$g('accBody'); if(!card||!body) return;
