@@ -383,6 +383,11 @@
   .tk-strip .al-src{display:none}                       /* drop the "NWS · time" tag — no room in the strip */
   .tk-strip .call-e{width:100%;flex-wrap:nowrap;padding:5px 11px;gap:11px;margin:0}   /* one clean styled line, no wrap */
   .call-pin{filter:drop-shadow(0 0 3px rgba(0,0,0,.85))}   /* keeps a pin legible over bright satellite imagery */
+  /* Parcel house-number labels (close zoom): tiny, dim, halo'd — context, never competition for pins */
+  .addr-lbl-wrap{background:none;border:0}
+  .addr-lbl{position:absolute;transform:translate(-50%,-50%);font-family:'DM Mono',monospace;font-size:10px;
+    line-height:1;color:#C9D1D9;opacity:.85;white-space:nowrap;pointer-events:none;
+    text-shadow:0 0 3px #000,0 0 3px #000,0 1px 2px #000}
   /* Fresh call: inverse flash — the dark outline goes white and thick, which reads at wall distance
      without moving anything. FINITE iteration count so it stops itself; a flash left running all
      shift because a cleanup timer was missed would be worse than no flash at all. */
@@ -1152,6 +1157,23 @@
     var map=L.map(el,{center:[29.465,-98.730],zoom:13,layers:[initial],zoomControl:false,zoomSnap:0.1});   /* fine zoom steps so the idle fit tightens to the exact framing, not a coarse level */
     map.attributionControl.setPrefix(false);   /* drop Leaflet's own prefix; OSM/CARTO/Esri credit stays (tiny, subdued via CSS) */
     L.control.layers({"Satellite":satellite,"Dark":dark,"Positron":positron},null,{collapsed:true,position:"topright"}).addTo(map);
+    /* Follow the sun LIVE: satellite from sunrise to sunset, dark at night. The initial pick above
+       only ran at page load — and the wall hard-reloads at 04:07, so it loaded dark and stayed dark
+       all day. A 5-min check swaps at dawn/dusk. An officer's manual pick from the layers control
+       sticks until the next sunrise/sunset boundary, then the sun rules again. Never swaps mid
+       call-zoom (preFocusBase guard) — baseRestore hands back, and the next tick corrects. */
+    var userBase=null, lastSun=sunUp(29.465,-98.730);
+    map.on("baselayerchange",function(e){ userBase=e.layer; });
+    setInterval(function(){
+      var day=sunUp(29.465,-98.730);
+      if(day!==lastSun){ lastSun=day; userBase=null; }     /* boundary crossed -> officer override expires */
+      if(userBase || preFocusBase) return;
+      var want=day?satellite:dark;
+      if(!map.hasLayer(want)){
+        [satellite,dark,positron].forEach(function(l){ if(l!==want && map.hasLayer(l)){ try{ map.removeLayer(l); }catch(e){} } });
+        try{ map.addLayer(want); }catch(e){}
+      }
+    },5*60*1000);
     var droneIcon=L.icon({iconUrl:"drone-marker.png",iconRetinaUrl:"drone-marker@2x.png",iconSize:[46,46],iconAnchor:[23,23]});
     /* POI reticle — a hollow red targeting ring, transparent through the middle so the ground it
        marks shows through (the old raster had a filled dark centre). Built as an inline SVG so it
@@ -1196,6 +1218,43 @@
        a pin outside the frame is a pin nobody sees. Falls back to the station framing when
        there is nothing to show. ── */
     var pinLayer=L.layerGroup().addTo(map), pinPts=[], pinsOn=false, hadDrones=false;
+    /* ── ADDRESS LABELS — Bexar County appraisal parcels (Situs). Dispatch-grade "every address":
+       past ADDR_Z the viewport's parcels are fetched from the county GIS (maps.bexar.org, CORS
+       verified) and each lot is labeled with its house number, like the CAD map. Client-side
+       centroids from generalized polygons (~200 B/parcel). Only Situs is ever requested — owner
+       data never leaves the county server. Enhancement layer: if the county GIS is unreachable the
+       labels simply don't render; nothing safety-critical rides on them. Cache per rounded bbox so
+       small pans don't re-query; labels sit in their own pane UNDER the call pins. ── */
+    map.createPane("addrPane"); map.getPane("addrPane").style.zIndex=450; map.getPane("addrPane").style.pointerEvents="none";
+    window.BC2FD_MAP=map;   /* ops/debug handle (console tuning, tests); same-origin only */
+    var addrLayer=L.layerGroup().addTo(map), ADDR_Z=16.2, addrCache={}, addrCacheKeys=[], addrSeq=0, addrDeb=null;
+    function addrPaint(feats){
+      addrLayer.clearLayers();
+      feats.slice(0,600).forEach(function(f){
+        var g=f.geometry&&f.geometry.rings&&f.geometry.rings[0]; if(!g||!g.length) return;
+        var sx=0,sy=0; g.forEach(function(p){ sx+=p[0]; sy+=p[1]; });
+        var num=(String(f.attributes&&f.attributes.Situs||"").trim().match(/^\d+/)||[""])[0]; if(!num) return;
+        L.marker([sy/g.length, sx/g.length],{pane:"addrPane",interactive:false,keyboard:false,
+          icon:L.divIcon({className:"addr-lbl-wrap",html:'<span class="addr-lbl">'+num+'</span>',iconSize:[0,0]})}).addTo(addrLayer);
+      });
+    }
+    function addrUpdate(){
+      if(map.getZoom()<ADDR_Z){ addrLayer.clearLayers(); return; }
+      var b=map.getBounds().pad(0.12);
+      var bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(function(x){return x.toFixed(4);}).join(",");
+      if(addrCache[bbox]){ addrPaint(addrCache[bbox]); return; }
+      var seq=++addrSeq;
+      var u="https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0/query?geometry="+bbox+
+        "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects"+
+        "&outFields=Situs&returnGeometry=true&geometryPrecision=5&maxAllowableOffset=0.0002&resultRecordCount=800&f=json";
+      fetch(u).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+        if(seq!==addrSeq || !j || !Array.isArray(j.features)) return;   /* stale response or bad reply -> drop */
+        addrCache[bbox]=j.features; addrCacheKeys.push(bbox);
+        if(addrCacheKeys.length>40) delete addrCache[addrCacheKeys.shift()];
+        if(map.getZoom()>=ADDR_Z) addrPaint(j.features);
+      }).catch(function(){});
+    }
+    map.on("moveend zoomend",function(){ if(addrDeb)clearTimeout(addrDeb); addrDeb=setTimeout(addrUpdate,250); });
     /* Fresh new-call pins live in their OWN layer so the 5-min tally rebuild (BC2FD_CALL_PINS, which
        clearLayers() on pinLayer) can't wipe a pin the tally hasn't caught up to yet — that was making
        a just-dropped call flash its sonar and then vanish. A fresh pin is retired only once the tally
@@ -1251,14 +1310,15 @@
     };
     window.BC2FD_MAP_MODE=function(district){
       pinsOn=!!district;
-      if(!pinsOn && focusT){ clearTimeout(focusT); focusT=null; focusPts=[]; }   /* aircraft up: drop any pending return */
+      if(!pinsOn && focusT){ clearTimeout(focusT); focusT=null; focusPts=[]; baseRestore(); }   /* aircraft up: drop any pending return + hand back the base layer */
       try{ map.invalidateSize(); }catch(e){}
       setTimeout(function(){ try{ map.invalidateSize(); districtView(); }catch(e){} },260);   /* after the CSS transition settles */
     };
     /* ── NEW-CALL AUTOFOCUS ──────────────────────────────────────────────────────────────
-       A call drops: pin it immediately, flash it, swing the map to it, then return to the
-       district frame. GOVERNED, because a wall board that lurches on every dispatch during a
-       busy tour is worse than one that never moves at all:
+       A call drops: pin it immediately, flash it, swing the map to it — ROOFTOP zoom on satellite
+       imagery with parcel house numbers, so the room can log "corner house, third from the end" —
+       then return to the district frame. GOVERNED, because a wall board that lurches on every
+       dispatch during a busy tour is worse than one that never moves at all:
          · second call during the hold — the frame WIDENS to keep both (all) still-pulsing calls in
            view (fitBounds, capped at FOCUS_ZOOM so two close calls don't over-zoom). Each call keeps
            its OWN 1-min pulse; as the earlier call's pulse ends the view collapses back onto whatever
@@ -1272,7 +1332,26 @@
        animation so it ends on its own — no timer to leak, and a missed cleanup can't leave a
        pin blinking on the wall all shift. ── */
     var focusT=null, lastFocus=0, recent=[], focusPts=[];
-    var FOCUS_ZOOM=15.2, HOLD=60000, MIN_GAP=25000, BURST_N=3, BURST_WIN=240000;
+    /* CALL_ZOOM: single-call focus goes to ROOFTOP level — with the imagery swap below, the crew sees
+       the actual house ("corner lot", "third from the end") plus its parcel number (ADDR_Z sits below
+       this, so labels light automatically). FOCUS_ZOOM stays the cap for multi-call framing. */
+    var FOCUS_ZOOM=15.2, CALL_ZOOM=17, HOLD=60000, MIN_GAP=25000, BURST_N=3, BURST_WIN=240000;
+    /* Imagery swap for the call zoom. At night the board runs the dark base; a rooftop zoom on a dark
+       vector map says nothing, so a SINGLE-call hold swaps to the satellite hybrid and the end of the
+       hold restores whatever base was up. If the base already IS satellite (daytime default, or the
+       officer picked it) nothing happens — hasLayer-based, so the layers-control state stays honest. */
+    var preFocusBase=null;
+    function baseSat(){
+      if(preFocusBase) return;                                        /* already swapped for this hold */
+      var cur = map.hasLayer(satellite)?satellite : map.hasLayer(dark)?dark : map.hasLayer(positron)?positron : null;
+      if(!cur || cur===satellite) return;
+      preFocusBase=cur; try{ map.removeLayer(cur); }catch(e){} try{ map.addLayer(satellite); }catch(e){}
+    }
+    function baseRestore(){
+      if(!preFocusBase) return;
+      try{ map.removeLayer(satellite); }catch(e){} try{ map.addLayer(preFocusBase); }catch(e){}
+      preFocusBase=null;
+    }
     /* Frame the map to the calls still pulsing (exp in the future): 2+ -> fitBounds to hold them all,
        1 -> zoom to it, 0 -> back to the district frame. Re-runs itself when the soonest call's pulse
        ends, so a two-call frame collapses onto the last pulser when the older one times out, then to
@@ -1285,10 +1364,10 @@
       var now=Date.now();
       focusPts=focusPts.filter(function(p){ return p.exp>now; });   /* keep only calls still pulsing */
       if(focusT){ clearTimeout(focusT); focusT=null; }
-      if(!focusPts.length){ districtView(); offscreenNote(); return; }
+      if(!focusPts.length){ baseRestore(); districtView(); offscreenNote(); return; }
       try{
-        if(focusPts.length===1) map.setView(focusPts[0].ll,FOCUS_ZOOM,{animate:false});
-        else map.fitBounds(L.latLngBounds(focusPts.map(function(p){ return p.ll; })).pad(0.35),{animate:false,maxZoom:FOCUS_ZOOM});
+        if(focusPts.length===1){ map.setView(focusPts[0].ll,CALL_ZOOM,{animate:false}); baseSat(); }   /* one call: rooftop imagery + parcel numbers */
+        else { baseRestore(); map.fitBounds(L.latLngBounds(focusPts.map(function(p){ return p.ll; })).pad(0.35),{animate:false,maxZoom:FOCUS_ZOOM}); }   /* multiple: wide frame, district look */
       }catch(e){}
       var next=focusPts.reduce(function(m,p){ return Math.min(m,p.exp); },Infinity)-now;
       focusT=setTimeout(reframe, Math.max(250,next));   /* re-evaluate when the next pulse ends */
