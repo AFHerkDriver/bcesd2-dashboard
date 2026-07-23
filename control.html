@@ -68,6 +68,10 @@
   /* Access Log (admin PIN only) — control-panel activity grouped by person, expandable */
   #accCard{display:none}
   .acc-body{max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+  .acc-reset{margin-top:10px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);font-family:inherit;font-size:12px;letter-spacing:1px;padding:9px 14px;min-height:38px;cursor:pointer}
+  .acc-reset:hover{border-color:var(--dim);color:var(--text)}
+  .acc-reset.armed{border-color:var(--red);color:var(--red);background:rgba(255,59,48,.12);font-weight:700}
+  .acc-reset:disabled{opacity:.6;cursor:default}
   .acc-grp{border-bottom:1px solid var(--border)}
   .acc-grp:last-child{border-bottom:none}
   .acc-hd{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;color:var(--text);
@@ -383,6 +387,7 @@
       <h2>Access Log</h2>
       <div class="hint">Who&rsquo;s opened this control panel and what they changed &mdash; grouped by person, most-recently-active first. Tap a name to expand their logins (🔑) and board edits (✏️). Rejected PINs bucket under &ldquo;Unknown / failed.&rdquo; Admin PIN only.</div>
       <div class="acc-body" id="accBody"><div class="acc-empty">Loading&hellip;</div></div>
+      <button type="button" class="acc-reset" id="accReset">Reset Log</button>
     </div>
 
   </div>
@@ -400,7 +405,7 @@
   function $g(id){ return document.getElementById(id); }
   function msg(txt, cls){ var m=$g('gateMsg'); if(m){ m.textContent=txt||''; m.className='gate-msg'+(cls?(' '+cls):''); } }
   function unlock(name, tier, pin){
-    if(tier==='admin') loadAccessLog(pin);   /* access log is yours alone — admin PIN only */
+    if(tier==='admin'){ loadAccessLog(pin); wireReset(); }   /* access log is yours alone — admin PIN only */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
     var n=$g('lockNotice'); if(n) n.textContent='🔒 Officer Access \u00b7 '+(name||'Verified');
   }
@@ -488,6 +493,26 @@
         }); }
       })
       .catch(function(){ body.innerHTML='<div class="acc-empty err">Access log unreachable.</div>'; });
+  }
+  /* Reset button: ARMED two-step so the log is never wiped by a stray tap. First tap arms (red,
+     "tap again"), auto-disarms after 4s; second tap clears the whole log via the admin-only route. */
+  var resetWired=false;
+  function wireReset(){
+    if(resetWired) return; var btn=$g('accReset'); if(!btn) return; resetWired=true;
+    var armed=false, tmr=null;
+    function disarm(){ armed=false; btn.classList.remove('armed'); btn.textContent='Reset Log'; if(tmr){clearTimeout(tmr);tmr=null;} }
+    btn.addEventListener('click', function(){
+      if(!armed){ armed=true; btn.classList.add('armed'); btn.textContent='Tap again to CLEAR the whole log'; tmr=setTimeout(disarm,4000); return; }
+      disarm();
+      var pin=""; try{ var a=JSON.parse(sessionStorage.getItem(SKEY)||"null"); pin=(a&&a.pin)||""; }catch(e){}
+      if(!pin) return;
+      btn.disabled=true; btn.textContent='Clearing…';
+      fetch(AUTH_URL+'/accessclear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})})
+        .then(function(r){ return r.json(); }).then(function(j){ btn.disabled=false;
+          if(j&&j.ok){ btn.textContent='Reset Log'; loadAccessLog(pin); }
+          else { btn.textContent='Clear failed'; setTimeout(function(){btn.textContent='Reset Log';},2200); } })
+        .catch(function(){ btn.disabled=false; btn.textContent='Clear failed'; setTimeout(function(){btn.textContent='Reset Log';},2200); });
+    });
   }
   function shake(){ var c=document.querySelector('.gate-card'); if(!c) return; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
   function verify(pin, silent){
