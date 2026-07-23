@@ -71,6 +71,9 @@ function geoNum(v) {
 }
 
 /* Station derivation: "122A" (station assignment) -> 122; "UAV124"/"L123" (real unit) -> trailing 3 digits. */
+/* Real apparatus = letters then a 3-digit station (E123, M122, MOF121). Box/still codes (123A) are
+   the dispatch response area, not a rig. Shared by station derivation and chute detection. */
+const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 function stationsOf(units) {
   const s = new Set();
   for (const u of units || []) {
@@ -178,6 +181,8 @@ function dedupeIncidents(rows) {
         if (dt >= 1 && dt <= 1800) { chute = dt; chuteUnit = String((hit.units || []).find(isApp) || ""); }
       }
     }
+    const rowChute = g.rows.find(r => r.chute >= 1);   /* a write-time stamp on any row wins over the read-time estimate */
+    if (rowChute) { chute = rowChute.chute; chuteUnit = rowChute.chuteUnit || chuteUnit; }
     return { ...base, units, stations: stationsOf(units), cross, chute, chuteUnit,
              lat: base.lat != null ? base.lat : (withGeo ? withGeo.lat : null),
              lng: base.lng != null ? base.lng : (withGeo ? withGeo.lng : null) };
@@ -758,14 +763,29 @@ export default {
                accumulated units — and `logged` is what the board trusts for call age and the 0700 tour
                boundary, so a 06:55 call migrating at 07:02 would jump into the next tour. */
             if (!prev && c.cad_code && c.id) prev = await env.PINS.get("call:" + c.id);
-            let origLogged = "", prevUnits = [];
-            if (prev) { try { const pj = JSON.parse(prev); origLogged = pj.logged || ""; prevUnits = Array.isArray(pj.units) ? pj.units : []; } catch (e) {} }
+            let origLogged = "", prevUnits = [], prevChute = null, prevChuteUnit = "";
+            if (prev) { try { const pj = JSON.parse(prev); origLogged = pj.logged || ""; prevUnits = Array.isArray(pj.units) ? pj.units : [];
+              if (pj.chute >= 1) { prevChute = pj.chute; prevChuteUnit = pj.chuteUnit || ""; } } catch (e) {} }
             c.logged = origLogged || new Date().toISOString();
+            /* CHUTE TIME — stamped HERE because this row is one-per-incident and units are unioned on
+               every sighting, so the before/after-apparatus transition is only visible at write time.
+               First sighting with no real apparatus starts the clock (logged); the first sighting that
+               INTRODUCES a real apparatus stamps chute = now - logged, first responder only, sticky
+               once set. Auto-assigned calls (apparatus already on the first tone) never get one —
+               unmeasurable by design. Precision is bounded by the relay poll cadence. */
+            const incoming = Array.isArray(c.units) ? c.units : [];
+            let chute = prevChute, chuteUnit = prevChuteUnit;
+            if (chute == null && prev && !prevUnits.some(isRealApparatus) && incoming.some(isRealApparatus)) {
+              const t0 = Date.parse(c.logged);
+              const dt = Math.round((Date.now() - t0) / 1000);
+              if (isFinite(dt) && dt >= 1 && dt <= 1800) { chute = dt; chuteUnit = String(incoming.find(isRealApparatus) || ""); }
+            }
             const seenU = {}, merged = [];
             for (const u of prevUnits.concat(c.units || [])) { const key = String(u).toUpperCase(); if (u && !seenU[key]) { seenU[key] = 1; merged.push(u); } }
             c.units = merged;
             if (c.id || c.cad_code) {
-              await env.PINS.put(k, JSON.stringify({ ...c, stations: stationsOf(c.units), logged: c.logged }),
+              await env.PINS.put(k, JSON.stringify({ ...c, stations: stationsOf(c.units), logged: c.logged,
+                                 chute: chute != null ? chute : null, chuteUnit: chuteUnit || "" }),
                                  { expirationTtl: 48 * 3600 });
               if (c.cad_code && c.id && ("call:" + c.id) !== k) { try { await env.PINS.delete("call:" + c.id); } catch (e) {} }
             }
