@@ -798,6 +798,48 @@ export default {
       } catch (e) { return json({ ok: false, error: "write failed" }, 502); }
     }
 
+    /* Log a board-edit action independently of the /state write path. The control panel's server-side
+       write (/state) needs Firestore SA creds; without them it falls back to a DIRECT Firestore write,
+       so no action would ever log. The client reports the action here after any successful save, so the
+       audit trail works regardless of which write path ran. Pin-gated + rate-limited like every route. */
+    if (url.pathname === "/logaction") {
+      let body; try { body = await req.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
+      const gate = await pinGate(env, ip, String(body.pin || ""), json, "unauthorized");
+      if (gate.res) return gate.res;
+      if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "display-only" }, 403);
+      await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
+                             action: String(body.action || "updated board state").slice(0, 200) });
+      return json({ ok: true }, 200);
+    }
+
+    /* Clear access-log entries. Admin only. Body {names:[...]} deletes only those people (a name in
+       the list, or an empty/"unknown" name for the failed-login bucket); no `names` clears the WHOLE log. */
+    if (url.pathname === "/accessclear") {
+      let body; try { body = await req.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
+      const gate = await pinGate(env, ip, String(body.pin || ""), json, "unauthorized");
+      if (gate.res) return gate.res;
+      if ((gate.who.tier || "") !== "admin") return json({ ok: false, error: "admin only" }, 403);
+      const names = Array.isArray(body.names) ? body.names.map(n => String(n).trim().toLowerCase()) : null;
+      const wantUnknown = names ? names.some(n => n === "unknown" || n === "") : false;
+      let cleared = 0, cursor;
+      try {
+        do {
+          const listed = await env.PINS.list({ prefix: "acc:", cursor });
+          for (const k of listed.keys) {
+            if (names) {
+              const v = await env.PINS.get(k.name); if (!v) continue;
+              let nm = ""; try { nm = String(JSON.parse(v).name || "").trim().toLowerCase(); } catch {}
+              const match = (nm && names.indexOf(nm) >= 0) || (!nm && wantUnknown);
+              if (!match) continue;
+            }
+            await env.PINS.delete(k.name); cleared++;
+          }
+          cursor = listed.list_complete ? null : listed.cursor;
+        } while (cursor);
+      } catch { return json({ ok: false, error: "clear failed" }, 502); }
+      return json({ ok: true, cleared }, 200);
+    }
+
     return json({ ok: false, error: "not found" }, 404);
   },
 };
