@@ -1613,7 +1613,9 @@
     var fl=document.getElementById("wxFlag"), st=document.getElementById("wxStamp");
     var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE});
     if(!flag){fl.hidden=true; st.textContent="NWS \u00b7 5-sta worst-case \u00b7 "+tm;}
-    else{fl.hidden=false; fl.textContent=flag; st.textContent=/SAMPLE/.test(flag)?"NWS unavailable":("NWS \u00b7 "+tm);}}
+    else{fl.hidden=false; fl.textContent=flag;
+      st.textContent=/OPEN-METEO/.test(flag)?("OPEN-METEO backup \u00b7 5-sta worst-case \u00b7 "+tm)   /* backup model data must never be stamped NWS */
+        :/SAMPLE/.test(flag)?"NWS unavailable":("NWS \u00b7 "+tm);}}
   /* \u2500\u2500 NWS BANNER CAROUSEL \u2014 one predictable slot showing ONE active band at a time. Reads the hidden
      source bands (#alertLane / #heatBand / #linkBand), sorts warnings first, and rotates: warnings
      dwell ~3x longer (15s vs 5s) so a life-threat is never off-screen for long. Every source render
@@ -1724,11 +1726,43 @@
     try{ FireWx.hours([]); }catch(e){}                                        /* no invented fire-weather pills */
     try{ if(window.updateHeatFlag) window.updateHeatFlag(null); }catch(e){}   /* no invented heat advisory */
   }
+  /* \u2500\u2500 OPEN-METEO BACKUP \u2014 redundancy for the observed NWS forecastHourly 500 outages (2026-07-23:
+     every gridpoint hourly returned "Unexpected Problem" while alerts/grid data stayed up). One
+     keyless call covers all 5 stations; the adapter reshapes the reply into NWS-period objects so
+     renderAggregate/FireWx render it IDENTICALLY (same worst-of-5, icons, pills). Loudly labeled \u2014
+     backup model data must never pass as NWS. Alerts are untouched: NWS remains the only alert source. \u2500\u2500 */
+  function omCompass(d){ var p=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]; return p[Math.round((((+d%360)+360)%360)/22.5)%16]; }
+  function omCond(c){ c=+c; if(c===0)return"Clear"; if(c<=2)return"Partly Cloudy"; if(c===3)return"Cloudy"; if(c<=48)return"Fog";
+    if(c<=57)return"Drizzle"; if(c<=67)return"Rain"; if(c<=77)return"Snow"; if(c<=82)return"Rain Showers"; if(c<=86)return"Snow Showers"; return"Thunderstorms"; }
+  function omBackup(){
+    var u="https://api.open-meteo.com/v1/forecast?latitude="+STATIONS.map(function(s){return s.lat;}).join(",")+
+      "&longitude="+STATIONS.map(function(s){return s.lon;}).join(",")+
+      "&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,precipitation_probability,is_day"+
+      "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FChicago&forecast_hours=12";
+    function shape(loc){ var h=loc&&loc.hourly; if(!h||!h.time||!h.time.length) return null;
+      return h.time.map(function(t,i){ return {
+        startTime:t, isDaytime:h.is_day?h.is_day[i]===1:true,
+        temperature:(h.temperature_2m[i]!=null?Math.round(h.temperature_2m[i]):null),
+        relativeHumidity:{value:h.relative_humidity_2m[i]},
+        windSpeed:(h.wind_speed_10m[i]!=null?Math.round(h.wind_speed_10m[i]):0)+" mph",
+        windGust:(h.wind_gusts_10m&&h.wind_gusts_10m[i]!=null)?{value:Math.round(h.wind_gusts_10m[i]),unitCode:"mph"}:null,
+        windDirection:omCompass(h.wind_direction_10m[i]),
+        shortForecast:omCond(h.weather_code[i]),
+        probabilityOfPrecipitation:{value:(h.precipitation_probability&&h.precipitation_probability[i]!=null)?h.precipitation_probability[i]:0} }; }); }
+    return wxTO(fetch(u),8000).then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .catch(function(){ return wxTO(fetch(WX_PROXY(u)),8000).then(function(r){ if(!r.ok) throw 0; return r.json(); }); })   /* CORS/network fallback via the wx proxy */
+      .then(function(arr){ var good=(Array.isArray(arr)?arr:[arr]).map(shape).filter(Boolean);
+        if(!good.length) throw 0; return good; });
+  }
   function loadWeather(){
     if(typeof fetch!=="function"){wxFail("WEATHER FEED UNAVAILABLE \u2014 no live NWS data");return;}
     Promise.all(STATIONS.map(function(st){return stationHourly(st).then(function(hf){var p=hf&&hf.properties&&hf.properties.periods;return (p&&p.length)?p:null;}).catch(function(){return null;});}))
     .then(function(res){var good=res.filter(Boolean);
-      if(!good.length){ if(wxLastGood)renderAggregate(wxLastGood,"STALE \u2014 NWS not refreshing (last good shown)"); else wxFail("WEATHER FEED UNAVAILABLE \u2014 no live NWS data"); return; }
+      if(!good.length){
+        /* NWS fully down -> Open-Meteo backup, loudly labeled. Then stale, then fail. */
+        omBackup().then(function(og){ renderAggregate(og,"BACKUP SOURCE \u2014 OPEN-METEO (NWS DOWN)"); })
+          .catch(function(){ if(wxLastGood)renderAggregate(wxLastGood,"STALE \u2014 NWS not refreshing (last good shown)"); else wxFail("WEATHER FEED UNAVAILABLE \u2014 no live NWS or backup data"); });
+        return; }
       wxLastGood=good;
       renderAggregate(good, good.length<STATIONS.length?(good.length+"/"+STATIONS.length+" stations reporting \u2014 partial coverage"):null);});}
   loadWeather(); setInterval(loadWeather,WX_REFRESH);
