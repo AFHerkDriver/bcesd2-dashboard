@@ -1136,7 +1136,10 @@
     var el=document.getElementById("droneMap"); if(!el) return;
     if(typeof L==="undefined"){ return; }
     var CARTO="© OSM · CARTO", ESRI="© Esri";
-    var TL=function(u,o){ return L.tileLayer(u,o); };
+    /* updateWhenIdle + no mid-zoom updates + a fat keepBuffer: tiles load when the map settles instead
+       of churning through every animation frame — the satellite hybrid is 3 tile layers, and without
+       this the daytime board felt sluggish on pan/zoom. */
+    var TL=function(u,o){ o=o||{}; o.updateWhenIdle=true; o.updateWhenZooming=false; o.keepBuffer=4; return L.tileLayer(u,o); };
     var dark=TL("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{attribution:CARTO,subdomains:"abcd",maxZoom:20});
     var positron=TL("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{attribution:CARTO,subdomains:"abcd",maxZoom:20});
     /* Satellite = Esri imagery + street/place label overlays (a "hybrid" so addresses/streets read on the photo) */
@@ -1227,10 +1230,12 @@
        small pans don't re-query; labels sit in their own pane UNDER the call pins. ── */
     map.createPane("addrPane"); map.getPane("addrPane").style.zIndex=450; map.getPane("addrPane").style.pointerEvents="none";
     window.BC2FD_MAP=map;   /* ops/debug handle (console tuning, tests); same-origin only */
-    var addrLayer=L.layerGroup().addTo(map), ADDR_Z=16.2, addrCache={}, addrCacheKeys=[], addrSeq=0, addrDeb=null;
-    function addrPaint(feats){
+    var addrLayer=L.layerGroup().addTo(map), ADDR_Z=16.2, addrCache={}, addrCacheKeys=[], addrSeq=0, addrDeb=null, addrPainted="";
+    function addrPaint(feats,key){
+      if(key && key===addrPainted) return;                 /* this exact view is already painted — tearing down and rebuilding 300+ DOM labels on every pan tick is what made the map drag */
+      addrPainted=key||"";
       addrLayer.clearLayers();
-      feats.slice(0,600).forEach(function(f){
+      feats.slice(0,350).forEach(function(f){
         var g=f.geometry&&f.geometry.rings&&f.geometry.rings[0]; if(!g||!g.length) return;
         var sx=0,sy=0; g.forEach(function(p){ sx+=p[0]; sy+=p[1]; });
         var num=(String(f.attributes&&f.attributes.Situs||"").trim().match(/^\d+/)||[""])[0]; if(!num) return;
@@ -1239,10 +1244,10 @@
       });
     }
     function addrUpdate(){
-      if(map.getZoom()<ADDR_Z){ addrLayer.clearLayers(); return; }
+      if(map.getZoom()<ADDR_Z){ addrLayer.clearLayers(); addrPainted=""; return; }
       var b=map.getBounds().pad(0.12);
       var bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(function(x){return x.toFixed(4);}).join(",");
-      if(addrCache[bbox]){ addrPaint(addrCache[bbox]); return; }
+      if(addrCache[bbox]){ addrPaint(addrCache[bbox],bbox); return; }
       var seq=++addrSeq;
       var u="https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0/query?geometry="+bbox+
         "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects"+
@@ -1251,10 +1256,10 @@
         if(seq!==addrSeq || !j || !Array.isArray(j.features)) return;   /* stale response or bad reply -> drop */
         addrCache[bbox]=j.features; addrCacheKeys.push(bbox);
         if(addrCacheKeys.length>40) delete addrCache[addrCacheKeys.shift()];
-        if(map.getZoom()>=ADDR_Z) addrPaint(j.features);
+        if(map.getZoom()>=ADDR_Z) addrPaint(j.features,bbox);
       }).catch(function(){});
     }
-    map.on("moveend zoomend",function(){ if(addrDeb)clearTimeout(addrDeb); addrDeb=setTimeout(addrUpdate,250); });
+    map.on("moveend zoomend",function(){ if(addrDeb)clearTimeout(addrDeb); addrDeb=setTimeout(addrUpdate,400); });
     /* Fresh new-call pins live in their OWN layer so the 5-min tally rebuild (BC2FD_CALL_PINS, which
        clearLayers() on pinLayer) can't wipe a pin the tally hasn't caught up to yet — that was making
        a just-dropped call flash its sonar and then vanish. A fresh pin is retired only once the tally
@@ -1332,10 +1337,11 @@
        animation so it ends on its own — no timer to leak, and a missed cleanup can't leave a
        pin blinking on the wall all shift. ── */
     var focusT=null, lastFocus=0, recent=[], focusPts=[];
-    /* CALL_ZOOM: single-call focus goes to ROOFTOP level — with the imagery swap below, the crew sees
-       the actual house ("corner lot", "third from the end") plus its parcel number (ADDR_Z sits below
-       this, so labels light automatically). FOCUS_ZOOM stays the cap for multi-call framing. */
-    var FOCUS_ZOOM=15.2, CALL_ZOOM=17, HOLD=60000, MIN_GAP=25000, BURST_N=3, BURST_WIN=240000;
+    /* CALL_ZOOM: single-call focus goes to near-rooftop ON IMAGERY — the crew sees the actual house
+       ("corner lot", "third from the end"). Deliberately JUST BELOW ADDR_Z so the auto-zoom never
+       triggers the parcel fetch/labels (expediency on every dispatch); one manual zoom nudge crosses
+       the threshold and lights the house numbers. FOCUS_ZOOM stays the cap for multi-call framing. */
+    var FOCUS_ZOOM=15.2, CALL_ZOOM=16, HOLD=60000, MIN_GAP=25000, BURST_N=3, BURST_WIN=240000;
     /* Imagery swap for the call zoom. At night the board runs the dark base; a rooftop zoom on a dark
        vector map says nothing, so a SINGLE-call hold swaps to the satellite hybrid and the end of the
        hold restores whatever base was up. If the base already IS satellite (daytime default, or the
