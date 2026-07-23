@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BC2FD Dash">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <title>BC2FD Station Dashboard</title>
 <!-- Link preview (iMessage / SMS / Slack). Scrapers do NOT resolve relative paths, so these
      must stay absolute; og:image is 1200x630 JPEG, the size every platform renders large. -->
@@ -206,6 +208,12 @@
   /* Q1 District Weather — now + next hours (big, glanceable) */
   .wx-now{display:flex;align-items:center;justify-content:space-between;gap:clamp(8px,1vmin,18px);flex:0 0 auto;margin-bottom:clamp(4px,.5vmin,9px)}
   .wx-ic .wic{width:clamp(28px,2.5vmin,44px);height:clamp(28px,2.5vmin,44px);display:block}
+  /* Backup-source whisper: Open-Meteo carrying the tile is live, valid data — it gets a tiny corner
+     tag, not the loud amber band (that stays for stale/missing data, where alarm is warranted). */
+  .wx-tile{position:relative}
+  .wx-src-tag{position:absolute;right:9px;bottom:5px;z-index:3;font-family:'DM Mono',monospace;white-space:nowrap;
+    font-size:clamp(8px,.7vmin,11px);letter-spacing:1px;color:var(--dim);opacity:.8;pointer-events:none}
+  .wx-src-tag[hidden]{display:none}
   .wx-flag{flex:0 0 auto;background:rgba(255,193,7,.15);border:1px solid var(--amber);color:var(--amber);
     border-radius:8px;padding:clamp(4px,.45vmin,9px) clamp(8px,.9vmin,14px);font-size:clamp(11px,1vmin,16px);
     letter-spacing:1px;margin-bottom:clamp(6px,.7vmin,12px);text-align:center;font-family:'Bebas Neue',sans-serif}
@@ -775,6 +783,8 @@
   .tally .tchip2.hot{border-color:var(--blue)} .tally .tchip2.hot b{color:var(--blue)}
   .tally .tchip2.rank1{border-color:var(--red);background:rgba(255,59,48,.16)} .tally .tchip2.rank1 b{color:var(--red)}
   .tally .tchip2.rank2{border-color:var(--amber);background:rgba(255,193,7,.14)} .tally .tchip2.rank2 b{color:var(--amber)}
+  .tally .tchip2.chute{border-color:var(--teal);background:rgba(45,212,191,.10)} .tally .tchip2.chute b{color:var(--teal)}   /* avg turnout — teal so it never reads as a station chip */
+  .tally .tchip2.chute[hidden]{display:none}
   .calls-body.err .idle{color:var(--amber);font-style:normal}
 
   /* Shift Schedule tile — vertical list (replaces the old bottom strip) */
@@ -840,6 +850,9 @@
   .rs-run{display:grid;grid-template-columns:clamp(62px,8vmin,104px) 1fr;grid-template-areas:"t n" "t u" "t a";
     gap:0 10px;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.55)}
   .rs-run:last-child{border-bottom:none}
+  .rs-run.rs-go{cursor:pointer}                            /* has a coordinate: tap -> close sheet, peek the map 15s */
+  .rs-t .rs-ch{font-style:normal;color:var(--teal);font-size:.92em}   /* per-run chute under the timestamp */
+  .rs-run.rs-go:hover{background:rgba(255,255,255,.045)}
   .rs-t{grid-area:t;color:var(--dim);font-size:clamp(10px,1.05vmin,14px);font-variant-numeric:tabular-nums;padding-top:1px}
   .rs-n{grid-area:n;font-size:clamp(11.5px,1.2vmin,17px);color:var(--text)}
   .rs-u{grid-area:u;display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 2px}
@@ -950,6 +963,7 @@
     <div class="wxrow">
     <div class="tile wx-tile">
       <div class="head"><span class="name">District Weather</span><span class="stamp src" id="wxStamp">Loading NWS&hellip;</span></div>
+      <div class="wx-src-tag" id="wxSrcTag" hidden>OPEN-METEO BACKUP &middot; NWS DOWN</div>
       <div class="wx-flag" id="wxFlag" hidden></div>
       <div class="wx-now">
         <div class="wx-lead">
@@ -996,6 +1010,7 @@
         <span class="tchip2" data-st="125">S125 <b>0</b></span>
         <span class="tchip2" data-st="161">S161 <b>0</b></span>
         <span class="tchip2" data-st="162">S162 <b>0</b></span>
+        <span class="tchip2 chute" id="chuteChip" hidden title="Average dispatch-to-first-apparatus (chute) this tour — measurable calls only; auto-assigned apparatus can't be timed">CHUTE <b>—</b></span>
       </div>
     </div>
     <!-- Shift schedule — officer-set via control.html; vertical list, auto-paging on overflow -->
@@ -1310,6 +1325,15 @@
       focusPts.push({ll:[c.lat,c.lng],exp:now+HOLD});
       reframe();
     };
+    /* Officer taps a run in the detail sheet -> peek the map at that run's pin for 15s, then return
+       to the district frame. Reuses the focus machinery (frames alongside any live new-call hold);
+       bypasses MIN_GAP/burst — a deliberate tap is not a dispatch storm. No-op while a drone owns
+       the map. The run's pin is already plotted by the tally, so nothing is added or removed. */
+    window.BC2FD_MAP_PEEK=function(lat,lng){
+      if(lat==null||lng==null||!isFinite(lat)||!isFinite(lng)||!pinsOn) return;
+      focusPts.push({ll:[lat,lng],exp:Date.now()+15000});
+      reframe();
+    };
     /* Point `m` metres from lat/lng along a compass bearing — used to draw the operator look-cone. */
     function dest(lat,lng,brgDeg,m){ var R=6378137,br=brgDeg*Math.PI/180,dr=m/R,la=lat*Math.PI/180,lo=lng*Math.PI/180;
       var la2=Math.asin(Math.sin(la)*Math.cos(dr)+Math.cos(la)*Math.sin(dr)*Math.cos(br));
@@ -1612,10 +1636,12 @@
     try{ FireWx.hours(fhrs); }catch(e){}
     var fl=document.getElementById("wxFlag"), st=document.getElementById("wxStamp");
     var tm=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE});
-    if(!flag){fl.hidden=true; st.textContent="NWS \u00b7 5-sta worst-case \u00b7 "+tm;}
-    else{fl.hidden=false; fl.textContent=flag;
-      st.textContent=/OPEN-METEO/.test(flag)?("OPEN-METEO backup \u00b7 5-sta worst-case \u00b7 "+tm)   /* backup model data must never be stamped NWS */
-        :/SAMPLE/.test(flag)?"NWS unavailable":("NWS \u00b7 "+tm);}}
+    var tg=document.getElementById("wxSrcTag");
+    if(!flag){fl.hidden=true; if(tg)tg.hidden=true; st.textContent="NWS \u00b7 5-sta worst-case \u00b7 "+tm;}
+    else if(/OPEN-METEO/.test(flag)){ fl.hidden=true; if(tg)tg.hidden=false;   /* backup is LIVE data \u2014 tiny corner tag, not the alarm band; stamp still never says NWS */
+      st.textContent="OPEN-METEO backup \u00b7 5-sta worst-case \u00b7 "+tm; }
+    else{fl.hidden=false; fl.textContent=flag; if(tg)tg.hidden=true;
+      st.textContent=/SAMPLE/.test(flag)?"NWS unavailable":("NWS \u00b7 "+tm);}}
   /* \u2500\u2500 NWS BANNER CAROUSEL \u2014 one predictable slot showing ONE active band at a time. Reads the hidden
      source bands (#alertLane / #heatBand / #linkBand), sorts warnings first, and rotates: warnings
      dwell ~3x longer (15s vs 5s) so a life-threat is never off-screen for long. Every source render
@@ -1722,6 +1748,7 @@
     setH("wxIcon",""); setH("wxTemp","—&deg;"); setH("wxFeels","—&deg;"); setH("wxWind","—"); setH("wxHours","");
     var c=document.getElementById("wxCond"); if(c) c.textContent="—";
     var fl=document.getElementById("wxFlag"); if(fl){ fl.hidden=false; fl.textContent=msg; }
+    var tg=document.getElementById("wxSrcTag"); if(tg) tg.hidden=true;   /* total failure is LOUD only — no backup whisper */
     var st=document.getElementById("wxStamp"); if(st) st.textContent="NWS unavailable";
     try{ FireWx.hours([]); }catch(e){}                                        /* no invented fire-weather pills */
     try{ if(window.updateHeatFlag) window.updateHeatFlag(null); }catch(e){}   /* no invented heat advisory */
@@ -2503,7 +2530,9 @@
                '<span class="rs-wn">'+work[u]+'</span></div>'; }).join("");
       var rows=runs.map(function(c){
         var ty=String(c.type||"").replace(/^(MED|FIRE|MVC|RESCUE|ALARM|ASSIST)\s*-\s*/i,"");
-        return '<div class="rs-run"><span class="rs-t">'+rtEsc(dow(c))+' '+rtEsc(hhmm(c))+'</span>'+
+        var geo=(c.lat!=null&&c.lng!=null)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'';   /* tappable: closes the sheet and peeks the map at this run */
+        var ch=(c.chute>=1)?('<br><i class="rs-ch" title="chute: dispatch to first apparatus'+(c.chuteUnit?(' ('+rtEsc(c.chuteUnit)+')'):'')+'">'+Math.floor(c.chute/60)+':'+('0'+(c.chute%60)).slice(-2)+'</i>'):'';
+        return '<div class="rs-run'+(geo?' rs-go':'')+'"'+geo+'><span class="rs-t">'+rtEsc(dow(c))+' '+rtEsc(hhmm(c))+ch+'</span>'+
                '<span class="rs-n">'+rtEsc(ty)+'</span>'+
                '<span class="rs-u">'+(function(){
                   var seen={}, out=[];
@@ -2537,7 +2566,12 @@
        never yanks the sheet away from someone who is actively reading it. */
     (function(){
       var o=document.getElementById("rtSheet"); if(!o) return;
-      o.addEventListener("click",function(e){ if(e.target===o) rtClose(); else rtArm(); });
+      o.addEventListener("click",function(e){
+        var run=e.target.closest && e.target.closest(".rs-run[data-lat]");
+        if(run){ rtClose();   /* tap a run -> collapse the sheet and peek the map at its pin for 15s */
+          try{ if(window.BC2FD_MAP_PEEK) window.BC2FD_MAP_PEEK(parseFloat(run.getAttribute("data-lat")),parseFloat(run.getAttribute("data-lng"))); }catch(err){}
+          return; }
+        if(e.target===o) rtClose(); else rtArm(); });
       o.addEventListener("scroll",rtArm,true);
       document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !o.hidden) rtClose(); });
     })();
@@ -2608,7 +2642,16 @@
         .then(function(j){
           if(!j||!j.ok||!Array.isArray(j.calls)){ tallyFail(); return; }
           tallyOk=true; tallyFails=0; applyTallyVis();
-          var since=tourStart().getTime(), counts={}, typeCounts={}, incident={}, groups=[];
+          /* MAC121 auto-active: mutual-aid engine has no roster feed, so a dispatch IS the signal it's
+             up. Any call in the 48h log carrying MAC121 (or MA121 — dispatch tones it both ways) lights
+             the pill for 6h from that call; latest assignment wins. Scans the full log, not just this
+             tour, so a pre-0700 call still counts. Officer can still force it via control.html. */
+          (function(){ var until=0;
+            (j.calls||[]).forEach(function(c){ if(((c.units)||[]).some(function(u){ return /^MAC?121$/i.test(String(u)); })){
+              var t=new Date(c.logged||c.started||0).getTime(); if(t && t+6*3600000>until) until=t+6*3600000; } });
+            if(window.MA121_UNTIL!==until){ window.MA121_UNTIL=until; try{ if(window.renderUnits) window.renderUnits(); }catch(e){} }
+          })();
+          var since=tourStart().getTime(), counts={}, typeCounts={}, incident={}, groups=[], chuteVals=[];
           RT_RUNS={}; RT_SINCE=since;                            /* rebuilt every poll so the sheet can never show a stale run */
           /* Tally INCIDENTS, not alert rows: A911 re-tones a run as a new alert, so one structure
              fire can sit in the log three times. Sorted ascending so incidentKey's time window
@@ -2619,6 +2662,7 @@
           }).sort(byStarted).forEach(function(c){
             var ikey=incidentKey(c, groups);
             if(incident[ikey]) return; incident[ikey]=1;
+            if(c.chute>=1) chuteVals.push(c.chute);          /* worker-computed turnout (dispatch -> first apparatus); only measurable calls carry one */
             var sts=stationsFor(c).map(function(s){ return s==="126"?"123":s==="120"?"121":(s==="119"||s==="127")?"124":s; });   /* extra ambulances ride with a staffed station: M126 -> 123, M120 -> 121, M119/M127 -> 124 (none have a tally chip of their own) */
             var seen={};
             sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
@@ -2629,6 +2673,12 @@
             }
           });
           paintTally(counts); paintRunTypes(typeCounts);
+          /* Running average chute this tour. Hidden until at least one call is measurable — a fake
+             0:00 on a tour of auto-assigned calls would read as impossibly fast turnout. */
+          var cc=document.getElementById("chuteChip");
+          if(cc){ if(chuteVals.length){ var avg=Math.round(chuteVals.reduce(function(a,b){return a+b;},0)/chuteVals.length);
+              cc.querySelector("b").textContent=Math.floor(avg/60)+":"+("0"+(avg%60)).slice(-2);
+              cc.hidden=false; } else cc.hidden=true; }
           /* District map pins — same incidents, same tour window, same palette as the keypad, so the
              tally, the run sheet and the map can never tell three different stories. Runs without a
              coordinate are simply not pinned (the log predates the worker recording them). */
@@ -2743,7 +2793,7 @@
      GREEN = on/staffed · RED = out of service · AMBER = source unreachable (fail-loud,
      never a false all-clear) · dim = not staffed. No status words on chips. ── */
   (function(){
-    var OFF=[["b121","B121"],["mac121","MAC121"],["bat161","BC161"],["boat124","BOAT124"],["rescue124","RESCUE124"]];
+    var OFF=[["b121","B121"],["mac121","MAC121"],["bat161","BC161"],["boat124","BOAT124"],["rescue124","RESCUE124"]];   /* display is MAC121; dispatch sometimes tones it "MA121" — the auto-active matcher accepts both */
     var APP=[["l123","L123"],["ap124","AP124"],["l125","L125"]];
     var stOk=null, stSt=null;
     function esc2(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -2759,6 +2809,7 @@
       var body=document.getElementById("teamsBody");
       if(!body) return;
       var items=[], s=window.UAV_STATE;                            /* collect {label, cls} for every visible pill, then sort A–Z */
+      var maOn=!!(window.MA121_UNTIL && window.MA121_UNTIL>Date.now() && !(stSt&&stSt.macAck===window.MA121_UNTIL));   /* MAC121 dispatched -> auto-on 6h; once the officer ACKS this dispatch in control (macAck), their saved staffing/expiry governs instead — shorten, extend, or stand down */
       items.push({label:"UAV121", cls: !s?"":(!s.ok?"err":(s.u121?"on":""))});
       items.push({label:"UAV124", cls: !s?"":(!s.ok?"err":(s.u124?"on":""))});
       if(stOk===false){
@@ -2768,12 +2819,12 @@
         APP.forEach(function(a){ items.push({label:a[1],cls:"err"}); });
       } else if(stOk===null){
         body.className="teams-body";
-        OFF.forEach(function(t){ items.push({label:t[1],cls:""}); });
+        OFF.forEach(function(t){ items.push({label:t[1],cls:(t[0]==="mac121"&&maOn)?"on":""}); });
       } else {
         var tm=(stSt&&stSt.teams)||{}, ap=(stSt&&stSt.apparatus)||{};
         var tx=(stSt&&stSt.tExp)||{}, ax=(stSt&&stSt.aExp)||{};
         body.className="teams-body";
-        OFF.forEach(function(t){ var on=!!tm[t[0]] && !expired(tx[t[0]]); items.push({label:t[1],cls:on?"on":""}); });   /* expiry passed -> quietly off */
+        OFF.forEach(function(t){ var on=(!!tm[t[0]] && !expired(tx[t[0]])) || (t[0]==="mac121"&&maOn); items.push({label:t[1],cls:on?"on":""}); });   /* expiry passed -> quietly off; MA121 also lights from dispatch */
         APP.forEach(function(a){ if(!!ap[a[0]] && !expired(ax[a[0]])) items.push({label:a[1],cls:"oos"}); });            /* apparatus only while OOS */
         ((stSt&&stSt.writeins)||[]).forEach(function(u){                              /* ad-hoc write-ins */
           if(!u || !u.name || !String(u.name).trim() || expired(u.exp)) return;

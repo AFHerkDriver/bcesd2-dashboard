@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BC2FD Dash">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <title>BC2FD Station Dashboard — Control</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
 <style>
@@ -277,7 +279,7 @@
     <!-- Specialty Units — alphabetized -->
     <div class="card">
       <h2>Specialty Units &amp; OOS</h2>
-      <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on team staffing — when it passes, the team drops to — on its own. Ladders/AP have no dates: maintenance returns are unknown; flip them back In Service manually.</div>
+      <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on team staffing — when it passes, the team drops to — on its own. Ladders/AP have no dates: maintenance returns are unknown; flip them back In Service manually. MAC 121 also auto-staffs for 6 hours when dispatch tones it (MAC121 or MA121 on a call) — the expiry prefills below; shorten, extend, or clear it and Save.</div>
       <div class="unit-row"><span class="ulabel">Aerial Platform 124</span><div class="seg red useg" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
       <div class="unit-row"><span class="ulabel">Battalion 161</span><div class="seg red useg" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:bat161" title="Expires (optional)"></div>
       <div class="unit-row"><span class="ulabel">Boat Team 124</span><div class="seg red useg" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:boat124" title="Expires (optional)"></div>
@@ -407,6 +409,8 @@
   function unlock(name, tier, pin){
     if(tier==='admin'){ loadAccessLog(pin); wireReset(); }   /* access log is yours alone — admin PIN only */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
+    /* MAC121 dispatch prefill needs the PIN (this unlock) AND loaded state — retry covers the race */
+    try{ if(window.macAutoPrefill){ window.macAutoPrefill(); setTimeout(window.macAutoPrefill,3000); setTimeout(window.macAutoPrefill,8000); } }catch(e){}
     var n=$g('lockNotice'); if(n) n.textContent='🔒 Officer Access \u00b7 '+(name||'Verified');
   }
   /* Active911 token-expiry heads-up. Shown ONLY to the token owner (Capt Sanchez), starting 30 days
@@ -868,6 +872,37 @@ function updateExpVis(){                                    /* expiry picker sho
     inp.classList.toggle('off', !active);
   });
 }
+/* ── MAC121 dispatch prefill. When dispatch tones MAC121 (or MA121) the BOARD auto-lights the pill
+   for 6h. Surface the same window HERE as a real staffing row — Staffed + expiry = dispatch + 6h —
+   so an officer can shorten, lengthen, or clear it, then Save. state.macAck remembers which dispatch
+   window was surfaced: once saved, the officer's values govern and the board's auto stands down.
+   A NEW dispatch (different window) re-arms the prefill. ── */
+var macStateLoaded=false, macPrefillFor=0;
+function macAutoPrefill(){
+  if(!macStateLoaded) return;
+  var pin=''; try{ var a=JSON.parse(sessionStorage.getItem('bc2fd_ctl_auth')||'null'); pin=(a&&a.pin)||''; }catch(e){}
+  if(!pin) return;
+  fetch(CTL_AUTH+'/calls?pin='+encodeURIComponent(pin)).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+    if(!j||!j.ok||!Array.isArray(j.calls)) return;
+    var until=0;
+    j.calls.forEach(function(c){ if(((c.units)||[]).some(function(u){ return /^MAC?121$/i.test(String(u)); })){
+      var t=new Date(c.logged||c.started||0).getTime(); if(t && t+6*3600000>until) until=t+6*3600000; } });
+    if(!until || until<=Date.now()) return;                      /* no live dispatch window */
+    if(state.macAck===until || macPrefillFor===until) return;    /* this dispatch already surfaced / officer already acted on it */
+    macPrefillFor=until;
+    var cur=(state.tExp&&state.tExp.mac121)?new Date(state.tExp.mac121).getTime():0;
+    state.teams.mac121=true;
+    if(!(cur>until)){                                            /* keep a manually-set LONGER expiry */
+      var d=new Date(until), p=function(n){return ('0'+n).slice(-2);};
+      state.tExp.mac121=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+    }
+    state.macAck=until;
+    segSet('segMac121','on');
+    var inp=document.querySelector('.uexp[data-ux="t:mac121"]'); if(inp) inp.value=state.tExp.mac121||'';
+    updateExpVis(); setDirty(true);                              /* Save button rings — adjust the expiry and Save to lock it in */
+  }).catch(function(){});
+}
+window.macAutoPrefill=macAutoPrefill;
 function renderWi(){
   var box=$('wiList'); if(!box) return; box.innerHTML='';
   state.writeins.forEach(function(u,i){
@@ -1006,7 +1041,7 @@ function inForm(el){ return el && el.closest && !el.closest('#gate'); }
 document.addEventListener('click',function(e){ var t=(e.target&&e.target.closest)?e.target.closest('button'):null; if(uiReady && t && t.id!=='saveTop' && inForm(t)) setDirty(true); },true);
 window.addEventListener('beforeunload',function(e){ if(uiDirty){ e.preventDefault(); e.returnValue=''; return ''; } });
 setTimeout(function(){ uiReady=true; },2500);   /* backstop: activate the guard even if the initial load errored */
-Store.get().then(function(s){ if(s) state=ensureShape(s); pruneCalendar(); hydrate(); uiReady=true; setDirty(false); lastSaved=clone(state); })   /* drop ended events before first paint; lastSaved AFTER prune so the cleanup is silent, not logged as officer removals, and persists on the next real save */
+Store.get().then(function(s){ if(s) state=ensureShape(s); pruneCalendar(); hydrate(); uiReady=true; setDirty(false); lastSaved=clone(state); macStateLoaded=true; try{ macAutoPrefill(); }catch(e){} })   /* drop ended events before first paint; lastSaved AFTER prune so the cleanup is silent, not logged as officer removals, and persists on the next real save */
   .catch(function(){ hydrate(); lastSaved=clone(state); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
 </script>
 <script>

@@ -162,7 +162,23 @@ function dedupeIncidents(rows) {
        row is the one we keep — so coalesce across the group rather than losing a fix that exists. */
     const withGeo = g.rows.find(r => r.lat != null && r.lng != null);
     const cross   = base.cross || (g.rows.find(r => r.cross) || {}).cross || "";
-    return { ...base, units, stations: stationsOf(units), cross,
+    /* CHUTE TIME — dispatch to the FIRST real apparatus attaching. The initial tone usually carries
+       only the box/still code (123A); the re-page that adds the first apparatus (E123) is the enroute
+       mark, so chute = that row's first-sighting minus the first row's. Calls where dispatch auto-
+       assigned an apparatus on the FIRST tone are unmeasurable — no chute emitted, by design.
+       Precision is bounded by the relay poll cadence (~12s while a board is open). */
+    const isApp = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
+    const hasApp = (r) => (r.units || []).some(isApp);
+    const ordered = [...g.rows].sort((a, b) => seenAt(a) - seenAt(b));
+    let chute = null, chuteUnit = "";
+    if (!hasApp(ordered[0])) {
+      const hit = ordered.find(hasApp);
+      if (hit && isFinite(seenAt(hit)) && isFinite(seenAt(ordered[0]))) {
+        const dt = Math.round((seenAt(hit) - seenAt(ordered[0])) / 1000);
+        if (dt >= 1 && dt <= 1800) { chute = dt; chuteUnit = String((hit.units || []).find(isApp) || ""); }
+      }
+    }
+    return { ...base, units, stations: stationsOf(units), cross, chute, chuteUnit,
              lat: base.lat != null ? base.lat : (withGeo ? withGeo.lat : null),
              lng: base.lng != null ? base.lng : (withGeo ? withGeo.lng : null) };
   });
