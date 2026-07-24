@@ -476,24 +476,38 @@ export default {
       if (gate.res) return gate.res;
       if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "officers only" }, 403);
       try {
-        let listed = await env.PINS.list({ prefix: "agg:", limit: 60 });
-        if (!listed.keys.length) {
+        /* One-time seed from the live 48h log, MARKER-based (not if-empty: live archiving creates agg
+           docs before the first /metrics call, which skipped the backfill and lost the trailing 48h).
+           Dedupe-safe: incidents that already have an arch: row (archived live) are not re-counted. */
+        const seeded = await env.PINS.get("archmeta:seeded");
+        if (!seeded) {
           const cl = await env.PINS.list({ prefix: "call:", limit: 1000 });
           const aggs = {};
           for (const kk of cl.keys) {
             const v = await env.PINS.get(kk.name); if (!v) continue;
             let c; try { c = JSON.parse(v); } catch { continue; }
             const cls = clsOf(c.type); if (cls === "gen") continue;
+            const akey = "arch:" + (c.cad_code || c.id || "");
+            if (!c.cad_code && !c.id) continue;
+            if (await env.PINS.get(akey)) continue;             /* already archived by the live path */
             const mh = ctMonthHour(c.logged || c.started);
-            const agg = (aggs[mh.mon] = aggs[mh.mon] || newAgg());
-            aggApply(agg, { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
-            if (c.cad_code || c.id) await env.PINS.put("arch:" + (c.cad_code || c.id), JSON.stringify({
+            if (!aggs[mh.mon]) {
+              let base = newAgg();
+              const pv = await env.PINS.get("agg:" + mh.mon);
+              if (pv) { try { base = Object.assign(newAgg(), JSON.parse(pv)); } catch (e) {} }
+              if (!Array.isArray(base.byHour) || base.byHour.length !== 24) base.byHour = new Array(24).fill(0);
+              if (!Array.isArray(base.chutes)) base.chutes = [];
+              aggs[mh.mon] = base;
+            }
+            aggApply(aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
+            await env.PINS.put(akey, JSON.stringify({
               t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
               u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "" }));
           }
           for (const m in aggs) await env.PINS.put("agg:" + m, JSON.stringify(aggs[m]));
-          listed = await env.PINS.list({ prefix: "agg:", limit: 60 });
+          await env.PINS.put("archmeta:seeded", new Date().toISOString());
         }
+        const listed = await env.PINS.list({ prefix: "agg:", limit: 60 });
         const months = [];
         for (const kk of listed.keys) {
           const v = await env.PINS.get(kk.name); if (!v) continue;
