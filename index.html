@@ -2886,6 +2886,32 @@
               var t=new Date(c.logged||c.started||0).getTime(); if(t && t+6*3600000>until) until=t+6*3600000; } });
             if(window.MA121_UNTIL!==until){ window.MA121_UNTIL=until; try{ if(window.renderUnits) window.renderUnits(); }catch(e){} }
           })();
+          /* CROSS-STAFF AUTO-OOS: E124's crew rides AP124 and E125's rides L125 — when the engine is
+             on a call, the stick has nobody, so it auto-flags OOS until the NEXT 0700 (shift change
+             restaffs). E123 deliberately excluded (L123 is not cross-staffed the same way). Officer's
+             manual OOS in control.html still works independently; windows self-expire at 0700. */
+          (function(){
+            var XMAP={ "E124":"ap124", "E125":"l125" };
+            function ct0700After(ms){                            /* next 0700 CENTRAL strictly after ms */
+              try{
+                var p=new Intl.DateTimeFormat("en-US",{timeZone:"America/Chicago",hour12:false,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit"}).formatToParts(new Date(ms));
+                var g=function(t){ return +((p.find(function(x){ return x.type===t; })||{}).value); };
+                var base=ctEpoch(g("year"), g("month")-1, g("day"), 7, 0);
+                return (g("hour")%24)<7 ? base : base+86400000;
+              }catch(e){ return ms+18*3600000; }                 /* fallback: ~overnight window */
+            }
+            var au={};
+            (j.calls||[]).forEach(function(c){
+              (c.units||[]).forEach(function(u){
+                var k=XMAP[String(u).toUpperCase()]; if(!k) return;
+                var t=new Date(c.logged||c.started||0).getTime(); if(!t) return;
+                var end=ct0700After(t);
+                if(!au[k] || end>au[k]) au[k]=end;
+              });
+            });
+            var prev=JSON.stringify(window.AUTO_OOS||{});
+            if(prev!==JSON.stringify(au)){ window.AUTO_OOS=au; try{ if(window.renderUnits) window.renderUnits(); }catch(e){} }
+          })();
           var since=tourStart().getTime(), counts={}, typeCounts={}, incident={}, groups=[], chuteVals=[];
           RT_RUNS={}; RT_SINCE=since;                            /* rebuilt every poll so the sheet can never show a stale run */
           /* Tally INCIDENTS, not alert rows: A911 re-tones a run as a new alert, so one structure
@@ -3060,7 +3086,14 @@
         var tx=(stSt&&stSt.tExp)||{}, ax=(stSt&&stSt.aExp)||{};
         body.className="teams-body";
         OFF.forEach(function(t){ var on=(!!tm[t[0]] && !expired(tx[t[0]])) || (t[0]==="mac121"&&maOn); items.push({label:t[1],cls:on?"on":""}); });   /* expiry passed -> quietly off; MA121 also lights from dispatch */
-        APP.forEach(function(a){ if(!!ap[a[0]] && !expired(ax[a[0]])) items.push({label:a[1],cls:"oos"}); });            /* apparatus only while OOS */
+        var xsAck=(stSt&&stSt.xsAck)||{};
+        APP.forEach(function(a){
+          var au=window.AUTO_OOS&&window.AUTO_OOS[a[0]];
+          /* cross-staffed stick down while its engine runs (E124->AP124, E125->L125), until next 0700 —
+             UNLESS the officer acked THIS window in control (their saved OOS/expiry/in-service governs) */
+          var auto=!!(au && au>Date.now() && xsAck[a[0]]!==au);
+          if((!!ap[a[0]] && !expired(ax[a[0]])) || auto) items.push({label:a[1],cls:"oos"});
+        });            /* apparatus only while OOS */
         ((stSt&&stSt.writeins)||[]).forEach(function(u){                              /* ad-hoc write-ins */
           if(!u || !u.name || !String(u.name).trim() || expired(u.exp)) return;
           items.push({label:esc2(String(u.name).trim().toUpperCase()), cls:u.mode==="oos"?"oos":"on"});

@@ -298,12 +298,12 @@
     <div class="card">
       <h2>Specialty Units &amp; OOS</h2>
       <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on team staffing — when it passes, the team drops to — on its own. Ladders/AP have no dates: maintenance returns are unknown; flip them back In Service manually. MAC 121 also auto-staffs for 6 hours when dispatch tones it (MAC121 or MA121 on a call) — the expiry prefills below; shorten, extend, or clear it and Save.</div>
-      <div class="unit-row"><span class="ulabel">Aerial Platform 124</span><div class="seg red useg" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      <div class="unit-row"><span class="ulabel">Aerial Platform 124</span><div class="seg red useg" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:ap124" title="Back in service at (auto-fills to next 0700 when E124 runs)"></div>
       <div class="unit-row"><span class="ulabel">Battalion 161</span><div class="seg red useg" id="segBat161"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:bat161" title="Expires (optional)"></div>
       <div class="unit-row"><span class="ulabel">Boat Team 124</span><div class="seg red useg" id="segBoat124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:boat124" title="Expires (optional)"></div>
       <div class="unit-row"><span class="ulabel">Brush 121</span><div class="seg red useg" id="segB121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:b121" title="Expires (optional)"></div>
       <div class="unit-row"><span class="ulabel">Ladder 123</span><div class="seg red useg" id="segL123"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
-      <div class="unit-row"><span class="ulabel">Ladder 125</span><div class="seg red useg" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div></div>
+      <div class="unit-row"><span class="ulabel">Ladder 125</span><div class="seg red useg" id="segL125"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:l125" title="Back in service at (auto-fills to next 0700 when E125 runs)"></div>
       <div class="unit-row"><span class="ulabel">MAC 121</span><div class="seg red useg" id="segMac121"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:mac121" title="Expires (optional)"></div>
       <div class="unit-row"><span class="ulabel">Rescue Team 124</span><div class="seg red useg" id="segRescue124"><button data-v="on">Staffed</button><button data-v="off">—</button></div><input type="datetime-local" class="uexp" data-ux="t:rescue124" title="Expires (optional)"></div>
       <div class="hint" style="margin-top:10px">Write-in units — extra staffing OR maintenance OOS for any apparatus not listed above (E121, T124, B162…). Green = staffed up · Red = out of service. Leave the date blank for unknown maintenance returns; delete the row when the unit is back.</div>
@@ -435,7 +435,8 @@
     if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadChuteStats(pin); }   /* access log + chute gee-whiz are yours alone — admin PIN only */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
     /* MAC121 dispatch prefill needs the PIN (this unlock) AND loaded state — retry covers the race */
-    try{ if(window.macAutoPrefill){ window.macAutoPrefill(); setTimeout(window.macAutoPrefill,3000); setTimeout(window.macAutoPrefill,8000); } }catch(e){}
+    try{ var pf=function(){ try{ window.macAutoPrefill&&window.macAutoPrefill(); }catch(e){} try{ window.xsAutoPrefill&&window.xsAutoPrefill(); }catch(e){} };
+      pf(); setTimeout(pf,3000); setTimeout(pf,8000); }catch(e){}
     var n=$g('lockNotice'); if(n) n.textContent='🔒 Officer Access \u00b7 '+(name||'Verified');
   }
   /* Active911 token-expiry heads-up. Shown ONLY to the token owner (Capt Sanchez), starting 30 days
@@ -935,7 +936,54 @@ function updateExpVis(){                                    /* expiry picker sho
    so an officer can shorten, lengthen, or clear it, then Save. state.macAck remembers which dispatch
    window was surfaced: once saved, the officer's values govern and the board's auto stands down.
    A NEW dispatch (different window) re-arms the prefill. ── */
-var macStateLoaded=false, macPrefillFor=0;
+var macStateLoaded=false, macPrefillFor=0, xsPrefillFor={};
+function dtLocal(ms){ var d=new Date(ms), p=function(n){return ('0'+n).slice(-2);};
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
+/* Next 0700 CENTRAL strictly after ms — the SAME math the board uses, so the ack saved here matches
+   the board's auto-window value exactly (the ack only suppresses on exact equality). */
+function next0700CT(ms){
+  try{
+    var pp=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit'}).formatToParts(new Date(ms));
+    var g=function(t){ return +((pp.find(function(x){ return x.type===t; })||{}).value); };
+    var guess=Date.UTC(g('year'),g('month')-1,g('day'),7,0,0,0);
+    var t2=new Date(guess);
+    var asCT=new Date(t2.toLocaleString('en-US',{timeZone:'America/Chicago'}));
+    var asUTC=new Date(t2.toLocaleString('en-US',{timeZone:'UTC'}));
+    var base=guess+(asUTC.getTime()-asCT.getTime());
+    return (g('hour')%24)<7 ? base : base+86400000;
+  }catch(e){ return ms+18*3600000; }
+}
+/* ── CROSS-STAFF prefill (MAC121 pattern): an engine on a call downs its stick until the next 0700
+   Central (E124 -> AP124, E125 -> L125; E123 excluded). Surfaces the auto window HERE as a real OOS
+   row — seg flips to OOS, expiry prefills to that 0700 — so an officer can shorten, extend, or flip
+   In Service and Save. The saved decision (state.xsAck) overrides the board's auto window for THAT
+   dispatch; a new engine call (different window) re-arms. ── */
+function xsAutoPrefill(){
+  if(!macStateLoaded) return;
+  var pin=''; try{ var a=JSON.parse(sessionStorage.getItem('bc2fd_ctl_auth')||'null'); pin=(a&&a.pin)||''; }catch(e){}
+  if(!pin) return;
+  fetch(CTL_AUTH+'/calls?pin='+encodeURIComponent(pin)).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+    if(!j||!j.ok||!Array.isArray(j.calls)) return;
+    var touched=false;
+    [["E124","ap124","segAP124"],["E125","l125","segL125"]].forEach(function(x){
+      var until=0;
+      j.calls.forEach(function(c){ if(((c.units)||[]).some(function(u){ return String(u).toUpperCase()===x[0]; })){
+        var t=new Date(c.logged||c.started||0).getTime(); if(t){ var e=next0700CT(t); if(e>until) until=e; } } });
+      if(!until || until<=Date.now()) return;                        /* no live window */
+      if((state.xsAck||{})[x[1]]===until || xsPrefillFor[x[1]]===until) return;   /* surfaced / officer already acted */
+      xsPrefillFor[x[1]]=until;
+      state.apparatus[x[1]]=true;
+      var cur=(state.aExp&&state.aExp[x[1]])?new Date(state.aExp[x[1]]).getTime():0;
+      if(!(cur>until)) state.aExp[x[1]]=dtLocal(until);              /* keep a manually-set LATER return time */
+      (state.xsAck=state.xsAck||{})[x[1]]=until;
+      segSet(x[2],'oos');
+      var inp=document.querySelector('.uexp[data-ux="a:'+x[1]+'"]'); if(inp) inp.value=state.aExp[x[1]]||'';
+      touched=true;
+    });
+    if(touched){ updateExpVis(); setDirty(true); }                   /* Save button rings — adjust and Save to lock it in */
+  }).catch(function(){});
+}
+window.xsAutoPrefill=xsAutoPrefill;
 function macAutoPrefill(){
   if(!macStateLoaded) return;
   var pin=''; try{ var a=JSON.parse(sessionStorage.getItem('bc2fd_ctl_auth')||'null'); pin=(a&&a.pin)||''; }catch(e){}
@@ -1099,7 +1147,7 @@ function inForm(el){ return el && el.closest && !el.closest('#gate'); }
 document.addEventListener('click',function(e){ var t=(e.target&&e.target.closest)?e.target.closest('button'):null; if(uiReady && t && t.id!=='saveTop' && inForm(t)) setDirty(true); },true);
 window.addEventListener('beforeunload',function(e){ if(uiDirty){ e.preventDefault(); e.returnValue=''; return ''; } });
 setTimeout(function(){ uiReady=true; },2500);   /* backstop: activate the guard even if the initial load errored */
-Store.get().then(function(s){ if(s) state=ensureShape(s); pruneCalendar(); hydrate(); uiReady=true; setDirty(false); lastSaved=clone(state); macStateLoaded=true; try{ macAutoPrefill(); }catch(e){} })   /* drop ended events before first paint; lastSaved AFTER prune so the cleanup is silent, not logged as officer removals, and persists on the next real save */
+Store.get().then(function(s){ if(s) state=ensureShape(s); pruneCalendar(); hydrate(); uiReady=true; setDirty(false); lastSaved=clone(state); macStateLoaded=true; try{ macAutoPrefill(); }catch(e){} try{ xsAutoPrefill(); }catch(e){} })   /* drop ended events before first paint; lastSaved AFTER prune so the cleanup is silent, not logged as officer removals, and persists on the next real save */
   .catch(function(){ hydrate(); lastSaved=clone(state); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
 </script>
 <script>
