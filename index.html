@@ -1237,6 +1237,31 @@
        small pans don't re-query; labels sit in their own pane UNDER the call pins. ── */
     map.createPane("addrPane"); map.getPane("addrPane").style.zIndex=450; map.getPane("addrPane").style.pointerEvents="none";
     window.BC2FD_MAP=map;   /* ops/debug handle (console tuning, tests); same-origin only */
+    /* ── DISTRICT BORDERS — official ESD 2 + ESD 6 boundaries (county KMZ, in district-bounds.json)
+       drawn as subtle dashed outlines for situational awareness: crews see at a glance whether a pin
+       is ours or a neighbor's. Own pane above radar, below labels/pins; enhancement layer — if the
+       file is missing the map simply has no outline. ── */
+    map.createPane("boundPane"); map.getPane("boundPane").style.zIndex=360; map.getPane("boundPane").style.pointerEvents="none";
+    fetch("district-bounds.json").then(function(r){ return r.ok?r.json():null; }).then(function(b){
+      if(!b) return;
+      ["esd2","esd6"].forEach(function(k){
+        (b[k]||[]).forEach(function(ring){
+          L.polyline(ring.map(function(p){ return [p[1],p[0]]; }),
+            {pane:"boundPane",color:"#FF6B35",weight:2,opacity:.55,dashArray:"7 6",interactive:false}).addTo(map);
+        });
+      });
+    }).catch(function(){});
+    /* ── TENDER OPS ZONES — precomputed no-hydrant territory (>1,000 ft from any plug, clipped to the
+       official borders; tender-zones.json, derived from the same CAD hydrant data as the live per-call
+       flag). Faint red wash so crews see water-poor ground at a glance; all rings go into ONE polygon
+       per district so the SVG even-odd fill keeps covered islands unshaded. Under pins and labels. ── */
+    fetch("tender-zones.json").then(function(r){ return r.ok?r.json():null; }).then(function(z){
+      if(!z) return;
+      ["esd2","esd6"].forEach(function(k){
+        if((z[k]||[]).length) L.polygon(z[k],
+          {pane:"boundPane",color:"#FF3B30",weight:1,opacity:.3,fillColor:"#FF3B30",fillOpacity:.07,interactive:false}).addTo(map);
+      });
+    }).catch(function(){});
     var addrLayer=L.layerGroup().addTo(map), ADDR_Z=16.2, addrCache={}, addrCacheKeys=[], addrSeq=0, addrDeb=null, addrPainted="";
     function addrPaint(feats,key){
       if(key && key===addrPainted) return;                 /* this exact view is already painted — tearing down and rebuilding 300+ DOM labels on every pan tick is what made the map drag */
