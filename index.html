@@ -490,6 +490,7 @@
     .call-e .cu{font-size:clamp(24px,2.5vmin,44px)}   /* units sized to match the call TYPE on the wall */
     .call-e .cc{font-size:clamp(24px,2.5vmin,44px)}   /* channel — same size as units */
     .call-e .cw{font-size:clamp(19px,2vmin,34px)}
+    .call-e .ctd{font-size:clamp(19px,2vmin,34px);padding:2px 12px}   /* tender chip reads at wall distance */
     .call-e .ce{font-size:clamp(17px,1.8vmin,30px)}
     .sched-e .tm{font-size:clamp(26px,2.8vmin,48px)}
     .sched-e .ds{font-size:clamp(19px,2.05vmin,35px)}
@@ -743,6 +744,12 @@
   .call-e .ca{font-size:clamp(12px,1.2vmin,19px);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .call-e .cu{margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--green);flex:0 1 auto;min-width:0;white-space:normal;text-align:right}   /* units sized to match the call TYPE; wrap to a 2nd line on a big call */
   .call-e .cu .u{white-space:nowrap}   /* a single apparatus id never breaks mid-token */
+  /* TENDER water-supply chips: red solid = fire call in a hydrant gap (tender ops required);
+     amber dashed = alarm call in a gap (tenders if it turns into a working fire). */
+  .call-e .ctd{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;letter-spacing:1.2px;border-radius:6px;
+    padding:1px 8px;font-size:clamp(12px,1.3vmin,21px);white-space:nowrap;align-self:center}
+  .call-e .ctd.need{color:#FFF;background:var(--red);border:1px solid rgba(255,255,255,.35)}
+  .call-e .ctd.if{color:var(--amber);border:1px dashed var(--amber);background:rgba(255,193,7,.12)}
   .call-e .cu .u.box{color:var(--dim);font-weight:400;border:1px dashed var(--border);border-radius:5px;padding:0 6px}   /* box/still code shown as its station, dashed — a response area, not a rig */
   .call-e .cc{font-family:'DM Mono',monospace;font-weight:700;font-size:clamp(15px,1.6vmin,26px);color:var(--text);flex:0 0 auto;white-space:nowrap}   /* channel — same size as units, white */
   .call-e .cw{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(12px,1.3vmin,21px);letter-spacing:1px;color:var(--text)}
@@ -2510,11 +2517,35 @@
       if(!ts) return true;                             /* no timestamp: keep (fail-visible) */
       var m=(Date.now()-new Date(ts).getTime())/60000;
       return !isFinite(m)||m<=ADVISORY_MIN; }); }
+    /* ── TENDER OPS FLAG — live water-supply check per call. A FIRE-class call with no hydrant within
+       1,000 ft (the ISO credit distance) gets a red TENDER OPS chip on its row; an ALARM-class call in
+       the same gap gets an amber TENDER IF FIRE advisory (it may turn into one). Checked against the
+       CAD hydrant layer at call time (one point-radius count, ~150 ms, cached per incident) — always
+       current, no precomputed zones to go stale. A failed check shows NO chip and retries next poll:
+       this is an advisory aid on top of crew preplans, so a wrong silence beats a wrong alarm. ── */
+    var tenderCache={}, tenderPending={}, lastCallsArgs=null;
+    function tenderKey(c){ return c.cad_code||("id:"+(c&&c.id)); }
+    function tenderCheck(c){
+      var k=tenderKey(c);
+      if((k in tenderCache) || tenderPending[k]) return;
+      var cls=classify(c.type);
+      if((cls!=="k-fire" && cls!=="k-alarm") || c.lat==null || c.lng==null){ tenderCache[k]=null; return; }
+      tenderPending[k]=1;
+      fetch("https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query?geometry="+c.lng+","+c.lat+
+            "&geometryType=esriGeometryPoint&inSR=4326&distance=305&units=esriSRUnit_Meter&spatialRel=esriSpatialRelIntersects&returnCountOnly=true&f=json")
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(j){ delete tenderPending[k];
+          if(!j || j.count==null) return;                     /* unknown -> no chip; retried next poll */
+          tenderCache[k] = j.count>0 ? null : (cls==="k-fire" ? "need" : "if");
+          if(tenderCache[k] && lastCallsArgs){ try{ render(lastCallsArgs[0], lastCallsArgs[1]); }catch(e){} }   /* flag found -> repaint now, not in 12s */
+        })
+        .catch(function(){ delete tenderPending[k]; });
+    }
     function render(state, calls){
       var body=document.getElementById("callsBody"), pg=document.getElementById("callsPage");
       if(!body) return;
       stopRot();
-      if(Array.isArray(calls)) calls=freshOnly(calls);
+      if(Array.isArray(calls)){ lastCallsArgs=[state, calls]; calls=freshOnly(calls); calls.forEach(tenderCheck); }
       if(state==="off"){ show(false); body.className="calls-body";
         body.innerHTML='<div class="idle">— Dispatch feed standby</div>'; if(pg) pg.hidden=true; return; }   /* relay not built/configured — tile stays, honest standby (not an all-clear) */
       show(true);
@@ -2541,9 +2572,12 @@
           });
           return sp.join(" ");
         })()+'</span>'):'';
+        var td=tenderCache[tenderKey(c)];
+        var tdh= td==="need" ? '<span class="ctd need" title="No hydrant within 1,000 ft — tender/drafting water supply">TENDER OPS</span>'
+               : td==="if"   ? '<span class="ctd if" title="No hydrant within 1,000 ft — tenders if this becomes a working fire">TENDER IF FIRE</span>' : '';
         return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'">'+
                '<span class="cw">'+dropTime(ts)+'</span>'+                          /* time — far left */
-               '<span class="ct">'+esc(c.type||"CALL")+'</span>'+
+               '<span class="ct">'+esc(c.type||"CALL")+'</span>'+tdh+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
                unitsHtml+                                                            /* units — green, pushed right; a newly-assigned apparatus blinks 10s */
                (c.channel?('<span class="cc">'+esc(c.channel)+'</span>'):'')+'</div>';   /* channel — white, far right (only when the feed carries it) */
