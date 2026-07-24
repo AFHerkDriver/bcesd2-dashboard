@@ -74,6 +74,55 @@ function geoNum(v) {
 /* Real apparatus = letters then a 3-digit station (E123, M122, MOF121). Box/still codes (123A) are
    the dispatch response area, not a rig. Shared by station derivation and chute detection. */
 const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
+
+/* ── METRICS ARCHIVE — the 48h call log evaporates; these keep the district's history.
+   arch:<incident>  one permanent row per incident (no TTL), written on first sighting and updated
+                    when units attach or a chute stamps — bounded writes, not one per poll.
+   agg:<YYYY-MM>    monthly rollup the metrics page reads: run count, class mix, hour-of-day bands,
+                    station + apparatus workload, chute samples [cls,seconds]. Central-time months. */
+function clsOf(t) { t = String(t || "").toUpperCase();
+  if (/GENERAL|BURNING|BURN BAN|HYDRANT/.test(t)) return "gen";      /* announcements, not runs */
+  if (/MUTUAL/.test(t)) return "mutual";
+  if (/ALARM/.test(t)) return "alarm";
+  if (/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "mvc";
+  if (/FIRE|STRUCTURE|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "fire";
+  if (/RESCUE/.test(t)) return "rescue";
+  if (/\bHAZ/.test(t)) return "haz";
+  if (/GAS|FUEL|LEAK|SPILL|ODOR|FLUID/.test(t)) return "fuel";
+  if (/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZURE|OVERDOSE|DIABET|ASSAULT/.test(t)) return "med";
+  if (/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "assist";
+  return "other"; }
+function ctMonthHour(iso) {
+  try { const d = new Date(iso);
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour12: false, year: "numeric", month: "2-digit", hour: "2-digit" }).formatToParts(d);
+    const g = (t) => (p.find(x => x.type === t) || {}).value || "";
+    return { mon: g("year") + "-" + g("month"), hour: (+g("hour")) % 24 };
+  } catch (e) { return { mon: "unknown", hour: 0 }; } }
+/* Shift letter for a timestamp — same AABBCC 48h-tour math as the board: tours flip at 0700 Central,
+   pattern anchored 2026-01-01. A call at 06:59 belongs to the PREVIOUS calendar day's shift. */
+function sftOf(iso) {
+  try {
+    const d = new Date(iso);
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit" }).formatToParts(d);
+    const g = (t) => +(p.find(x => x.type === t) || {}).value;
+    let y = g("year"), mo = g("month"), da = g("day");
+    if ((g("hour") % 24) < 7) { const dd = new Date(Date.UTC(y, mo - 1, da)); dd.setUTCDate(dd.getUTCDate() - 1); y = dd.getUTCFullYear(); mo = dd.getUTCMonth() + 1; da = dd.getUTCDate(); }
+    const idx = Math.floor((Date.UTC(y, mo - 1, da) - Date.UTC(2026, 0, 1)) / 86400000);
+    return ["A", "A", "B", "B", "C", "C"][((idx % 6) + 6) % 6] || "";
+  } catch (e) { return ""; } }
+function newAgg() { return { n: 0, byCls: {}, byHour: new Array(24).fill(0), bySta: {}, byUnit: {}, bySft: {}, chutes: [] }; }
+/* Apply one incident event to an agg doc. kind: "new" (first sighting) | "delta" (units/chute update). */
+function aggApply(agg, ev) {
+  if (ev.kind === "new") {
+    agg.n++; agg.byCls[ev.cls] = (agg.byCls[ev.cls] || 0) + 1;
+    if (ev.hour >= 0 && ev.hour < 24) agg.byHour[ev.hour]++;
+    if (ev.sft) { agg.bySft = agg.bySft || {}; agg.bySft[ev.sft] = (agg.bySft[ev.sft] || 0) + 1; }
+  }
+  (ev.units || []).forEach(u => { if (!isRealApparatus(u)) return;
+    agg.byUnit[u] = (agg.byUnit[u] || 0) + 1;
+    const m = /(\d{3})$/.exec(u); if (m) agg.bySta[m[1]] = (agg.bySta[m[1]] || 0) + 1; });
+  if (ev.chute != null && agg.chutes.length < 2000) agg.chutes.push([ev.cls, ev.chute, ev.sft || ""]);
+}
 function stationsOf(units) {
   const s = new Set();
   for (const u of units || []) {
@@ -420,6 +469,41 @@ export default {
       }
     }
 
+    /* ── GET /metrics?pin — officer-gated metrics rollups from the permanent archive. On the very
+       first call (no agg docs yet) it seeds itself from the live 48h log so the page isn't empty. ── */
+    if (req.method === "GET" && url.pathname === "/metrics") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
+      if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "officers only" }, 403);
+      try {
+        let listed = await env.PINS.list({ prefix: "agg:", limit: 60 });
+        if (!listed.keys.length) {
+          const cl = await env.PINS.list({ prefix: "call:", limit: 1000 });
+          const aggs = {};
+          for (const kk of cl.keys) {
+            const v = await env.PINS.get(kk.name); if (!v) continue;
+            let c; try { c = JSON.parse(v); } catch { continue; }
+            const cls = clsOf(c.type); if (cls === "gen") continue;
+            const mh = ctMonthHour(c.logged || c.started);
+            const agg = (aggs[mh.mon] = aggs[mh.mon] || newAgg());
+            aggApply(agg, { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
+            if (c.cad_code || c.id) await env.PINS.put("arch:" + (c.cad_code || c.id), JSON.stringify({
+              t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
+              u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "" }));
+          }
+          for (const m in aggs) await env.PINS.put("agg:" + m, JSON.stringify(aggs[m]));
+          listed = await env.PINS.list({ prefix: "agg:", limit: 60 });
+        }
+        const months = [];
+        for (const kk of listed.keys) {
+          const v = await env.PINS.get(kk.name); if (!v) continue;
+          try { months.push({ m: kk.name.slice(4), ...JSON.parse(v) }); } catch (e) {}
+        }
+        months.sort((a, b) => (a.m < b.m ? 1 : -1));
+        return json({ ok: true, months }, 200);
+      } catch (e) { return json({ ok: false, error: "metrics read error" }, 502); }
+    }
+
     if (req.method === "GET" && url.pathname === "/dupes") {
       const gate = await pinGate(env, ip, url.searchParams.get("pin"), json, "unauthorized — add ?pin=<station pin>");
       if (gate.res) return gate.res;
@@ -748,6 +832,7 @@ export default {
            preserving the original `logged` — this is how the live board and the tally catch late
            attachments. Every call here came from a SUCCESSFUL detail fetch, so no write-from-failed-read.
            Log failures never break the live feed. */
+        const aggDelta = {};   /* month -> events; flushed once per poll so rollup writes stay bounded */
         for (const c of calls) {
           try {
             /* Key the log by CAD case number when present, so a re-tone that surfaces long after the
@@ -788,8 +873,39 @@ export default {
                                  chute: chute != null ? chute : null, chuteUnit: chuteUnit || "" }),
                                  { expirationTtl: 48 * 3600 });
               if (c.cad_code && c.id && ("call:" + c.id) !== k) { try { await env.PINS.delete("call:" + c.id); } catch (e) {} }
+              /* METRICS ARCHIVE — bounded writes: first sighting, new units attaching, or a chute
+                 stamping. Announcements (gen class) are not runs and are never archived. */
+              const isNewInc = !prev;
+              const newUnits = merged.filter(u => prevUnits.indexOf(u) < 0);
+              const chuteNew = (chute != null && prevChute == null);
+              if (isNewInc || newUnits.length || chuteNew) {
+                const cls = clsOf(c.type);
+                if (cls !== "gen") {
+                  await env.PINS.put("arch:" + (c.cad_code || c.id), JSON.stringify({
+                    t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
+                    u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "" }));
+                  const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
+                  (aggDelta[mh.mon] = aggDelta[mh.mon] || []).push(
+                    isNewInc ? { kind: "new", cls, hour: mh.hour, sft, units: newUnits, chute: chuteNew ? chute : null }
+                             : { kind: "delta", cls, sft, units: newUnits, chute: chuteNew ? chute : null });
+                }
+              }
             }
           } catch (e) { c.logged = c.logged || new Date().toISOString(); }
+        }
+        /* flush the monthly rollups — one read-modify-write per month touched this poll; metrics
+           failures are swallowed so they can never break the live feed */
+        for (const mon in aggDelta) {
+          try {
+            const key = "agg:" + mon;
+            let agg = newAgg();
+            const prevA = await env.PINS.get(key);
+            if (prevA) { try { agg = Object.assign(newAgg(), JSON.parse(prevA)); } catch (e) {} }
+            if (!Array.isArray(agg.byHour) || agg.byHour.length !== 24) agg.byHour = new Array(24).fill(0);
+            if (!Array.isArray(agg.chutes)) agg.chutes = [];
+            aggDelta[mon].forEach(ev => aggApply(agg, ev));
+            await env.PINS.put(key, JSON.stringify(agg));
+          } catch (e) { /* never break the feed for metrics */ }
         }
         /* remove the stale log rows for absorbed duplicate ids so the tally isn't padded by copies */
         for (const id of absorbed) { try { await env.PINS.delete("call:" + id); } catch (e) { /* best-effort */ } }

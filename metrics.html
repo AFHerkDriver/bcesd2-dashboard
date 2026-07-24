@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>BC2FD District Metrics</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0D1117;--panel:#161B22;--panel2:#1C2230;--border:#30363D;--text:#E6EDF3;--dim:#8B949E;
+    --blue:#4A90D9;--green:#34C759;--amber:#FFC107;--red:#FF3B30;--accent:#FF6B35;--teal:#2DD4BF;color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:14px;
+    padding:14px 14px calc(30px + env(safe-area-inset-bottom));-webkit-text-size-adjust:100%}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:2px;margin:6px 0 0}
+  .sub{color:var(--dim);font-size:11px;letter-spacing:1px;margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin:12px 0}
+  h2{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.6px;color:var(--blue);margin:0 0 4px}
+  .hint{color:var(--dim);font-size:11.5px;line-height:1.5;margin:0 0 10px}
+  .hero{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
+  .hb{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;text-align:center;flex:1 1 110px}
+  .hb b{display:block;font-size:24px;font-weight:500}
+  .hb span{font-size:9.5px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase}
+  .hb.pass b{color:var(--green)} .hb.fail b{color:var(--red)} .hb.na b{color:var(--dim)} .hb.info b{color:var(--teal)}
+  .bar{display:flex;align-items:center;gap:9px;margin:4px 0}
+  .bar .l{flex:0 0 76px;color:var(--dim);font-size:11.5px;text-align:right}
+  .bar .t{flex:1;background:rgba(255,255,255,.05);border-radius:5px;height:15px;overflow:hidden}
+  .bar .t i{display:block;height:100%;border-radius:5px;background:var(--blue)}
+  .bar .v{flex:0 0 46px;font-size:12px;color:var(--text)}
+  .hours{display:flex;align-items:flex-end;gap:2px;height:74px;margin-top:8px}
+  .hours .h{flex:1;background:var(--blue);opacity:.85;border-radius:3px 3px 0 0;min-height:2px}
+  .hours .h.pk{background:var(--accent)}
+  .hx{display:flex;gap:2px;font-size:8.5px;color:var(--dim);margin-top:3px}
+  .hx span{flex:1;text-align:center}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{color:var(--dim);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;text-align:left;font-weight:400;padding:4px 8px}
+  td{padding:4px 8px;border-top:1px solid rgba(48,54,61,.6)}
+  td.num{color:var(--teal)} td.bad{color:var(--red)} td.good{color:var(--green)}
+  .flag{display:inline-block;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;border-radius:6px;padding:1px 9px;font-size:13px;margin-left:8px;vertical-align:middle}
+  .flag.pass{color:#0D1117;background:var(--green)} .flag.fail{color:#FFF;background:var(--red)} .flag.warn{color:#0D1117;background:var(--amber)}
+  .note{border-left:3px solid var(--accent);padding:6px 10px;background:rgba(255,107,53,.07);border-radius:0 8px 8px 0;font-size:12px;line-height:1.55;margin:8px 0}
+  .err{color:var(--amber)}
+  /* PIN gate */
+  #gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50}
+  .gcard{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:26px;width:min(340px,90vw);text-align:center}
+  .gcard h2{color:var(--text)}
+  .gcard input{width:100%;margin:12px 0;padding:12px;font:inherit;font-size:20px;text-align:center;letter-spacing:6px;
+    background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text)}
+  .gcard button{width:100%;padding:12px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;
+    background:var(--accent);color:#0D1117;border:0;border-radius:9px;cursor:pointer}
+  .gmsg{min-height:18px;font-size:12px;color:var(--dim);margin-top:8px}
+  .gmsg.bad{color:var(--red)}
+  #app{display:none}
+</style>
+</head>
+<body>
+<div id="gate"><div class="gcard">
+  <h2 style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px">District Metrics</h2>
+  <div class="sub">Officer access · PIN required</div>
+  <input id="gpin" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••">
+  <button id="ggo" type="button">Unlock</button>
+  <div class="gmsg" id="gmsg"></div>
+</div></div>
+
+<div id="app"><div class="wrap">
+  <h1>BC2FD District Metrics</h1>
+  <div class="sub" id="stamp">Loading&hellip;</div>
+
+  <div class="card">
+    <h2>Turnout — NFPA 1710</h2>
+    <p class="hint">Turnout (chute) measured dispatch &rarr; first apparatus attaching in CAD. NFPA 1710 benchmarks at the <b>90th percentile</b>: 60s EMS &middot; 80s fire/special ops. Honest limits: this is a proxy (poll precision ~±12s); calls where dispatch auto-assigned the apparatus can't be measured; travel/total response isn't available from the dispatch feed.</p>
+    <div class="hero" id="nfpaHero"></div>
+  </div>
+
+  <div class="card">
+    <h2>Call Volume &amp; Mix</h2>
+    <p class="hint">Permanent archive — grows from 2026-07-23 forward (seeded with the trailing 48h). Announcements/burn-ban notices excluded.</p>
+    <div id="volMonths"></div>
+    <div id="clsMix" style="margin-top:12px"></div>
+    <div style="margin-top:14px"><span class="hint">Runs by hour of day (all archived months, Central)</span>
+      <div class="hours" id="hourBars"></div><div class="hx" id="hourLbls"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Workload</h2>
+    <div id="staBars"></div>
+    <table id="unitTbl" style="margin-top:12px"></table>
+  </div>
+
+  <div class="card">
+    <h2>Shift Metrics</h2>
+    <p class="hint">Runs and turnout by shift — AABBCC 48h tours, 0700 Central flip (a 06:59 call belongs to the off-going shift). Friendly competition encouraged; small samples lie, so let the numbers season.</p>
+    <div id="sftBars"></div>
+    <div class="hero" id="sftChutes"></div>
+  </div>
+
+  <div class="card">
+    <h2>Water Supply — ISO Standard</h2>
+    <p class="hint">Structures within 1,000 ft of a hydrant (ISO credit distance). District-wide analysis 2026-07-23 — Bexar CAD hydrants (10,396 west / 1,981 south) &times; county parcels with structures. Live per-call TENDER OPS flags on the board run off this same standard.</p>
+    <div class="hero">
+      <div class="hb pass"><b>93.8%</b><span>West (120–125) covered</span></div>
+      <div class="hb fail"><b>62.5%</b><span>161/162 area covered</span></div>
+      <div class="hb info"><b>~17k</b><span>structures off-hydrant</span></div>
+    </div>
+    <table>
+      <tr><th>Gap zone</th><th>Homes</th><th>Median to hydrant</th></tr>
+      <tr><td>S Foster / Hildebrandt / Old Corpus (161)</td><td class="num">5,762</td><td class="bad">1,534 ft</td></tr>
+      <tr><td>Sunset Blvd / Beverly Hills (N fringe)</td><td class="num">1,221</td><td class="bad">1,750 ft</td></tr>
+      <tr><td>IXL Dr / Bar J</td><td class="num">1,167</td><td class="bad">1,146 ft</td></tr>
+      <tr><td>Mechler / Jungman Rd (SW)</td><td class="num">870</td><td class="bad">7,409 ft</td></tr>
+      <tr><td>Rosa / Mesquite / Cartwright Trl</td><td class="num">616</td><td class="bad">959 ft</td></tr>
+      <tr><td>Oak Village / Rolling Oaks belt</td><td class="num">1,083</td><td class="bad">1,058–3,147 ft</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Growth Exposure</h2>
+    <p class="hint">New structures by appraisal year built (county parcels; 2025 lags the roll). Sustained build-out means call volume, water demand, and staffing pressure keep compounding.</p>
+    <div id="growth"></div>
+    <div class="note"><b>Planning signals:</b> the west district adds <b>&asymp;5,500–7,000 structures/yr</b> — Alamo Ranch build-out continues pushing volume onto S123/S124's first-due. The 161/162 area <b>tripled its build rate since 2019</b> (&asymp;1,500/yr) while only 62.5% of it has hydrant water — new rooftops are landing faster than mains. Cartwright/Gass gap zones double as monitored flood crossings: water-supply <i>and</i> access risk stack in the same pockets.</div>
+  </div>
+
+  <div class="card">
+    <h2>Debrief &amp; Planning</h2>
+    <div id="debrief" class="hint" style="font-size:12.5px;color:var(--text)">Loading&hellip;</div>
+  </div>
+
+  <div class="sub" style="margin-top:16px">BC2FD internal &middot; data: Active911 relay archive, Bexar CAD hydrants, BCAD parcels &middot; standards: NFPA 1710, ISO FSRS</div>
+</div></div>
+
+<script>
+(function(){
+  var AUTH='https://bc2fd-dash-auth.usafsentinel-45e.workers.dev';
+  var $=function(id){return document.getElementById(id);};
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fmt(s){return Math.floor(s/60)+':'+('0'+Math.round(s%60)).slice(-2);}
+  function pct(v,arr){arr=arr.slice().sort(function(a,b){return a-b;});if(!arr.length)return null;return arr[Math.min(arr.length-1,Math.ceil(arr.length*v)-1)];}
+
+  function render(months){
+    var all={n:0,byCls:{},byHour:new Array(24).fill(0),bySta:{},byUnit:{},bySft:{},chutes:[]};
+    months.forEach(function(mo){ all.n+=mo.n||0;
+      Object.keys(mo.byCls||{}).forEach(function(k){all.byCls[k]=(all.byCls[k]||0)+mo.byCls[k];});
+      (mo.byHour||[]).forEach(function(v,i){all.byHour[i]+=v||0;});
+      Object.keys(mo.bySta||{}).forEach(function(k){all.bySta[k]=(all.bySta[k]||0)+mo.bySta[k];});
+      Object.keys(mo.byUnit||{}).forEach(function(k){all.byUnit[k]=(all.byUnit[k]||0)+mo.byUnit[k];});
+      Object.keys(mo.bySft||{}).forEach(function(k){all.bySft[k]=(all.bySft[k]||0)+mo.bySft[k];});
+      (mo.chutes||[]).forEach(function(c){all.chutes.push(c);});
+    });
+    $('stamp').textContent='Officer view · '+all.n+' archived runs · '+months.length+' month'+(months.length===1?'':'s')+' · updated '+new Date().toLocaleString([],{timeZone:'America/Chicago'});
+
+    /* NFPA turnout */
+    var fire=all.chutes.filter(function(c){return c[0]==='fire'||c[0]==='alarm'||c[0]==='haz'||c[0]==='rescue';}).map(function(c){return c[1];});
+    var ems=all.chutes.filter(function(c){return c[0]==='med'||c[0]==='mvc';}).map(function(c){return c[1];});
+    var eAll=all.chutes.map(function(c){return c[1];});
+    function hb(label,val,std){ if(val==null)return '<div class="hb na"><b>—</b><span>'+label+' (no data)</span></div>';
+      var ok=val<=std; return '<div class="hb '+(ok?'pass':'fail')+'"><b>'+fmt(val)+'</b><span>'+label+' 90th · std '+std+'s '+(ok?'PASS':'OVER')+'</span></div>'; }
+    $('nfpaHero').innerHTML =
+      hb('EMS turnout', pct(0.9,ems), 60) + hb('Fire turnout', pct(0.9,fire), 80) +
+      '<div class="hb info"><b>'+(eAll.length?fmt(pct(0.5,eAll)):'—')+'</b><span>median all-calls</span></div>'+
+      '<div class="hb info"><b>'+eAll.length+'</b><span>measured chutes</span></div>';
+
+    /* monthly volume */
+    var mx=Math.max.apply(null,months.map(function(m){return m.n||0;}).concat([1]));
+    $('volMonths').innerHTML=months.slice(0,13).reverse().map(function(m){
+      return '<div class="bar"><span class="l">'+esc(m.m)+'</span><span class="t"><i style="width:'+Math.round((m.n||0)/mx*100)+'%"></i></span><span class="v">'+(m.n||0)+'</span></div>';}).join('');
+
+    /* class mix */
+    var CLS=[['med','EMS','#FFC107'],['mvc','MVC','#FF6B35'],['alarm','Alarm','#A371F7'],['fire','Fire','#FF3B30'],['assist','Assist','#4A90D9'],['fuel','Gas/Fuel','#2DD4BF'],['haz','Hazmat','#9ACD32'],['rescue','Rescue','#FF69B4'],['mutual','Mutual','#8B949E'],['other','Other','#8B949E']];
+    var cmx=Math.max.apply(null,CLS.map(function(c){return all.byCls[c[0]]||0;}).concat([1]));
+    $('clsMix').innerHTML=CLS.filter(function(c){return all.byCls[c[0]];}).map(function(c){
+      return '<div class="bar"><span class="l">'+c[1]+'</span><span class="t"><i style="width:'+Math.round((all.byCls[c[0]]||0)/cmx*100)+'%;background:'+c[2]+'"></i></span><span class="v">'+(all.byCls[c[0]]||0)+'</span></div>';}).join('');
+
+    /* hours */
+    var hmx=Math.max.apply(null,all.byHour.concat([1])), peak=all.byHour.indexOf(Math.max.apply(null,all.byHour));
+    $('hourBars').innerHTML=all.byHour.map(function(v,i){return '<div class="h'+(i===peak?' pk':'')+'" style="height:'+Math.max(3,Math.round(v/hmx*100))+'%" title="'+i+':00 — '+v+'"></div>';}).join('');
+    $('hourLbls').innerHTML=all.byHour.map(function(v,i){return '<span>'+(i%6===0?i:'')+'</span>';}).join('');
+
+    /* stations + units */
+    var stas=Object.keys(all.bySta).sort(); var smx=Math.max.apply(null,stas.map(function(s){return all.bySta[s];}).concat([1]));
+    $('staBars').innerHTML='<span class="hint">Apparatus responses by station</span>'+stas.map(function(s){
+      return '<div class="bar"><span class="l">S'+esc(s)+'</span><span class="t"><i style="width:'+Math.round(all.bySta[s]/smx*100)+'%;background:var(--teal)"></i></span><span class="v">'+all.bySta[s]+'</span></div>';}).join('');
+    var units=Object.keys(all.byUnit).sort(function(a,b){return all.byUnit[b]-all.byUnit[a];}).slice(0,12);
+    $('unitTbl').innerHTML='<tr><th>Busiest apparatus</th><th>Responses</th></tr>'+units.map(function(u){
+      return '<tr><td>'+esc(u)+'</td><td class="num">'+all.byUnit[u]+'</td></tr>';}).join('');
+
+    /* shifts — board colors: A red, B blue, C green */
+    var SFT=[['A','#FF3B30'],['B','#4A90D9'],['C','#34C759']];
+    var sfmx=Math.max.apply(null,SFT.map(function(s){return all.bySft[s[0]]||0;}).concat([1]));
+    $('sftBars').innerHTML=SFT.map(function(s){
+      return '<div class="bar"><span class="l">'+s[0]+' Shift</span><span class="t"><i style="width:'+Math.round((all.bySft[s[0]]||0)/sfmx*100)+'%;background:'+s[1]+'"></i></span><span class="v">'+(all.bySft[s[0]]||0)+'</span></div>';}).join('');
+    $('sftChutes').innerHTML=SFT.map(function(s){
+      var cs=all.chutes.filter(function(c){return c[2]===s[0];}).map(function(c){return c[1];});
+      var p90=pct(0.9,cs);
+      return '<div class="hb '+(p90==null?'na':(p90<=80?'pass':'fail'))+'"><b style="color:'+(p90==null?'var(--dim)':s[1])+'">'+(p90==null?'—':fmt(p90))+'</b><span>'+s[0]+' turnout 90th (n='+cs.length+')</span></div>';}).join('');
+
+    /* debrief bullets */
+    var b=[];
+    var e90=pct(0.9,ems), f90=pct(0.9,fire);
+    if(e90!=null) b.push((e90<=60?'✅':'⚠️')+' EMS turnout 90th pct '+fmt(e90)+' vs 60s standard'+(e90<=60?' — passing.':' — over; worth a tone-to-wheels look.'));
+    if(f90!=null) b.push((f90<=80?'✅':'⚠️')+' Fire turnout 90th pct '+fmt(f90)+' vs 80s standard'+(f90<=80?' — passing.':' — over; night bunker-up time is the usual driver.'));
+    if(peak>=0) b.push('⏰ Peak demand lands in the '+peak+':00 hour — check apparatus availability and move-up posture there first.');
+    if(units.length) b.push('🚒 '+units[0]+' is the workhorse ('+all.byUnit[units[0]]+' responses) — watch hours, maintenance, and crew fatigue.');
+    var mut=all.byCls.mutual||0; if(mut) b.push('🤝 '+mut+' mutual-aid run'+(mut===1?'':'s')+' archived — track the give/get balance for renewal talks.');
+    var sfts=Object.keys(all.bySft); if(sfts.length>1){ var busy=sfts.sort(function(x,y){return all.bySft[y]-all.bySft[x];})[0];
+      b.push('👥 '+busy+' Shift is carrying the most runs ('+all.bySft[busy]+') — luck of the tours early on; a persistent spread is a workload-equity conversation.'); }
+    b.push('💧 South water gap is structural: 37.5% of 161/162-area structures lack hydrant coverage while growth runs ≈1,500 structures/yr — tender program + developer main extensions are the levers.');
+    b.push('📈 West growth ≈5,500–7,000 structures/yr concentrates on S123/S124 first-due — station-load rebalancing is a when, not an if.');
+    $('debrief').innerHTML=b.map(function(x){return '<div style="margin:6px 0">'+x+'</div>';}).join('');
+  }
+
+  function load(pin){
+    fetch(AUTH+'/metrics?pin='+encodeURIComponent(pin))
+      .then(function(r){return r.json();})
+      .then(function(j){ if(!j||!j.ok){ $('stamp').innerHTML='<span class="err">⚠ Metrics unavailable — '+esc((j&&j.error)||'fetch failed')+'</span>'; return; }
+        render(j.months||[]); })
+      .catch(function(){ $('stamp').innerHTML='<span class="err">⚠ Metrics service unreachable</span>'; });
+  }
+  function unlock(pin){ $('gate').style.display='none'; $('app').style.display='block'; load(pin); }
+  function submit(){
+    var pin=($('gpin').value||'').trim(); if(!pin) return;
+    $('gmsg').textContent='Checking…'; $('gmsg').className='gmsg';
+    fetch(AUTH+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin,scope:'control'})})
+      .then(function(r){return r.json();})
+      .then(function(j){ if(j&&j.ok){ unlock(pin); } else { $('gmsg').textContent='Wrong PIN or display-only'; $('gmsg').className='gmsg bad'; } })
+      .catch(function(){ $('gmsg').textContent='Auth service unreachable — stays locked'; $('gmsg').className='gmsg bad'; });
+  }
+  $('ggo').addEventListener('click',submit);
+  $('gpin').addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); });
+  /* growth bars (static, from BCAD parcel analysis 2026-07-23) */
+  (function(){
+    var west=[["2019",4847],["2020",5712],["2021",7024],["2022",5605],["2023",5062],["2024",5771]];
+    var south=[["2019",427],["2020",848],["2021",1679],["2022",1516],["2023",1406],["2024",1504]];
+    function block(t,arr,color){ var mx=Math.max.apply(null,arr.map(function(a){return a[1];}));
+      return '<span class="hint">'+t+'</span>'+arr.map(function(a){
+        return '<div class="bar"><span class="l">'+a[0]+'</span><span class="t"><i style="width:'+Math.round(a[1]/mx*100)+'%;background:'+color+'"></i></span><span class="v">'+a[1].toLocaleString()+'</span></div>';}).join(''); }
+    document.getElementById('growth').innerHTML=block('West district (120–125) — new structures/yr',west,'var(--accent)')+'<div style="height:10px"></div>'+block('161/162 area — new structures/yr',south,'var(--amber)');
+  })();
+})();
+</script>
+</body>
+</html>
