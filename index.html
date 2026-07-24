@@ -3058,7 +3058,13 @@
     var APP=[["l123","L123"],["ap124","AP124"],["l125","L125"]];
     var stOk=null, stSt=null;
     function esc2(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-    function expired(x){ if(!x) return false; var d=new Date(x); return !isNaN(d.getTime()) && new Date()>d; }  /* unparseable = never expires */
+    function expired(x){ if(!x) return false;                    /* unparseable = never expires */
+      /* Expiry strings are CENTRAL wall-clock by contract — parse them via ctEpoch so a viewing
+         device in another zone reads the same deadline as the wall. */
+      var m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(x));
+      if(m){ var t=ctEpoch(+m[1],+m[2]-1,+m[3],+m[4],+m[5]); return isFinite(t) && Date.now()>t; }
+      var d=new Date(x); return !isNaN(d.getTime()) && new Date()>d;
+    }
     function chip(label, cls){ return '<div class="tchip'+(cls?(" "+cls):"")+'"><span class="tcn">'+label+'</span></div>'; }
     function uavChip(label, key){
       var s=window.UAV_STATE;
@@ -3119,7 +3125,7 @@
     function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
     function stopRot(){ if(rot){ rot(); rot=null; } }
     function parseDate(s){
-      if(!s) return null; s=String(s).trim(); var m, now=new Date();
+      if(!s) return null; s=String(s).trim(); var m, now=ctNow();   /* CENTRAL wall-clock fields — device zone must not shift event dates */
       if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)))  return new Date(+m[1], +m[2]-1, +m[3]);
       if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))) return new Date(+m[3]<100?2000+ +m[3]:+m[3], +m[1]-1, +m[2]);
       if((m=s.match(/^(\d{1,2})\/(\d{1,2})$/)))          return new Date(now.getFullYear(), +m[1]-1, +m[2]);
@@ -3138,10 +3144,12 @@
       var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-TOUR_ANCHOR)/86400000);
       var day1=((d%6)+6)%6%2===0;                            /* even index in AABBCC = first day of the pair */
       s.setDate(s.getDate()+(day1?2:1));
-      return new Date(ctEpoch(s.getFullYear(),s.getMonth(),s.getDate(),7,0));   /* 0700 in San Antonio, not on this device */
+      /* VIRTUAL Central wall-clock Date (fields = San Antonio time), matching resolve()'s dates —
+         this module compares virtual-to-virtual throughout, so device zone cancels out entirely. */
+      return new Date(s.getFullYear(),s.getMonth(),s.getDate(),7,0);
     }
-    function resolve(e){                                    /* -> {startDT,endDT,sortKey,valid} */
-      var today=new Date(); today.setHours(0,0,0,0);
+    function resolve(e){                                    /* -> {startDT,endDT,sortKey,valid} — all VIRTUAL Central wall-clock */
+      var today=ctNow(); today.setHours(0,0,0,0);
       var d = e.date ? parseDate(e.date) : new Date(today);
       if(e.date && !d) return { valid:false, sortKey:Infinity };        /* unparseable date: verbatim, last, never cleared */
       d.setHours(0,0,0,0);
@@ -3164,7 +3172,7 @@
       if(!ok){ list.className="sched-list err";
         list.innerHTML='<div class="sched-e"><span class="ds">SHIFT SCHEDULE UNAVAILABLE \u2014 can\u2019t reach board state</span></div>';
         if(pg) pg.hidden=true; return; }
-      var now=new Date(), horizon=tourHorizon();
+      var now=ctNow(), horizon=tourHorizon();               /* virtual Central now — matches resolve()'s virtual dates on any device */
       var items=((st&&st.calendar)||[])
         .filter(function(e){ return e && (e.time || e.desc); })
         .map(function(e){ var r=resolve(e); r.e=e; return r; })
@@ -3173,7 +3181,7 @@
         .sort(function(a,b){ return a.sortKey-b.sortKey; });
       list.className="sched-list";
       if(!items.length){ list.innerHTML=''; if(pg) pg.hidden=true; return; }   /* nothing scheduled -> clean cell; SHIFT SCHEDULE UNAVAILABLE still shows on read failure */
-      var todayKey=new Date().toDateString();
+      var todayKey=ctNow().toDateString();                  /* "today" is San Antonio's today, not the device's */
       var rows=items.map(function(r){
         var e=r.e;
         var isNow = r.valid && r.startDT<=now && now<=r.endDT && parseMin(e.time)!=null;

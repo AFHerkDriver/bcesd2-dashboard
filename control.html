@@ -260,6 +260,8 @@
     <!-- Active911 token-expiry reminder — admin owner (Capt Sanchez) only, from 30 days out. -->
     <div class="tok-warn" id="tokWarn" hidden></div>
 
+    <div class="hint" style="text-align:center;margin:2px 0 10px">🕐 All dates &amp; times on this panel are <b>San Antonio time (Central)</b>, regardless of your device&rsquo;s clock or location.</div>
+
     <!-- District Metrics — officer-gated page (own PIN gate; permanent call archive + standards) -->
     <a class="card" href="metrics.html" style="display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--text)">
       <span style="font-size:22px">📊</span>
@@ -911,7 +913,7 @@ document.addEventListener('input', function(e){
 });
 function expireSweep(){                                     /* control mirrors the board: expired = reverted */
   var now=new Date(), changed=false;
-  function past(x){ if(!x) return false; var d=new Date(x); return !isNaN(d.getTime()) && now>d; }
+  function past(x){ if(!x) return false; var t=ctParse(x); return !isNaN(t) && now>t; }   /* expiries are CENTRAL wall-clock — parse them that way regardless of device zone (this sweep mutates state and gets SAVED, so a zone skew here would persist) */
   Object.keys(state.tExp||{}).forEach(function(k){
     if(past(state.tExp[k])){ if(state.teams[k]){ state.teams[k]=false; changed=true; }
       state.tExp[k]=''; var el=document.querySelector('.uexp[data-ux="t:'+k+'"]'); if(el) el.value='';
@@ -937,8 +939,26 @@ function updateExpVis(){                                    /* expiry picker sho
    window was surfaced: once saved, the officer's values govern and the board's auto stands down.
    A NEW dispatch (different window) re-arms the prefill. ── */
 var macStateLoaded=false, macPrefillFor=0, xsPrefillFor={};
-function dtLocal(ms){ var d=new Date(ms), p=function(n){return ('0'+n).slice(-2);};
-  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
+/* Render an epoch as a CENTRAL wall-clock datetime-local string. Every date/time on this panel is
+   San Antonio time by contract — a device set to another zone must not skew what gets stored. */
+function dtLocal(ms){
+  try{
+    var p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(ms));
+    var g=function(t){ return ((p.find(function(x){ return x.type===t; })||{}).value)||'00'; };
+    return g('year')+'-'+g('month')+'-'+g('day')+'T'+('0'+(+g('hour')%24)).slice(-2)+':'+g('minute');
+  }catch(e){ var d=new Date(ms), q=function(n){return ('0'+n).slice(-2);};
+    return d.getFullYear()+'-'+q(d.getMonth()+1)+'-'+q(d.getDate())+'T'+q(d.getHours())+':'+q(d.getMinutes()); }
+}
+/* Parse a zone-less "YYYY-MM-DDTHH:MM" board string AS Central -> epoch ms (NaN if unparseable). */
+function ctParse(s){
+  var m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(s||'')); if(!m) return NaN;
+  var guess=Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],0,0);
+  try{ var t=new Date(guess);
+    var asCT=new Date(t.toLocaleString('en-US',{timeZone:'America/Chicago'}));
+    var asUTC=new Date(t.toLocaleString('en-US',{timeZone:'UTC'}));
+    return guess+(asUTC.getTime()-asCT.getTime());
+  }catch(e){ return new Date(s).getTime(); }
+}
 /* Next 0700 CENTRAL strictly after ms — the SAME math the board uses, so the ack saved here matches
    the board's auto-window value exactly (the ack only suppresses on exact equality). */
 function next0700CT(ms){
@@ -999,8 +1019,7 @@ function macAutoPrefill(){
     var cur=(state.tExp&&state.tExp.mac121)?new Date(state.tExp.mac121).getTime():0;
     state.teams.mac121=true;
     if(!(cur>until)){                                            /* keep a manually-set LONGER expiry */
-      var d=new Date(until), p=function(n){return ('0'+n).slice(-2);};
-      state.tExp.mac121=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+      state.tExp.mac121=dtLocal(until);                          /* Central wall-clock, device zone irrelevant */
     }
     state.macAck=until;
     segSet('segMac121','on');
@@ -1111,7 +1130,15 @@ $('saveTop').addEventListener('click',save);
 (function(){
   var K='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ', B='https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents';
   var ANCHOR=Date.UTC(2026,0,1), PAT=['A','A','B','B','C','C'], LEAD=1;
-  function todayShift(){ var s=new Date(Date.now()-7*3600000); var d=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-ANCHOR)/86400000); return PAT[((d%6)+6)%6]; }
+  function todayShift(){   /* CENTRAL calendar fields, not device — a phone in another zone must show the same shift as the wall */
+    try{
+      var p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit'}).formatToParts(new Date());
+      var g=function(t){ return +((p.find(function(x){ return x.type===t; })||{}).value); };
+      var y=g('year'), mo=g('month'), da=g('day');
+      if((g('hour')%24)<7){ var dd=new Date(Date.UTC(y,mo-1,da)); dd.setUTCDate(dd.getUTCDate()-1); y=dd.getUTCFullYear(); mo=dd.getUTCMonth()+1; da=dd.getUTCDate(); }
+      var d=Math.floor((Date.UTC(y,mo-1,da)-ANCHOR)/86400000); return PAT[((d%6)+6)%6];
+    }catch(e){ var s=new Date(Date.now()-7*3600000); var d2=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-ANCHOR)/86400000); return PAT[((d2%6)+6)%6]; }
+  }
   function decodeDay(day){ var N=function(x){ if(x==null) return null; var v=parseInt(x,10); return isNaN(v)?null:v; };   /* NaN must read as "no pilot", never as a value */ var ex=(day.extra||[]).map(N).filter(function(x){return x!=null;}); var a,r;
     if(day.lead!==undefined){a=!!day.lead;r=N(day.rpic);} else {var id=N(day.rpic);a=(id===LEAD)||ex.indexOf(LEAD)!==-1;r=(id!=null&&id!==LEAD)?id:null;} return {u121:!!a,u124:r!=null}; }
   function setTxt(id,t){ var e=document.getElementById(id); if(e)e.textContent=t; }
