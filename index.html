@@ -597,7 +597,12 @@
        active. Error / loading / "unknown" states render content and stay (fail-loud). The drone
        tile is never hidden — people expect it to load. :has() = iOS Safari 15.4+; older browsers
        ignore these rules and simply show every tile. */
-    .lcol > .calls-tile:has(.callsclear){display:none}       /* verified "No Active Calls" (keeps standby + fail-loud) */
+    /* Hide the calls tile only when it is TRULY empty: verified "No Active Calls" AND no tour tally
+       to show. The tally row (Runs This Tour + CHUTE) lives in this tile now — hiding on no-calls
+       alone was erasing the station tally from phones for the whole quiet stretch of a shift. */
+    .lcol > .calls-tile:has(.callsclear):has(.tally[hidden]){display:none}
+    .lcol > .calls-tile:has(.callsclear) .calls-body{min-height:44px}
+    .lcol > .calls-tile:has(.callsclear) .callsclear{font-size:15px;padding:6px 0}   /* quiet one-liner, tally below stays the point */
     .sched-split{flex-direction:column;gap:10px}             /* phone: stack events over the run-type tally; the two halves split the tile height evenly */
     .rt-half{border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:8px}
     .sched-tile:not(:has(.sched-list > *)):not(:has(.rt-cell:not(.rt-zero))){display:none}   /* hide only when there are no events AND no logged runs (all keypad tiles zero) */
