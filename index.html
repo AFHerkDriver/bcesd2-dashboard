@@ -347,6 +347,13 @@
      idle most of the time, so it carries this tour's runs instead of showing an empty sky. */
   .drone-tile.dt-district .drone-video{display:none}
   .drone-tile.dt-district .drone-map{flex:1 1 100%}
+  /* ── FULL-SCREEN MAP — the ⛶ control expands the map tile to the whole screen; ✕ or Esc exits.
+     Sits BELOW the drone takeover (z 1400 vs 1500): an aircraft launching always wins the wall. */
+  .drone-tile.dt-mapfull{position:fixed;inset:0;z-index:1400;margin:0;border-radius:0;padding:10px;background:var(--bg)}
+  .drone-tile.dt-mapfull > .head{display:none}
+  .map-fs-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--panel);
+    color:var(--text);font-size:17px;line-height:1;cursor:pointer;display:block}
+  .map-fs-btn:hover{border-color:var(--dim)}
   /* ── PHASE 3 · DRONE TAKEOVER ─────────────────────────────────────────────────────────
      The tile becomes the whole wall through position:fixed, so nothing in the grid moves.
      That is not a style preference: the feeds are IFRAMES, and reparenting an iframe reloads
@@ -1237,6 +1244,27 @@
        small pans don't re-query; labels sit in their own pane UNDER the call pins. ── */
     map.createPane("addrPane"); map.getPane("addrPane").style.zIndex=450; map.getPane("addrPane").style.pointerEvents="none";
     window.BC2FD_MAP=map;   /* ops/debug handle (console tuning, tests); same-origin only */
+    /* Full-screen toggle (⛶ / ✕, Esc exits). Refused while a drone takeover owns the wall, and
+       released automatically if one engages mid-expand — the aircraft always wins. */
+    function mapFull(force){
+      var tile=document.querySelector(".drone-tile"); if(!tile) return;
+      var on = force!=null ? !!force : !tile.classList.contains("dt-mapfull");
+      if(on && tile.classList.contains("dt-takeover")) return;
+      tile.classList.toggle("dt-mapfull",on);
+      var b=document.querySelector(".map-fs-btn");
+      if(b){ b.innerHTML=on?"✕":"⛶"; b.title=on?"Exit full-screen map (Esc)":"Expand map to full screen"; }
+      try{ window.BC2FD_MAP_RESIZE(); }catch(e){}
+    }
+    window.BC2FD_MAP_FULL=mapFull;
+    (function(){ var c=L.control({position:"topright"});
+      c.onAdd=function(){ var b=L.DomUtil.create("button","map-fs-btn"); b.type="button";
+        b.title="Expand map to full screen"; b.innerHTML="⛶";
+        L.DomEvent.disableClickPropagation(b); L.DomEvent.disableScrollPropagation(b);
+        b.addEventListener("click",function(){ mapFull(); });
+        return b; };
+      c.addTo(map);
+    })();
+    document.addEventListener("keydown",function(e){ if(e.key==="Escape") mapFull(false); });
     /* ── DISTRICT BORDERS — official ESD 2 + ESD 6 boundaries (county KMZ, in district-bounds.json)
        drawn as subtle dashed outlines for situational awareness: crews see at a glance whether a pin
        is ours or a neighbor's. Own pane above radar, below labels/pins; enhancement layer — if the
@@ -1406,6 +1434,7 @@
     };
     window.BC2FD_MAP_MODE=function(district){
       pinsOn=!!district;
+      if(!pinsOn){ try{ mapFull(false); }catch(e){} }   /* aircraft up: release full-screen — the takeover owns the wall */
       if(!pinsOn && focusT){ clearTimeout(focusT); focusT=null; focusPts=[]; baseRestore(); }   /* aircraft up: drop any pending return + hand back the base layer */
       try{ map.invalidateSize(); }catch(e){}
       setTimeout(function(){ try{ map.invalidateSize(); districtView(); }catch(e){} },260);   /* after the CSS transition settles */
