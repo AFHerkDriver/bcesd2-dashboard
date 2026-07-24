@@ -2158,11 +2158,14 @@
   (function(){
     var SEQ=[[0,0],[4,0],[4,4],[0,4],[-4,4],[-4,0],[-4,-4],[0,-4],[4,-4]], si=0, timer=null, on=null;
     function wall(){ return !!(window.matchMedia && window.matchMedia("(min-width:1500px)").matches); }
-    function tick(){ if(!wall()){ document.body.style.transform="translate(0,0)"; return; }
+    /* When NOT shifting, REMOVE the transform rather than setting translate(0,0): any transform on
+       body — even the identity — becomes the containing block for position:fixed, which re-anchored
+       the PIN gate to the full scrolled page height on phones and sank the card off-center. */
+    function tick(){ if(!wall()){ document.body.style.transform=""; return; }
       var s=SEQ[si]; document.body.style.transform="translate("+s[0]+"px,"+s[1]+"px)"; si=(si+1)%SEQ.length; }
     function set(want){ if(want===on) return; on=want;
       if(on){ document.body.style.transition="transform 4s ease"; tick(); if(!timer) timer=setInterval(tick, 120000); }   /* glide every 2 min */
-      else { if(timer){ clearInterval(timer); timer=null; } document.body.style.transform="translate(0,0)"; } }
+      else { if(timer){ clearInterval(timer); timer=null; } document.body.style.transform=""; } }
     set(true);                                               /* protect by default, before state loads */
     onBoardState(function(ok, st){ set(!(st && st.display && st.display.pixelShift===false)); });
   })();
