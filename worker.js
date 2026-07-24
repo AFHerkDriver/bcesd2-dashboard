@@ -110,9 +110,30 @@ function sftOf(iso) {
     const idx = Math.floor((Date.UTC(y, mo - 1, da) - Date.UTC(2026, 0, 1)) / 86400000);
     return ["A", "A", "B", "B", "C", "C"][((idx % 6) + 6) % 6] || "";
   } catch (e) { return ""; } }
-function newAgg() { return { n: 0, byCls: {}, byHour: new Array(24).fill(0), bySta: {}, byUnit: {}, bySft: {}, chutes: [] }; }
-/* Apply one incident event to an agg doc. kind: "new" (first sighting) | "delta" (units/chute update). */
+/* Official district polygons (ESD 2 + ESD 6), fetched from the deployed board and cached per isolate.
+   Used to keep the METRICS in-department: a cross-border response is tallied separately (nOut) and
+   excluded from class/hour/station/chute stats. Unknown location or fetch failure -> counted as ours
+   (our dispatch feed is our work by default). The live TENDER OPS call flag ignores borders on purpose. */
+let _dbRings = null, _dbAt = 0;
+async function districtRings() {
+  if (_dbRings && Date.now() - _dbAt < 6 * 3600 * 1000) return _dbRings;
+  try { const r = await fetch("https://afherkdriver.github.io/bcesd2-dashboard/district-bounds.json");
+    if (r.ok) { const j = await r.json(); _dbRings = [...(j.esd2 || []), ...(j.esd6 || [])]; _dbAt = Date.now(); } } catch (e) {}
+  return _dbRings;
+}
+function inDistrict(rings, lng, lat) {
+  if (!rings || lng == null || lat == null) return true;      /* unknown -> ours */
+  let ins = false;
+  for (const r of rings) { let j = r.length - 1;
+    for (let i = 0; i < r.length; i++) { const xi = r[i][0], yi = r[i][1], xj = r[j][0], yj = r[j][1];
+      if ((yi > lat) !== (yj > lat) && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) ins = !ins; j = i; } }
+  return ins;
+}
+function newAgg() { return { n: 0, nOut: 0, byCls: {}, byHour: new Array(24).fill(0), bySta: {}, byUnit: {}, bySft: {}, chutes: [] }; }
+/* Apply one incident event to an agg doc. kind: "new" (first sighting) | "delta" (units/chute update).
+   ev.out (cross-border) -> counted once in nOut, everything else excluded: department metrics stay ours. */
 function aggApply(agg, ev) {
+  if (ev.out) { if (ev.kind === "new") agg.nOut = (agg.nOut || 0) + 1; return; }
   if (ev.kind === "new") {
     agg.n++; agg.byCls[ev.cls] = (agg.byCls[ev.cls] || 0) + 1;
     if (ev.hour >= 0 && ev.hour < 24) agg.byHour[ev.hour]++;
@@ -483,6 +504,7 @@ export default {
         if (!seeded) {
           const cl = await env.PINS.list({ prefix: "call:", limit: 1000 });
           const aggs = {};
+          const dR = await districtRings();
           for (const kk of cl.keys) {
             const v = await env.PINS.get(kk.name); if (!v) continue;
             let c; try { c = JSON.parse(v); } catch { continue; }
@@ -499,7 +521,7 @@ export default {
               if (!Array.isArray(base.chutes)) base.chutes = [];
               aggs[mh.mon] = base;
             }
-            aggApply(aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
+            aggApply(aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), out: !inDistrict(dR, c.lng, c.lat), units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
             await env.PINS.put(akey, JSON.stringify({
               t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
               u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "" }));
@@ -847,6 +869,7 @@ export default {
            attachments. Every call here came from a SUCCESSFUL detail fetch, so no write-from-failed-read.
            Log failures never break the live feed. */
         const aggDelta = {};   /* month -> events; flushed once per poll so rollup writes stay bounded */
+        const dRings = await districtRings();   /* official borders for the in-department metrics split */
         for (const c of calls) {
           try {
             /* Key the log by CAD case number when present, so a re-tone that surfaces long after the
@@ -899,9 +922,10 @@ export default {
                     t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
                     u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "" }));
                   const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
+                  const out = !inDistrict(dRings, c.lng, c.lat);   /* cross-border response -> nOut only */
                   (aggDelta[mh.mon] = aggDelta[mh.mon] || []).push(
-                    isNewInc ? { kind: "new", cls, hour: mh.hour, sft, units: newUnits, chute: chuteNew ? chute : null }
-                             : { kind: "delta", cls, sft, units: newUnits, chute: chuteNew ? chute : null });
+                    isNewInc ? { kind: "new", cls, hour: mh.hour, sft, out, units: newUnits, chute: chuteNew ? chute : null }
+                             : { kind: "delta", cls, sft, out, units: newUnits, chute: chuteNew ? chute : null });
                 }
               }
             }
