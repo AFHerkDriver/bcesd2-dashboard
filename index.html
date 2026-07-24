@@ -1323,10 +1323,11 @@
        enhancement failure mode as addresses: source down -> dots simply absent. ── */
     var HYD_URL="https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query";
     var hydLayer=L.layerGroup().addTo(map), HYD_Z=16.2, hydCache={}, hydKeys=[], hydSeq=0, hydPainted="";
-    /* Officer-supplied teal hydrant pin (hydrant-marker.png, background keyed out). Teardrop tip is
-       the anchor point; 10"+ mains render a size up. Lives in the addr pane, under the call pins. */
+    /* Officer-supplied hydrant pins (backgrounds keyed out), teardrop tip anchored, addr pane under
+       the call pins. Standard mains = teal; 10"+ mains = the BLUE pin, a size up — main size is our
+       proxy for NFPA 291 Class AA (>=1,500 GPM) high-volume hydrants, which NFPA marks light blue. */
     var hydIcon=L.icon({iconUrl:"hydrant-marker.png",iconRetinaUrl:"hydrant-marker@2x.png",iconSize:[20,20],iconAnchor:[10,20]});
-    var hydIconBig=L.icon({iconUrl:"hydrant-marker@2x.png",iconSize:[26,26],iconAnchor:[13,26]});
+    var hydIconBig=L.icon({iconUrl:"hydrant-marker-hv.png",iconRetinaUrl:"hydrant-marker-hv@2x.png",iconSize:[26,26],iconAnchor:[13,26]});
     function hydPaint(feats,key){
       if(key&&key===hydPainted) return; hydPainted=key||"";
       hydLayer.clearLayers();

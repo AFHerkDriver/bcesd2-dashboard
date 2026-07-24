@@ -144,8 +144,9 @@
   function pct(v,arr){arr=arr.slice().sort(function(a,b){return a-b;});if(!arr.length)return null;return arr[Math.min(arr.length-1,Math.ceil(arr.length*v)-1)];}
 
   function render(months){
-    var all={n:0,nOut:0,byCls:{},byHour:new Array(24).fill(0),bySta:{},byUnit:{},bySft:{},chutes:[]};
+    var all={n:0,nOut:0,byCls:{},byHour:new Array(24).fill(0),bySta:{},byUnit:{},bySft:{},byAid:{},chutes:[]};
     months.forEach(function(mo){ all.n+=mo.n||0; all.nOut+=mo.nOut||0;
+      Object.keys(mo.byAid||{}).forEach(function(k){all.byAid[k]=(all.byAid[k]||0)+mo.byAid[k];});
       Object.keys(mo.byCls||{}).forEach(function(k){all.byCls[k]=(all.byCls[k]||0)+mo.byCls[k];});
       (mo.byHour||[]).forEach(function(v,i){all.byHour[i]+=v||0;});
       Object.keys(mo.bySta||{}).forEach(function(k){all.bySta[k]=(all.bySta[k]||0)+mo.bySta[k];});
@@ -170,7 +171,10 @@
     var mx=Math.max.apply(null,months.map(function(m){return m.n||0;}).concat([1]));
     $('volMonths').innerHTML=months.slice(0,13).reverse().map(function(m){
       return '<div class="bar"><span class="l">'+esc(m.m)+'</span><span class="t"><i style="width:'+Math.round((m.n||0)/mx*100)+'%"></i></span><span class="v">'+(m.n||0)+'</span></div>';}).join('');
-    $('xborder').innerHTML = all.nOut ? ('🤝 <b style="color:var(--text)">'+all.nOut+'</b> cross-border response'+(all.nOut===1?'':'s')+' given (outside ESD 2/6 — excluded from department metrics; tender flags still apply on those calls)') : '';
+    var aidKeys=Object.keys(all.byAid).sort(function(a,b){return all.byAid[b]-all.byAid[a];});
+    $('xborder').innerHTML = all.nOut ? ('🤝 <b style="color:var(--text)">Mutual aid given: '+all.nOut+'</b> response'+(all.nOut===1?'':'s')+
+      (aidKeys.length?(' — '+aidKeys.map(function(k){return esc(k)+' <b style="color:var(--teal)">×'+all.byAid[k]+'</b>';}).join(' · ')):'')+
+      ' <span style="color:var(--dim)">(excluded from department metrics; TENDER flags still apply on scene)</span>') : '';
 
     /* class mix */
     var CLS=[['med','EMS','#FFC107'],['mvc','MVC','#FF6B35'],['alarm','Alarm','#A371F7'],['fire','Fire','#FF3B30'],['assist','Assist','#4A90D9'],['fuel','Gas/Fuel','#2DD4BF'],['haz','Hazmat','#9ACD32'],['rescue','Rescue','#FF69B4'],['mutual','Mutual','#8B949E'],['other','Other','#8B949E']];
