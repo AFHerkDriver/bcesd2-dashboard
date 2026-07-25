@@ -67,6 +67,19 @@
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin:10px 0}
   .card > h2{font-size:17px;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px}
   .card .hint{font-size:11px;color:var(--dim);margin-bottom:8px}   /* descendant, not child: also catches hints nested inside a .field (e.g. Drone Takeover) so all descriptions match */
+  /* Diagnostics (owner only) */
+  .diag-btn{width:100%;padding:12px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;
+    background:none;border:1px solid var(--blue,#4A90D9);color:#4A90D9;border-radius:9px;cursor:pointer}
+  .diag-btn:disabled{opacity:.5;cursor:default}
+  .diag-out{margin-top:10px;font-family:'DM Mono',monospace;font-size:12px;line-height:1.8;
+    background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 12px;max-height:420px;overflow-y:auto}
+  .diag-out .dr{display:flex;gap:8px;align-items:baseline}
+  .diag-out .dr .dn{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .diag-out .dr .dv{flex:0 1 auto;color:var(--dim);text-align:right}
+  .diag-out .dr.ok .dv{color:#34C759}
+  .diag-out .dr.bad{color:#FF3B30} .diag-out .dr.bad .dv{color:#FF3B30;font-weight:700}
+  .diag-sum{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700}
+  .diag-sum.allok{color:#34C759} .diag-sum.down{color:#FF3B30}
   /* Chute Times (admin gee-whiz) */
   .chute-body{font-family:'DM Mono',monospace;font-size:13px}
   .chute-hero{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 12px}
@@ -404,6 +417,14 @@
       </div>
     </div>
 
+    <!-- Diagnostics — owner only: live health sweep of every data connection the board depends on -->
+    <div class="card" id="diagCard" style="display:none">
+      <h2>🩺 Diagnostics</h2>
+      <div class="hint">Checks every connection the board depends on, from THIS device: worker routes, NWS (+ hourly), backup weather, flood sensors, burn ban, rain radar sources, county parcel &amp; hydrant services, map tiles, Firestore state, and the Firehawk schedule. Green = healthy; red = that source is down (the board fails loud on it, not silently).</div>
+      <button type="button" class="diag-btn" id="diagRun">Run Diagnostics</button>
+      <div class="diag-out" id="diagOut" hidden></div>
+    </div>
+
     <!-- Chute Times — admin-only gee-whiz: turnout stats from the 48h call log -->
     <div class="card" id="chuteCard" style="display:none">
       <h2>Chute Times</h2>
@@ -436,6 +457,8 @@
   function unlock(name, tier, pin){
     if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadChuteStats(pin); }   /* access log + chute gee-whiz are yours alone — admin PIN only */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
+    /* Diagnostics card is OWNER-only — same identity gate as the token reminder */
+    try{ if(String(name||'').trim().toLowerCase()==='capt sanchez' && window.wireDiag) window.wireDiag(pin); }catch(e){}
     /* MAC121 dispatch prefill needs the PIN (this unlock) AND loaded state — retry covers the race */
     try{ var pf=function(){ try{ window.macAutoPrefill&&window.macAutoPrefill(); }catch(e){} try{ window.xsAutoPrefill&&window.xsAutoPrefill(); }catch(e){} };
       pf(); setTimeout(pf,3000); setTimeout(pf,8000); }catch(e){}
@@ -473,6 +496,76 @@
            '<span class="acc-txt">'+accEsc(txt)+'</span>'+
            (ip?'<span class="acc-ip">'+accEsc(ip)+'</span>':'')+'</div>';
   }
+  /* ── Diagnostics (owner only) — live health sweep of every upstream the board depends on, run
+     from THIS device so it also proves the officer's own network path. Rows stream in as they
+     finish; any red row names the failing source. Read-only: nothing here mutates board state. ── */
+  function wireDiag(pin){
+    var card=$g('diagCard'), btn=$g('diagRun'), out=$g('diagOut');
+    if(!card||!btn||!out) return;
+    card.style.display='block';
+    function T(ms){ try{ return AbortSignal.timeout(ms); }catch(e){ return undefined; } }
+    function row(name,ok,val,ms){
+      var d=document.createElement('div'); d.className='dr '+(ok?'ok':'bad');
+      d.innerHTML='<span>'+(ok?'✅':'🔴')+'</span><span class="dn">'+name+'</span><span class="dv">'+String(val).replace(/[<>&]/g,'')+(ms!=null?(' · '+ms+'ms'):'')+'</span>';
+      out.appendChild(d); out.scrollTop=out.scrollHeight;
+      return ok;
+    }
+    function jget(url,opts){ var t0=Date.now();
+      return fetch(url,Object.assign({signal:T(12000)},opts||{})).then(function(r){
+        return r.json().then(function(j){ return {j:j,ms:Date.now()-t0,http:r.status,ok:r.ok}; });
+      }); }
+    function tget(url){ var t0=Date.now();
+      return fetch(url,{signal:T(12000),cache:'no-store'}).then(function(r){ return r.text().then(function(t){ return {t:t,ms:Date.now()-t0,ok:r.ok}; }); }); }
+    function img(url){ var t0=Date.now();
+      return new Promise(function(res){ var im=new Image(), done=false;
+        var tm=setTimeout(function(){ if(!done){done=true;res({ok:false,ms:12000});} },12000);
+        im.onload=function(){ if(!done){done=true;clearTimeout(tm);res({ok:true,ms:Date.now()-t0});} };
+        im.onerror=function(){ if(!done){done=true;clearTimeout(tm);res({ok:false,ms:Date.now()-t0});} };
+        im.src=url+(url.indexOf('?')<0?'?':'&')+'d='+Date.now(); }); }
+    function run(){
+      btn.disabled=true; btn.textContent='Running…'; out.hidden=false; out.innerHTML='';
+      var bad=0, P=[];
+      function chk(p){ P.push(p.then(function(ok){ if(!ok) bad++; }).catch(function(){ bad++; })); }
+      var FS_KEY2='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ';
+      chk(tget('sw.js').then(function(r){ var v=(r.t.match(/bc2fd-dash-v\d+/)||['?'])[0]; return row('Board version (Pages)',r.ok&&v!=='?',v,r.ms); }));
+      chk(jget(CTL_AUTH+'/dispatch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})}).then(function(r){ return row('Dispatch relay (Active911)',!!(r.j&&r.j.ok),(r.j&&r.j.ok)?((r.j.calls||[]).length+' active'):(r.j&&r.j.error||'HTTP '+r.http),r.ms); }));
+      chk(jget(CTL_AUTH+'/calls?pin='+encodeURIComponent(pin)).then(function(r){ return row('48h call log',!!(r.j&&r.j.ok),(r.j&&r.j.ok)?(r.j.count+' incidents'):'error',r.ms); }));
+      chk(jget(CTL_AUTH+'/metrics?pin='+encodeURIComponent(pin)).then(function(r){ return row('Metrics archive',!!(r.j&&r.j.ok),(r.j&&r.j.ok)?((r.j.months||[]).map(function(m){return m.m.slice(5)+':'+m.n;}).join(' ')||'empty'):'error',r.ms); }));
+      chk(jget(CTL_AUTH+'/drones?pin='+encodeURIComponent(pin)).then(function(r){ return row('DroneSense relay',!!(r.j&&r.j.ok),(r.j&&r.j.ok)?((r.j.count||0)+' streams'):(r.j&&r.j.error||'error'),r.ms); }));
+      chk(jget(FS_DOC+'?key='+FS_KEY2).then(function(r){ return row('Board state (Firestore)',!!(r.j&&r.j.fields),(r.j&&r.j.fields)?'ok':'missing',r.ms); }));
+      chk(jget('https://api.weather.gov/points/29.520,-98.700').then(function(r){
+        var hu=r.j&&r.j.properties&&r.j.properties.forecastHourly;
+        row('NWS gridpoint',!!hu,hu?'ok':'bad',r.ms);
+        if(!hu) return false;
+        return jget(hu).then(function(h){ var n=(h.j&&h.j.properties&&h.j.properties.periods||[]).length;
+          return row('NWS hourly forecast',n>0,n?(n+' periods'):'NO DATA (board on backup)',h.ms); });
+      }));
+      chk(jget('https://api.weather.gov/alerts/active?zone=TXZ205,TXC029').then(function(r){ var n=(r.j&&r.j.features||[]).length; return row('NWS alerts (Bexar)',!!(r.j&&r.j.features!==undefined),n+' active',r.ms); }));
+      chk(jget('https://api.open-meteo.com/v1/forecast?latitude=29.52&longitude=-98.70&current=temperature_2m&temperature_unit=fahrenheit').then(function(r){ return row('Open-Meteo backup wx',!!(r.j&&r.j.current),(r.j&&r.j.current)?(r.j.current.temperature_2m+'°F'):'bad',r.ms); }));
+      chk(jget('https://firehawk-wx.usafsentinel-45e.workers.dev/redflag').then(function(r){ return row('Fire weather (red flag)',!!(r.j&&('active' in r.j)),'active='+(r.j&&r.j.active),r.ms); }));
+      chk(jget('https://firehawk-wx.usafsentinel-45e.workers.dev/burnban').then(function(r){ return row('Burn ban (TFS)',!!(r.j&&('underBan' in r.j)),'ban='+(r.j&&r.j.underBan),r.ms); }));
+      chk(jget('https://api.bexarflood.org/api/sensors/GetAll').then(function(r){ return row('Flood sensors (HALT)',Array.isArray(r.j),Array.isArray(r.j)?(r.j.length+' sensors'):'bad',r.ms); }));
+      chk(jget('https://mapservices.weather.noaa.gov/raster/rest/services/obs/mrms_qpe/ImageServer/identify?geometry=-98.70,29.52&geometryType=esriGeometryPoint&returnCatalogItems=true&f=json').then(function(r){ return row('Rain radar data (MRMS)',!!(r.j&&(r.j.value!==undefined||r.j.catalogItems)),'ok',r.ms); }));
+      chk(jget('https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer?f=json').then(function(r){ return row('Rain outlook (WPC)',!!(r.j&&r.j.layers),'ok',r.ms); }));
+      chk(jget('https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0?f=json').then(function(r){ return row('County parcels (addresses)',!!(r.j&&r.j.fields),'ok',r.ms); }));
+      chk(jget('https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query?geometry=-98.72,29.39,-98.68,29.42&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnCountOnly=true&f=json').then(function(r){ return row('CAD hydrants',!!(r.j&&r.j.count>0),(r.j&&r.j.count)+' in test box',r.ms); }));
+      chk(img('https://a.basemaps.cartocdn.com/dark_all/12/949/1685.png').then(function(r){ return row('Map tiles — dark (CARTO)',r.ok,r.ok?'ok':'unreachable',r.ms); }));
+      chk(img('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/12/1685/949').then(function(r){ return row('Map tiles — satellite (Esri)',r.ok,r.ok?'ok':'unreachable',r.ms); }));
+      chk(img('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/8/59/105.png').then(function(r){ return row('Storm radar tiles',r.ok,r.ok?'ok':'unreachable',r.ms); }));
+      chk(jget('tender-zones.json').then(function(r){ return row('District/tender files',!!(r.j&&r.j.esd2),'ok',r.ms); }));
+      chk((function(){ var n=ctNowCtl(); var doc='schedule_'+n.getFullYear()+'_'+n.getMonth();
+        return jget('https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents/firehawk/'+doc+'?key='+FS_KEY2)
+          .then(function(r){ return row('Firehawk schedule (UAV)',!!(r.j&&r.j.fields),(r.j&&r.j.fields)?'month doc ok':'missing',r.ms); }); })());
+      Promise.all(P).then(function(){
+        var s=document.createElement('div'); s.className='diag-sum '+(bad?'down':'allok');
+        s.textContent=bad?('⚠ '+bad+' CONNECTION'+(bad===1?'':'S')+' DOWN — board fails loud on those tiles; verify by CAD/radio'):'ALL SYSTEMS GO — every connection healthy';
+        out.appendChild(s); out.scrollTop=out.scrollHeight;
+        btn.disabled=false; btn.textContent='Run Diagnostics';
+      });
+    }
+    btn.onclick=run;
+  }
+  window.wireDiag=wireDiag;
   /* Chute gee-whiz: pull the 48h log, keep calls the worker stamped with a chute, and show the
      numbers that matter — average, median, NFPA-style 90th percentile, fastest — plus a per-station
      breakdown keyed by the FIRST responding apparatus. Quietly hides when nothing is measurable yet. */
