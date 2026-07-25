@@ -74,6 +74,7 @@
     <h2>Turnout — NFPA 1710</h2>
     <p class="hint">Turnout (chute) measured dispatch &rarr; first apparatus attaching in CAD. NFPA 1710 benchmarks at the <b>90th percentile</b>: 60s EMS &middot; 80s fire/special ops. Honest limits: this is a proxy (poll precision ~±12s); calls where dispatch auto-assigned the apparatus can't be measured; travel/total response isn't available from the dispatch feed.</p>
     <div class="hero" id="nfpaHero"></div>
+    <div id="trendChart" style="margin-top:12px"></div>
   </div>
 
   <div class="card">
@@ -81,6 +82,7 @@
     <p class="hint">Permanent archive — grows from 2026-07-23 forward (seeded with the trailing 48h). Announcements/burn-ban notices excluded. <b>Department metrics count in-district calls only</b> (official ESD 2/6 borders); cross-border responses given are tallied separately below and never dilute the stats.</p>
     <div id="volMonths"></div>
     <div class="hint" id="xborder" style="margin-top:6px"></div>
+    <div class="hint" id="xrecv" style="margin-top:4px"></div>
     <div id="clsMix" style="margin-top:12px"></div>
     <div style="margin-top:14px"><span class="hint">Runs by hour of day (all archived months, Central)</span>
       <div class="hours" id="hourBars"></div><div class="hx" id="hourLbls"></div>
@@ -144,9 +146,10 @@
   function pct(v,arr){arr=arr.slice().sort(function(a,b){return a-b;});if(!arr.length)return null;return arr[Math.min(arr.length-1,Math.ceil(arr.length*v)-1)];}
 
   function render(months){
-    var all={n:0,nOut:0,byCls:{},byHour:new Array(24).fill(0),bySta:{},byUnit:{},bySft:{},byAid:{},chutes:[]};
+    var all={n:0,nOut:0,byCls:{},byHour:new Array(24).fill(0),bySta:{},byUnit:{},bySft:{},byAid:{},byRecv:{},chutes:[]};
     months.forEach(function(mo){ all.n+=mo.n||0; all.nOut+=mo.nOut||0;
       Object.keys(mo.byAid||{}).forEach(function(k){all.byAid[k]=(all.byAid[k]||0)+mo.byAid[k];});
+      Object.keys(mo.byRecv||{}).forEach(function(k){all.byRecv[k]=(all.byRecv[k]||0)+mo.byRecv[k];});
       Object.keys(mo.byCls||{}).forEach(function(k){all.byCls[k]=(all.byCls[k]||0)+mo.byCls[k];});
       (mo.byHour||[]).forEach(function(v,i){all.byHour[i]+=v||0;});
       Object.keys(mo.bySta||{}).forEach(function(k){all.bySta[k]=(all.bySta[k]||0)+mo.bySta[k];});
@@ -167,6 +170,33 @@
       '<div class="hb info"><b>'+(eAll.length?fmt(pct(0.5,eAll)):'—')+'</b><span>median all-calls</span></div>'+
       '<div class="hb info"><b>'+eAll.length+'</b><span>measured chutes</span></div>';
 
+    /* turnout trend — per-month 90th percentile, fire (red, 80s std) vs EMS (amber, 60s std).
+       One month = dots; the lines earn their meaning as history accrues. */
+    (function(){
+      var el=$('trendChart'); if(!el) return;
+      var asc=months.slice().sort(function(a,b){return a.m<b.m?-1:1;});
+      var pts=asc.map(function(mo){
+        var f=(mo.chutes||[]).filter(function(c){return c[0]==='fire'||c[0]==='alarm'||c[0]==='haz'||c[0]==='rescue';}).map(function(c){return c[1];});
+        var e=(mo.chutes||[]).filter(function(c){return c[0]==='med'||c[0]==='mvc';}).map(function(c){return c[1];});
+        return {m:mo.m.slice(5), f:pct(0.9,f), e:pct(0.9,e)};
+      }).filter(function(p){return p.f!=null||p.e!=null;});
+      if(!pts.length){ el.innerHTML=''; return; }
+      var W=640,H=150,PL=34,PR=8,PT=10,PB=22, maxY=Math.max(120,Math.ceil(Math.max.apply(null,pts.map(function(p){return Math.max(p.f||0,p.e||0);}))/30)*30);
+      var X=function(i){ return pts.length===1?W/2:(PL+(W-PL-PR)*i/(pts.length-1)); };
+      var Y=function(v){ return PT+(H-PT-PB)*(1-v/maxY); };
+      function line(key,color){ var seg=pts.map(function(p,i){return p[key]!=null?(X(i)+','+Y(p[key])):null;}).filter(Boolean);
+        if(!seg.length) return '';
+        var dots=pts.map(function(p,i){return p[key]!=null?('<circle cx="'+X(i)+'" cy="'+Y(p[key])+'" r="3.5" fill="'+color+'"/>'):'';}).join('');
+        return (seg.length>1?('<polyline points="'+seg.join(' ')+'" fill="none" stroke="'+color+'" stroke-width="2"/>'):'')+dots; }
+      function bench(v,color,lbl){ return '<line x1="'+PL+'" y1="'+Y(v)+'" x2="'+(W-PR)+'" y2="'+Y(v)+'" stroke="'+color+'" stroke-width="1" stroke-dasharray="4 4" opacity=".5"/>'+
+        '<text x="'+(W-PR)+'" y="'+(Y(v)-3)+'" text-anchor="end" font-size="9" fill="'+color+'" opacity=".8">'+lbl+'</text>'; }
+      var lbls=pts.map(function(p,i){ return '<text x="'+X(i)+'" y="'+(H-6)+'" text-anchor="middle" font-size="10" fill="#8b949e">'+esc(p.m)+'</text>'; }).join('');
+      el.innerHTML='<span class="hint">Turnout 90th percentile by month — <span style="color:#F85149">fire</span> vs <span style="color:#FFC107">EMS</span> vs NFPA benchmarks</span>'+
+        '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--bg);border:1px solid var(--border);border-radius:9px">'+
+        bench(80,'#F85149','80s fire')+bench(60,'#FFC107','60s EMS')+
+        line('f','#F85149')+line('e','#FFC107')+lbls+'</svg>';
+    })();
+
     /* monthly volume */
     var mx=Math.max.apply(null,months.map(function(m){return m.n||0;}).concat([1]));
     $('volMonths').innerHTML=months.slice(0,13).reverse().map(function(m){
@@ -176,6 +206,11 @@
     $('xborder').innerHTML = all.nOut ? ('🤝 <b style="color:var(--text)">Mutual aid given: '+all.nOut+'</b> response'+(all.nOut===1?'':'s')+
       (aidKeys.length?(' — '+aidKeys.map(function(k){return esc(aidLbl(k))+' <b style="color:var(--teal)">×'+all.byAid[k]+'</b>';}).join(' · ')):'')+
       ' <span style="color:var(--dim)">(excluded from department metrics; TENDER flags still apply on scene)</span>') : '';
+    var recvKeys=Object.keys(all.byRecv).sort(function(a,b){return all.byRecv[b]-all.byRecv[a];});
+    var recvN=recvKeys.reduce(function(a,k){return a+all.byRecv[k];},0);
+    $('xrecv').innerHTML = recvN ? ('🚒 <b style="color:var(--text)">Mutual aid received: '+recvN+'</b> unit response'+(recvN===1?'':'s')+' on our ground — '+
+      recvKeys.slice(0,10).map(function(k){return esc(k)+' <b style="color:var(--amber)">×'+all.byRecv[k]+'</b>';}).join(' · ')+
+      ' <span style="color:var(--dim)">(the get side of the give/get ledger)</span>') : '';
 
     /* class mix */
     var CLS=[['med','EMS','#FFC107'],['mvc','MVC','#FF6B35'],['alarm','Alarm','#A371F7'],['fire','Fire','#FF3B30'],['assist','Assist','#4A90D9'],['fuel','Gas/Fuel','#2DD4BF'],['haz','Hazmat','#9ACD32'],['rescue','Rescue','#FF69B4'],['mutual','Mutual','#8B949E'],['other','Other','#8B949E']];

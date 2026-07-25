@@ -202,7 +202,7 @@ function inDistrict(rings, lng, lat) {
       if ((yi > lat) !== (yj > lat) && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) ins = !ins; j = i; } }
   return ins;
 }
-function newAgg() { return { n: 0, nOut: 0, byCls: {}, byHour: new Array(24).fill(0), bySta: {}, byUnit: {}, bySft: {}, byAid: {}, chutes: [] }; }
+function newAgg() { return { n: 0, nOut: 0, byCls: {}, byHour: new Array(24).fill(0), bySta: {}, byUnit: {}, bySft: {}, byAid: {}, byRecv: {}, chutes: [] }; }
 /* Apply one incident event to an agg doc. kind: "new" (first sighting) | "delta" (units/chute update).
    ev.out (cross-border) -> counted once in nOut, everything else excluded: department metrics stay ours. */
 function aggApply(agg, ev) {
@@ -216,11 +216,21 @@ function aggApply(agg, ev) {
   /* Department stations ONLY (121-125, 161, 162). Extra ambulances ride with a staffed station:
      M126 -> 123, M120 -> 121, M119/M127 -> 124 (same remap as the board tally). Units that map to
      no department station (neighbor apparatus on our ground) are excluded from workload stats. */
-  (ev.units || []).forEach(u => { if (!isRealApparatus(u)) return;
+  (ev.units || []).forEach(u => {
+    if (!isRealApparatus(u)) {
+      /* neighbor departments run 1-2 digit callsigns (E23, BR5) that the 3-digit rule skips — on OUR
+         ground those are aid received too. Box codes (digits-then-letter) stay excluded. */
+      if (/^[A-Za-z]{1,4}\d{1,2}$/.test(String(u))) { agg.byRecv = agg.byRecv || {}; agg.byRecv[u] = (agg.byRecv[u] || 0) + 1; }
+      return;
+    }
     const m = /(\d{3})$/.exec(u); if (!m) return;
     let st = m[1];
     st = st === "126" ? "123" : st === "120" ? "121" : (st === "119" || st === "127") ? "124" : st;
-    if (["121","122","123","124","125","161","162"].indexOf(st) < 0) return;
+    if (["121","122","123","124","125","161","162"].indexOf(st) < 0) {
+      /* a NEIGHBOR rig on OUR in-district call = mutual aid RECEIVED (out-calls return above, so
+         this can only fire on our own ground) — the "get" side of the give/get ledger */
+      agg.byRecv = agg.byRecv || {}; agg.byRecv[u] = (agg.byRecv[u] || 0) + 1; return;
+    }
     agg.byUnit[u] = (agg.byUnit[u] || 0) + 1;
     agg.bySta[st] = (agg.bySta[st] || 0) + 1; });
   if (ev.chute != null && agg.chutes.length < 2000) agg.chutes.push([ev.cls, ev.chute, ev.sft || ""]);
@@ -651,6 +661,35 @@ export default {
         months.sort((a, b) => (a.m < b.m ? 1 : -1));
         return json({ ok: true, months }, 200);
       } catch (e) { return json({ ok: false, error: "metrics read error" }, 502); }
+    }
+
+    /* ── GET /heat?pin — call-demand density from the permanent archive for the board's optional
+       Demand map overlay. ~500 m cells, top 800 by count. Cached 6 h in KV (the archive only grows;
+       per-request KV scans would get expensive as history accumulates). ── */
+    if (req.method === "GET" && url.pathname === "/heat") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
+      try {
+        const cached = await env.PINS.get("heatcache");
+        if (cached) return json(JSON.parse(cached), 200);
+        const cells = {}; let cur;
+        do {
+          const lst = await env.PINS.list({ prefix: "arch:", cursor: cur, limit: 1000 });
+          for (const kk of lst.keys) {
+            const v = await env.PINS.get(kk.name); if (!v) continue;
+            let c; try { c = JSON.parse(v); } catch { continue; }
+            if (c.la == null || c.ln == null) continue;
+            const key = (Math.round(c.la / 0.0045) * 0.0045).toFixed(4) + "," + (Math.round(c.ln / 0.0052) * 0.0052).toFixed(4);
+            cells[key] = (cells[key] || 0) + 1;
+          }
+          cur = lst.list_complete ? null : lst.cursor;
+        } while (cur);
+        const top = Object.entries(cells).sort((a, b) => b[1] - a[1]).slice(0, 800)
+          .map(([k, n]) => { const p = k.split(","); return [+p[0], +p[1], n]; });
+        const out = { ok: true, cells: top, updated: new Date().toISOString() };
+        await env.PINS.put("heatcache", JSON.stringify(out), { expirationTtl: 6 * 3600 });
+        return json(out, 200);
+      } catch (e) { return json({ ok: false, error: "heat error" }, 502); }
     }
 
     if (req.method === "GET" && url.pathname === "/dupes") {

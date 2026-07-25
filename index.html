@@ -1178,7 +1178,11 @@
     var initial=sunUp(29.465,-98.730)?satellite:dark;   /* daylight -> satellite, night -> dark */
     var map=L.map(el,{center:[29.465,-98.730],zoom:13,layers:[initial],zoomControl:false,zoomSnap:0.1});   /* fine zoom steps so the idle fit tightens to the exact framing, not a coarse level */
     map.attributionControl.setPrefix(false);   /* drop Leaflet's own prefix; OSM/CARTO/Esri credit stays (tiny, subdued via CSS) */
-    L.control.layers({"Satellite":satellite,"Dark":dark,"Positron":positron},null,{collapsed:true,position:"topright"}).addTo(map);
+    /* Optional overlays: Wind Flow (windy-style particles — also auto-on during red flag) and Call
+       Demand (archive density, lazy-loaded on first enable). Both OFF by default — wall stays clean. */
+    var windOverlay=L.layerGroup(), heatLayer=L.layerGroup();
+    L.control.layers({"Satellite":satellite,"Dark":dark,"Positron":positron},
+      {"Wind Flow":windOverlay,"Call Demand":heatLayer},{collapsed:true,position:"topright"}).addTo(map);
     /* Follow the sun LIVE: satellite from sunrise to sunset, dark at night. The initial pick above
        only ran at page load — and the wall hard-reloads at 04:07, so it loaded dark and stayed dark
        all day. A 5-min check swaps at dawn/dusk. An officer's manual pick from the layers control
@@ -1330,8 +1334,30 @@
        red-flag) or flood ops are on; disappears when clear. 50% opacity in its own pane UNDER pins
        and labels, so a cell can never obscure a call. Tiles re-pull every 5 min while visible. ── */
     map.createPane("radarPane"); map.getPane("radarPane").style.zIndex=350; map.getPane("radarPane").style.pointerEvents="none";
-    var RADAR_URL="https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png";
-    var radar=L.tileLayer(RADAR_URL,{pane:"radarPane",opacity:0.5,maxZoom:19,updateWhenIdle:true,updateWhenZooming:false,keepBuffer:2});
+    /* ANIMATED sweep, windy/RadarScope style: five past frames (-25…-05 min) + current loop so the
+       room reads cell MOVEMENT, not a still. All frames sit in the radar pane at 0 opacity; the
+       animator lights one at a time (longer hold on the newest). */
+    var RADAR_FRAMES=["nexrad-n0q-900913-m25m","nexrad-n0q-900913-m20m","nexrad-n0q-900913-m15m","nexrad-n0q-900913-m10m","nexrad-n0q-900913-m05m","nexrad-n0q-900913"];
+    var radarLayers=RADAR_FRAMES.map(function(id){
+      return L.tileLayer("https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/"+id+"/{z}/{x}/{y}.png",
+        {pane:"radarPane",opacity:0,maxZoom:19,updateWhenIdle:true,updateWhenZooming:false,keepBuffer:2});
+    });
+    var radar={ _on:false, _anim:null, _fi:RADAR_FRAMES.length-1 };
+    function radarShow(on){
+      if(on===radar._on) return; radar._on=on;
+      radarLayers.forEach(function(l){ try{ on?map.addLayer(l):map.removeLayer(l); }catch(e){} });
+      if(on){ radar._fi=RADAR_FRAMES.length-1; radarStep();
+        radar._anim=setInterval(radarStep, 500); }
+      else if(radar._anim){ clearInterval(radar._anim); radar._anim=null; }
+    }
+    var radarHold=0;
+    function radarStep(){
+      if(radarHold>0){ radarHold--; return; }                      /* dwell on the newest frame */
+      radarLayers[radar._fi].setOpacity(0);
+      radar._fi=(radar._fi+1)%RADAR_FRAMES.length;
+      radarLayers[radar._fi].setOpacity(0.5);
+      if(radar._fi===RADAR_FRAMES.length-1) radarHold=3;           /* ~1.5 s on "now" */
+    }
     var radarBucket=0;
     function stormActive(){
       if(window.FLOOD_ACTIVE) return true;
@@ -1343,13 +1369,79 @@
     }
     function radarTick(){
       var want=false; try{ want=stormActive(); }catch(e){}
-      var has=map.hasLayer(radar);
-      if(want&&!has){ try{ map.addLayer(radar); }catch(e){} }
-      else if(!want&&has){ try{ map.removeLayer(radar); }catch(e){} }
+      radarShow(want);
       if(want){ var bk=Math.floor(Date.now()/300000);
-        if(bk!==radarBucket){ radarBucket=bk; try{ radar.setUrl(RADAR_URL+"?_="+bk); }catch(e){} } }   /* fresh sweep every 5 min */
+        if(bk!==radarBucket){ radarBucket=bk;                       /* fresh frame set every 5 min */
+          radarLayers.forEach(function(l,i){ try{ l.setUrl("https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/"+RADAR_FRAMES[i]+"/{z}/{x}/{y}.png?_="+bk); }catch(e){} }); } }
     }
     setTimeout(radarTick,15000); setInterval(radarTick,60000);
+    /* ── WIND FLOW — windy.com-style particle streamlines over the district. The field is an IDW
+       blend of the 5 station winds (window.WX_WINDS from the weather module), flowing TO (met dir
+       + 180). AUTO-ON whenever fire weather is up (red-flag band or pills); manual any time via the
+       "Wind Flow" overlay. Trails fade on a translucent wash; particles respawn on decay/exit. ── */
+    (function(){
+      var cv=null, ctx=null, parts=[], raf=null, windManual=false;
+      var C2D={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};
+      function ensure(){ if(cv) return;
+        cv=document.createElement("canvas");
+        cv.style.cssText="position:absolute;left:0;top:0;pointer-events:none;z-index:398";
+        map.getContainer().appendChild(cv); ctx=cv.getContext("2d"); }
+      function fit(){ var s=map.getSize(); if(cv.width!==s.x||cv.height!==s.y){ cv.width=s.x; cv.height=s.y; } }
+      function field(x,y){
+        var ws=window.WX_WINDS||[]; if(!ws.length) return null;
+        var ll; try{ ll=map.containerPointToLatLng([x,y]); }catch(e){ return null; }
+        var sx=0,sy=0,sw=0;
+        for(var i=0;i<ws.length;i++){ var w=ws[i];
+          var dd=Math.max(1e-6,(w.lat-ll.lat)*(w.lat-ll.lat)+(w.lng-ll.lng)*(w.lng-ll.lng));
+          var wt=1/dd;
+          var deg=((C2D[w.dir]!=null?C2D[w.dir]:0)+180)*Math.PI/180;    /* met FROM -> flow TO */
+          var sp=(w.spd||0)+((w.gust&&w.gust>w.spd)?(w.gust-w.spd)*0.3:0);
+          sx+=wt*sp*Math.sin(deg); sy+=wt*(-sp*Math.cos(deg)); sw+=wt; }
+        return {u:sx/sw, v:sy/sw};
+      }
+      function spawn(){ return {x:Math.random()*cv.width, y:Math.random()*cv.height, life:50+Math.random()*90}; }
+      function windOn(){
+        if(windManual) return true;
+        try{ if(document.querySelector("#nwsSrc .al-redflag")) return true;
+             if(document.querySelector(".fw-body .fwp, .fw-flag")) return true; }catch(e){}
+        return false;
+      }
+      function step(){
+        raf=null;
+        if(!windOn()){ if(cv){ ctx.clearRect(0,0,cv.width,cv.height); cv.style.display="none"; parts=[]; } return; }
+        ensure(); fit(); cv.style.display="block";
+        while(parts.length<300) parts.push(spawn());
+        ctx.fillStyle="rgba(13,17,23,0.10)"; ctx.fillRect(0,0,cv.width,cv.height);
+        ctx.strokeStyle="rgba(190,230,255,0.55)"; ctx.lineWidth=1.1; ctx.beginPath();
+        for(var i=0;i<parts.length;i++){ var p=parts[i];
+          var f=field(p.x,p.y); if(!f){ parts[i]=spawn(); continue; }
+          var nx=p.x+f.u*0.16, ny=p.y+f.v*0.16;
+          ctx.moveTo(p.x,p.y); ctx.lineTo(nx,ny);
+          p.x=nx; p.y=ny; p.life--;
+          if(p.life<=0||nx<-4||ny<-4||nx>cv.width+4||ny>cv.height+4) parts[i]=spawn(); }
+        ctx.stroke();
+        raf=requestAnimationFrame(step);
+      }
+      function kick(){ if(!raf) raf=requestAnimationFrame(step); }
+      setInterval(kick,5000);                                       /* watchdog: auto-starts when red flag appears */
+      map.on("overlayadd",function(e){ if(e.layer===windOverlay){ windManual=true; kick(); } if(e.layer===heatLayer) heatLoad(); });
+      map.on("overlayremove",function(e){ if(e.layer===windOverlay) windManual=false; });
+      map.on("move zoom",function(){ if(cv&&ctx) ctx.clearRect(0,0,cv.width,cv.height); });
+      /* ── CALL DEMAND — archive density (worker /heat), lazy-loaded on first enable ── */
+      var heatLoaded=false;
+      function heatLoad(){
+        if(heatLoaded) return; heatLoaded=true;
+        var pin=window.BOARD_PIN?window.BOARD_PIN():"";
+        fetch("https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/heat?pin="+encodeURIComponent(pin))
+          .then(function(r){ return r.ok?r.json():null; }).then(function(j){
+            if(!j||!j.ok||!Array.isArray(j.cells)){ heatLoaded=false; return; }
+            var max=1; j.cells.forEach(function(c){ if(c[2]>max) max=c[2]; });
+            j.cells.forEach(function(c){
+              L.circleMarker([c[0],c[1]],{pane:"boundPane",radius:5+13*Math.sqrt(c[2]/max),stroke:false,
+                fillColor:"#FF6B35",fillOpacity:0.22,interactive:false}).addTo(heatLayer); });
+          }).catch(function(){ heatLoaded=false; });
+      }
+    })();
     /* ── HYDRANTS — the CAD hydrant layer (SAFD/SAWS "CADHydrants", SA open-data hub; coverage
        verified in the unincorporated district). Teal dots past HYD_Z, bigger for 10"+ mains, with the
        address numbers — one zoom nudge from a call focus shows water supply around the fire. Same
@@ -1361,22 +1453,38 @@
        proxy for NFPA 291 Class AA (>=1,500 GPM) high-volume hydrants, which NFPA marks light blue. */
     var hydIcon=L.icon({iconUrl:"hydrant-marker.png",iconRetinaUrl:"hydrant-marker@2x.png",iconSize:[20,20],iconAnchor:[10,20]});
     var hydIconBig=L.icon({iconUrl:"hydrant-marker-hv.png",iconRetinaUrl:"hydrant-marker-hv@2x.png",iconSize:[26,26],iconAnchor:[13,26]});
+    /* Officer-flagged OUT-OF-SERVICE hydrants (control.html list, matched by address) render the red
+       slashed pin a size up — a plug you can't count on must out-shout the ones you can. */
+    var hydIconOOS=L.icon({iconUrl:"hydrant-marker-oos.png",iconRetinaUrl:"hydrant-marker-oos@2x.png",iconSize:[26,26],iconAnchor:[13,26]});
+    function hydNorm(s){ return String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
+    window.OOS_HYD=window.OOS_HYD||[];
+    function hydIsOOS(addr){
+      var a=hydNorm(addr); if(!a) return false;
+      for(var i=0;i<window.OOS_HYD.length;i++){ var o=window.OOS_HYD[i];
+        if(o && o.length>=4 && a.indexOf(o)>=0) return true; }
+      return false;
+    }
     function hydPaint(feats,key){
       if(key&&key===hydPainted) return; hydPainted=key||"";
       hydLayer.clearLayers();
       feats.slice(0,400).forEach(function(f){
         var g=f.geometry; if(!g||g.x==null||g.y==null) return;
-        var big=(+((f.attributes||{}).Main_Size)||0)>=10;
-        L.marker([g.y,g.x],{icon:big?hydIconBig:hydIcon,pane:"addrPane",interactive:false,keyboard:false}).addTo(hydLayer);
+        var at=f.attributes||{};
+        var icon = hydIsOOS(at.Address) ? hydIconOOS : ((+at.Main_Size||0)>=10 ? hydIconBig : hydIcon);
+        L.marker([g.y,g.x],{icon:icon,pane:"addrPane",interactive:false,keyboard:false}).addTo(hydLayer);
       });
     }
+    try{ onBoardState(function(ok,st){                              /* officer OOS list changes repaint the pins */
+      var next=((st&&st.oosHydrants)||[]).map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
+      if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)){ window.OOS_HYD=next; hydPainted=""; try{ hydUpdate(); }catch(e){} }
+    }); }catch(e){}
     function hydUpdate(){
       if(map.getZoom()<HYD_Z){ hydLayer.clearLayers(); hydPainted=""; return; }
       var b=map.getBounds().pad(0.12);
       var bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(function(x){return x.toFixed(4);}).join(",");
       if(hydCache[bbox]){ hydPaint(hydCache[bbox],bbox); return; }
       var seq=++hydSeq;
-      fetch(HYD_URL+"?geometry="+bbox+"&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Main_Size&returnGeometry=true&resultRecordCount=800&f=json")
+      fetch(HYD_URL+"?geometry="+bbox+"&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Main_Size,Address&returnGeometry=true&resultRecordCount=800&f=json")
         .then(function(r){ return r.ok?r.json():null; }).then(function(j){
           if(seq!==hydSeq||!j||!Array.isArray(j.features)) return;
           hydCache[bbox]=j.features; hydKeys.push(bbox);
@@ -1994,7 +2102,11 @@
   function loadWeather(){
     if(typeof fetch!=="function"){wxFail("WEATHER FEED UNAVAILABLE \u2014 no live NWS data");return;}
     Promise.all(STATIONS.map(function(st){return stationHourly(st).then(function(hf){var p=hf&&hf.properties&&hf.properties.periods;return (p&&p.length)?p:null;}).catch(function(){return null;});}))
-    .then(function(res){var good=res.filter(Boolean);
+    .then(function(res){
+      /* per-station wind vectors for the map's windy-style flow layer (res is still station-aligned here) */
+      try{ window.WX_WINDS=res.map(function(p,i){ if(!p||!p[0]) return null; var w=wxW(p[0]);
+        return {lat:STATIONS[i].lat,lng:STATIONS[i].lon,spd:w.spd,gust:w.gust,dir:w.dir}; }).filter(Boolean); }catch(e){}
+      var good=res.filter(Boolean);
       if(!good.length){
         /* NWS fully down -> Open-Meteo backup, loudly labeled. Then stale, then fail. */
         omBackup().then(function(og){ renderAggregate(og,"BACKUP SOURCE \u2014 OPEN-METEO (NWS DOWN)"); })

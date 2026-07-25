@@ -67,6 +67,26 @@
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin:10px 0}
   .card > h2{font-size:17px;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px}
   .card .hint{font-size:11px;color:var(--dim);margin-bottom:8px}   /* descendant, not child: also catches hints nested inside a .field (e.g. Drone Takeover) so all descriptions match */
+  /* Collapsible cards — tap the title to fold; .clps starts collapsed */
+  .card.fold > h2{cursor:pointer;-webkit-user-select:none;user-select:none}
+  .card.fold > h2::after{content:"▾";float:right;color:var(--dim);font-size:15px}
+  .card.fold.clps > h2::after{content:"▸"}
+  .card.fold.clps > :not(h2){display:none}
+  .fold-sum{font-family:'DM Mono',monospace;font-size:12px;color:var(--dim);letter-spacing:0;margin-left:8px;vertical-align:middle}
+  .fold-sum.bad{color:var(--red);font-weight:700}
+  /* Advanced group — inner sections keep their own ids/wiring, restyled as sub-blocks */
+  .adv-sec{border-top:1px solid var(--border);margin-top:14px;padding-top:12px}
+  .adv-sec > h2{font-size:14px;color:var(--text);letter-spacing:1px;cursor:default}
+  /* Jump chips — one-tap scroll to a section (auto-unfolds the target) */
+  .jump{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+  .jump a{font-size:12px;color:var(--text);text-decoration:none;border:1px solid var(--border);border-radius:999px;
+    padding:6px 12px;background:var(--panel);-webkit-tap-highlight-color:transparent}
+  .jump a:active{border-color:var(--accent);color:var(--accent)}
+  /* Sticky Save — always in reach; the unsaved-orange ring rides along */
+  .savebar{position:sticky;bottom:0;z-index:60;margin-top:14px;
+    padding:12px 0 calc(8px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,rgba(13,17,23,0),var(--bg) 42%)}
+  .savebar .btn.primary{width:100%;font-size:16px;padding:14px;letter-spacing:1px}
   /* Diagnostics (owner only) */
   .diag-btn{width:100%;padding:12px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;
     background:none;border:1px solid var(--blue,#4A90D9);color:#4A90D9;border-radius:9px;cursor:pointer}
@@ -74,7 +94,9 @@
   .diag-out{margin-top:10px;font-family:'DM Mono',monospace;font-size:12px;line-height:1.8;
     background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 12px;max-height:420px;overflow-y:auto}
   .diag-out .dr{display:flex;gap:8px;align-items:baseline}
-  .diag-out .dr .dn{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .diag-out .dr .dn{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px}
+  .diag-fails{border:1px solid var(--red);background:rgba(255,59,48,.10);color:var(--red);border-radius:8px;
+    padding:8px 10px;margin-bottom:8px;font-weight:700;line-height:1.6;text-transform:uppercase;letter-spacing:.5px}
   .diag-out .dr .dv{flex:0 1 auto;color:var(--dim);text-align:right}
   .diag-out .dr.ok .dv{color:#34C759}
   .diag-out .dr.bad{color:#FF3B30} .diag-out .dr.bad .dv{color:#FF3B30;font-weight:700}
@@ -250,7 +272,6 @@
     </div>
     <div class="actions">
       <a class="btn ghost" href="index.html">◱ View Board</a>
-      <button class="btn primary" id="saveTop">Save</button>
     </div>
   </div>
 
@@ -275,6 +296,10 @@
 
     <div class="hint" style="text-align:center;margin:2px 0 10px">🕐 All dates &amp; times on this panel are <b>San Antonio time (Central)</b>, regardless of your device&rsquo;s clock or location.</div>
 
+    <nav class="jump">
+      <a href="#cardAnn">📢 Announce</a><a href="#cardCal">📅 Events</a><a href="#cardUnits">🚒 Units</a><a href="#cardHosp">🏥 Hospitals</a><a href="#cardStrike">🔥 Strike</a><a href="#advCard">⚙️ Advanced</a>
+    </nav>
+
     <!-- District Metrics — officer-gated page (own PIN gate; permanent call archive + standards) -->
     <a class="card" href="metrics.html" style="display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--text)">
       <span style="font-size:22px">📊</span>
@@ -293,24 +318,24 @@
       </div>
     </div>
 
-    <!-- Announcements (top ticker) -->
-    <div class="card">
-      <h2>Announcements <span class="tag live">TICKER</span></h2>
+    <!-- Announcements (top ticker) — collapsible, count in header -->
+    <div class="card fold clps" id="cardAnn">
+      <h2>Announcements <span class="tag live">TICKER</span> <span class="fold-sum" id="annFoldSum"></span></h2>
       <div class="hint">Rotate on the board ticker. Auto-signed with your name from your login. Optional expiration — an expired post clears itself from the board.</div>
       <div id="annList"></div>
       <button class="add" id="addAnn">+ Add announcement</button>
     </div>
 
-    <!-- Calendar -->
-    <div class="card">
-      <h2>Shift Calendar</h2>
+    <!-- Calendar — collapsible, count in header -->
+    <div class="card fold clps" id="cardCal">
+      <h2>Shift Calendar <span class="fold-sum" id="calFoldSum"></span></h2>
       <div class="hint">Date optional (blank = today). End time optional. Tap a field for the date/time picker. Sorted automatically on the board; events clear themselves one hour after they end.</div>
       <div id="calList"></div>
       <button class="add" id="addCal">+ Add event</button>
     </div>
 
     <!-- Specialty Units — alphabetized -->
-    <div class="card">
+    <div class="card" id="cardUnits">
       <h2>Specialty Units &amp; OOS</h2>
       <div class="hint">UAV121/UAV124 are automatic from Firehawk. Optional expiry on team staffing — when it passes, the team drops to — on its own. Ladders/AP have no dates: maintenance returns are unknown; flip them back In Service manually. MAC 121 also auto-staffs for 6 hours when dispatch tones it (MAC121 or MA121 on a call) — the expiry prefills below; shorten, extend, or clear it and Save.</div>
       <div class="unit-row"><span class="ulabel">Aerial Platform 124</span><div class="seg red useg" id="segAP124"><button data-v="oos">OOS</button><button data-v="in">In Service</button></div><input type="datetime-local" class="uexp" data-ux="a:ap124" title="Back in service at (auto-fills to next 0700 when E124 runs)"></div>
@@ -352,15 +377,25 @@
       </div>
     </div>
 
-    <!-- Hospitals -->
-    <div class="card">
-      <h2>Hospital Status</h2>
-      <div class="hint">Real facilities per STRAC Hospital Selection Guide (Aug 2025). Diversion is not a public feed — set it here from EMResource / MEDCOM.</div>
+    <!-- Hospitals — collapsible (long list); starts folded, header shows the diversion count -->
+    <div class="card fold clps" id="cardHosp">
+      <h2>Hospital Status <span class="fold-sum" id="hospFoldSum"></span></h2>
+      <div class="hint">Real facilities per STRAC Hospital Selection Guide (Aug 2025). Diversion is not a public feed — set it here from EMResource / MEDCOM. Tap the title to expand/collapse.</div>
       <div id="hospList"></div>
     </div>
 
-    <!-- Flood Ops override — mirrors Fire Weather -->
-    <div class="card">
+    <!-- OOS Hydrants — officer-flagged; the board turns matching CAD hydrants into red slashed pins -->
+    <div class="card fold clps" id="cardOOS">
+      <h2>OOS Hydrants <span class="fold-sum" id="oosFoldSum"></span></h2>
+      <div class="hint">Enter the hydrant&rsquo;s street address as SAWS lists it (e.g. <b>11219 CHARISMATIC</b>) &mdash; the map matches it against the CAD hydrant layer and shows the red slashed pin at close zoom. Remove the entry when the hydrant is repaired.</div>
+      <div id="oosList"></div>
+      <button class="add" id="addOOS">+ Flag a hydrant OOS</button>
+    </div>
+
+    <!-- Advanced — rarely-touched overrides grouped and folded: Flood / Fire Weather / Display -->
+    <div class="card fold clps" id="advCard">
+      <h2>Advanced <span class="fold-sum">· flood · fire wx · display</span></h2>
+    <div class="adv-sec">
       <h2>Flood Ops <span class="tag live">LIVE NWS</span></h2>
       <div class="hint">Low-water crossings + station rain accumulator. Auto shows the band on an NWS Flood / Flash-Flood Warning; force it on to watch conditions before a warning posts.</div>
       <div class="field">
@@ -371,7 +406,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="adv-sec">
       <h2>Fire Weather <span class="tag live">LIVE NWS</span></h2>
       <div class="hint">RH / wind / temp come live from NWS. Red Flag defaults to the NWS feed; override only if needed.</div>
       <div class="field">
@@ -382,26 +417,9 @@
       </div>
     </div>
 
-    <!-- Strike Teams — name / callsign / phone shown stacked in the NWS Alerts tile footer when staffed -->
-    <div class="card">
-      <h2>Strike Teams</h2>
-      <div class="hint">When staffed, the board shows the team name, its STEN callsign, and the phone number — stacked — in the NWS Alerts tile.</div>
-      <div class="field"><label>Strike Team West</label><div class="seg red useg" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
-      <div class="row">
-        <div class="field"><label>West Callsign</label><input type="text" id="stCsWest" placeholder="STEN124"></div>
-        <div class="field"><label>West Phone</label><input type="tel" id="stPhWest" placeholder="(210) 000-0000"></div>
-      </div>
-      <div class="field" style="margin-top:10px"><label>Strike Team East</label><div class="seg red useg" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
-      <div class="row">
-        <div class="field"><label>East Callsign</label><input type="text" id="stCsEast" placeholder="STEN162"></div>
-        <div class="field"><label>East Phone</label><input type="tel" id="stPhEast" placeholder="(210) 000-0000"></div>
-      </div>
-    </div>
-
-    <!-- Display — wall-TV burn-in guard -->
-    <div class="card">
+    <div class="adv-sec">
       <h2>Display</h2>
-      <div class="hint">Pixel Shift nudges the whole wall board a few pixels on a slow cycle so no static element sits on the same pixels for hours — the standard burn-in guard for always-on TVs. Invisible across the room; only affects the big-screen wall view, not phones or tablets. Leave On unless you&rsquo;re troubleshooting.</div>
+      <div class="hint">Pixel Shift nudges the whole wall board a few pixels on a slow cycle so no static element sits on the same pixels for hours &mdash; the standard burn-in guard for always-on TVs. Invisible across the room; only affects the big-screen wall view, not phones or tablets. Leave On unless you&rsquo;re troubleshooting.</div>
       <div class="field">
         <label>Pixel Shift (Burn-in Guard)</label>
         <div class="seg" id="segPxShift">
@@ -414,6 +432,23 @@
         <div class="seg" id="segTakeover">
           <button data-v="on">On</button><button data-v="off">Off</button>
         </div>
+      </div>
+    </div>
+    </div><!-- /advCard -->
+
+    <!-- Strike Teams — name / callsign / phone shown stacked in the NWS Alerts tile footer when staffed -->
+    <div class="card fold clps" id="cardStrike">
+      <h2>Strike Teams <span class="fold-sum" id="stFoldSum"></span></h2>
+      <div class="hint">When staffed, the board shows the team name, its STEN callsign, and the phone number — stacked — in the NWS Alerts tile.</div>
+      <div class="field"><label>Strike Team West</label><div class="seg red useg" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+      <div class="row">
+        <div class="field"><label>West Callsign</label><input type="text" id="stCsWest" placeholder="STEN124"></div>
+        <div class="field"><label>West Phone</label><input type="tel" id="stPhWest" placeholder="(210) 000-0000"></div>
+      </div>
+      <div class="field" style="margin-top:10px"><label>Strike Team East</label><div class="seg red useg" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+      <div class="row">
+        <div class="field"><label>East Callsign</label><input type="text" id="stCsEast" placeholder="STEN162"></div>
+        <div class="field"><label>East Phone</label><input type="tel" id="stPhEast" placeholder="(210) 000-0000"></div>
       </div>
     </div>
 
@@ -439,6 +474,9 @@
       <button type="button" class="diag-btn" id="diagRun">Run Diagnostics</button>
       <div class="diag-out" id="diagOut" hidden></div>
     </div>
+
+    <!-- Sticky Save — always in reach at the bottom of the screen; the unsaved-orange ring rides here -->
+    <div class="savebar"><button class="btn primary" id="saveTop">Save</button></div>
 
   </div>
 
@@ -504,10 +542,12 @@
     if(!card||!btn||!out) return;
     card.style.display='block';
     function T(ms){ try{ return AbortSignal.timeout(ms); }catch(e){ return undefined; } }
+    var noteFail=function(n){};                                  /* rebound per run to collect failing names */
     function row(name,ok,val,ms){
       var d=document.createElement('div'); d.className='dr '+(ok?'ok':'bad');
       d.innerHTML='<span>'+(ok?'✅':'🔴')+'</span><span class="dn">'+name+'</span><span class="dv">'+String(val).replace(/[<>&]/g,'')+(ms!=null?(' · '+ms+'ms'):'')+'</span>';
       out.appendChild(d); out.scrollTop=out.scrollHeight;
+      if(!ok) noteFail(name);
       return ok;
     }
     function jget(url,opts){ var t0=Date.now();
@@ -524,7 +564,8 @@
         im.src=url+(url.indexOf('?')<0?'?':'&')+'d='+Date.now(); }); }
     function run(){
       btn.disabled=true; btn.textContent='Running…'; out.hidden=false; out.innerHTML='';
-      var bad=0, P=[];
+      var bad=0, P=[], failNames=[];
+      noteFail=function(n){ failNames.push(n); };
       function chk(p){ P.push(p.then(function(ok){ if(!ok) bad++; }).catch(function(){ bad++; })); }
       var FS_KEY2='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ';
       chk(tget('sw.js').then(function(r){ var v=(r.t.match(/bc2fd-dash-v\d+/)||['?'])[0]; return row('Board version (Pages)',r.ok&&v!=='?',v,r.ms); }));
@@ -557,9 +598,15 @@
         return jget('https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents/firehawk/'+doc+'?key='+FS_KEY2)
           .then(function(r){ return row('Firehawk schedule (UAV)',!!(r.j&&r.j.fields),(r.j&&r.j.fields)?'month doc ok':'missing',r.ms); }); })());
       Promise.all(P).then(function(){
-        var s=document.createElement('div'); s.className='diag-sum '+(bad?'down':'allok');
+        /* verdict + failures surface at the TOP — no scrolling to find the red */
+        if(failNames.length){
+          var f=document.createElement('div'); f.className='diag-fails';
+          f.textContent='🔴 DOWN: '+failNames.join(' · ');
+          out.insertBefore(f, out.firstChild);
+        }
+        var s=document.createElement('div'); s.className='diag-sum '+(bad?'down':'allok'); s.style.marginBottom='8px'; s.style.borderTop='none'; s.style.paddingTop='0';
         s.textContent=bad?('⚠ '+bad+' CONNECTION'+(bad===1?'':'S')+' DOWN — board fails loud on those tiles; verify by CAD/radio'):'ALL SYSTEMS GO — every connection healthy';
-        out.appendChild(s); out.scrollTop=out.scrollHeight;
+        out.insertBefore(s, out.firstChild); out.scrollTop=0;
         btn.disabled=false; btn.textContent='Run Diagnostics';
       });
     }
@@ -768,6 +815,7 @@ function defaults(){
     teams:{ b121:false, mac121:false, bat161:false, boat124:false, rescue124:false, west:false, east:false },
     apparatus:{ l123:false, ap124:false, l125:false },   /* true = OUT OF SERVICE */
     tExp:{}, aExp:{},                                    /* unit -> optional expiry (datetime-local); board auto-reverts past it */
+    oosHydrants:[],                                      /* address fragments; board flags matching CAD hydrants with the red slashed pin */
     writeins:[],                                         /* [{name, mode:'on'|'oos', exp}] ad-hoc units */
     announcements:[
       {text:'Water tender OOS until 1500 — cross-staff Engine 62.', by:'BC Alvarez'},
@@ -838,9 +886,34 @@ function activeMed(){
 function fmt(dt){ if(!dt) return ''; var d=new Date(dt); return d.toLocaleString('en-GB',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}); }
 
 
+/* Collapsible cards — tap the title to fold/unfold. Jump chips unfold their target and scroll. */
+document.addEventListener('click',function(e){
+  var j=e.target.closest && e.target.closest('.jump a');
+  if(j){ e.preventDefault();
+    var el=document.querySelector(j.getAttribute('href'));
+    if(el){ el.classList.remove('clps'); try{ el.scrollIntoView({behavior:'smooth',block:'start'}); }catch(err){ el.scrollIntoView(); } }
+    return; }
+  var h=e.target.closest && e.target.closest('.card.fold > h2');
+  if(h) h.parentElement.classList.toggle('clps');
+});
 /* ── render dynamic lists ── */
+function updateHospSum(){                                   /* header count — readable while the card is collapsed */
+  var s=$('hospFoldSum'); if(!s) return;
+  var n=0; for(var k in (state.hospitals||{})){ if(state.hospitals[k] && state.hospitals[k]!=='OPEN') n++; }
+  s.textContent = n ? ('· '+n+' DIVERTING') : '· all open';
+  s.className = 'fold-sum'+(n?' bad':'');
+}
+function updateStrikeSum(){                                 /* strike header — readable while folded */
+  var s=$('stFoldSum'); if(!s) return;
+  var w=!!(state.strikes&&state.strikes.west&&state.strikes.west.active);
+  var e=!!(state.strikes&&state.strikes.east&&state.strikes.east.active);
+  var on=[w?'WEST':null,e?'EAST':null].filter(Boolean);
+  s.textContent = on.length ? ('· '+on.join(' + ')+' STAFFED') : '· none staffed';
+  s.className = 'fold-sum'+(on.length?' bad':'');
+}
 function renderHosp(){
   var box=$('hospList'); box.innerHTML='';
+  updateHospSum();
   HOSPITALS.forEach(function(g){
     var head=document.createElement('div'); head.className='hosp-group'; head.textContent=g.sys; box.appendChild(head);
     g.list.forEach(function(o){
@@ -856,6 +929,8 @@ function renderHosp(){
 }
 function renderAnn(){
   var box=$('annList'); box.innerHTML='';
+  (function(){ var s=$('annFoldSum'); if(s){ var n=(state.announcements||[]).length;
+    s.textContent=n?('· '+n+' active'):'· none'; } })();
   state.announcements.forEach(function(a,i){
     var row=document.createElement('div'); row.className='list-row';
     row.innerHTML='<input type="text" data-i="'+i+'" data-f="anntext" value="'+esc(a.text)+'" placeholder="Announcement">'+
@@ -911,6 +986,8 @@ function pruneCalendar(){
 }
 function renderCal(){
   var box=$('calList'); box.innerHTML='';
+  (function(){ var s=$('calFoldSum'); if(s){ var n=(state.calendar||[]).length;
+    s.textContent=n?('· '+n+' event'+(n===1?'':'s')):'· none'; } })();
   state.calendar.forEach(function(e,i){
     var row=document.createElement('div'); row.className='list-row';
     row.innerHTML='<input type="date" data-i="'+i+'" data-f="date" value="'+esc(toDateInput(e.date))+'" title="Date (optional — blank = today)" style="flex:1 1 132px;min-width:0">'+
@@ -946,7 +1023,7 @@ function hydrate(){
   segSet('segBat161', state.teams.bat161?'on':'off');
   segSet('segBoat124', state.teams.boat124?'on':'off');
   segSet('segRescue124', state.teams.rescue124?'on':'off');
-  segSet('segWest', state.strikes.west.active?'on':'off');
+  segSet('segWest', state.strikes.west.active?'on':'off'); updateStrikeSum();
   segSet('segEast', state.strikes.east.active?'on':'off');
   $('stCsWest').value=state.strikes.west.callsign||''; $('stPhWest').value=state.strikes.west.phone||'';
   $('stCsEast').value=state.strikes.east.callsign||''; $('stPhEast').value=state.strikes.east.phone||'';
@@ -957,7 +1034,7 @@ function hydrate(){
   document.querySelectorAll('.uexp').forEach(function(inp){ var ux=inp.getAttribute('data-ux').split(':');
     inp.value=((ux[0]==='t'?state.tExp:state.aExp)[ux[1]])||''; });
   updateExpVis();
-  renderWi();
+  renderWi(); renderOOS();
   expireSweep();
   renderAnn();
   renderCal();
@@ -978,8 +1055,8 @@ segClick('segMac121', function(v){ state.teams.mac121=(v==='on'); updateExpVis()
 segClick('segBat161', function(v){ state.teams.bat161=(v==='on'); updateExpVis(); });
 segClick('segBoat124', function(v){ state.teams.boat124=(v==='on'); updateExpVis(); });
 segClick('segRescue124', function(v){ state.teams.rescue124=(v==='on'); updateExpVis(); });
-segClick('segWest', function(v){ state.strikes.west.active=(v==='on'); state.teams.west=state.strikes.west.active; });
-segClick('segEast', function(v){ state.strikes.east.active=(v==='on'); state.teams.east=state.strikes.east.active; });
+segClick('segWest', function(v){ state.strikes.west.active=(v==='on'); state.teams.west=state.strikes.west.active; ; try{ updateStrikeSum(); }catch(e){} });
+segClick('segEast', function(v){ state.strikes.east.active=(v==='on'); state.teams.east=state.strikes.east.active; try{ updateStrikeSum(); }catch(e){} });
 segClick('segFlood', function(v){ state.flood.mode=v; if(v==='on') state.fire.redFlag='off'; });
 segClick('segPxShift', function(v){ if(!state.display) state.display={pixelShift:true}; state.display.pixelShift=(v==='on'); });
 segClick('segTakeover', function(v){ if(!state.drone) state.drone={streams:[],bannerOnly:false}; state.drone.takeover=(v==='on'); });
@@ -1123,6 +1200,18 @@ function macAutoPrefill(){
   }).catch(function(){});
 }
 window.macAutoPrefill=macAutoPrefill;
+function renderOOS(){
+  var box=$('oosList'); if(!box) return; box.innerHTML='';
+  if(!Array.isArray(state.oosHydrants)) state.oosHydrants=[];
+  state.oosHydrants.forEach(function(a,i){
+    var row=document.createElement('div'); row.className='list-row';
+    row.innerHTML='<input type="text" data-oos="'+i+'" value="'+esc(a||'')+'" placeholder="Hydrant address (e.g. 11219 CHARISMATIC)" style="flex:1 1 220px;min-width:0">'+
+      '<button class="wdel oosdel" data-oosdel="'+i+'">✕</button>';
+    box.appendChild(row);
+  });
+  var s=$('oosFoldSum'); if(s){ var n=state.oosHydrants.length;
+    s.textContent=n?('· '+n+' OOS'):'· none'; s.className='fold-sum'+(n?' bad':''); }
+}
 function renderWi(){
   var box=$('wiList'); if(!box) return; box.innerHTML='';
   state.writeins.forEach(function(u,i){
@@ -1139,8 +1228,11 @@ document.addEventListener('click', function(e){
   var hc=e.target.closest&&e.target.closest('.hclear');
   if(hc){ var hid=hc.getAttribute('data-hclear'); delete state.hospitals[hid];
     var r=hc.closest('.hosp-row'); if(r){ r.classList.remove('diverted');
-      var sel=r.querySelector('select[data-hid]'); if(sel) sel.value='OPEN'; } return; }
+      var sel=r.querySelector('select[data-hid]'); if(sel) sel.value='OPEN'; }
+    try{ updateHospSum(); }catch(e){} return; }
   if(e.target.id==='addWi'){ state.writeins.push({name:'',mode:'on',exp:''}); renderWi(); return; }
+  if(e.target.id==='addOOS'){ if(!Array.isArray(state.oosHydrants)) state.oosHydrants=[]; state.oosHydrants.push(''); renderOOS(); return; }
+  var od=e.target.closest&&e.target.closest('.oosdel'); if(od){ state.oosHydrants.splice(+od.getAttribute('data-oosdel'),1); renderOOS(); return; }
   var wd=e.target.closest&&e.target.closest('.wdel'); if(wd){ state.writeins.splice(+wd.getAttribute('data-wi'),1); renderWi(); return; }
   var sb=e.target.closest&&e.target.closest('.wiseg button'); if(sb){ var seg=sb.parentElement, i=+seg.getAttribute('data-wi');
     state.writeins[i].mode=sb.getAttribute('data-v'); seg.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===sb);}); return; }
@@ -1148,6 +1240,8 @@ document.addEventListener('click', function(e){
 document.addEventListener('input', function(e){
   var t=e.target, wi=t.getAttribute&&t.getAttribute('data-wi'), wf=t.getAttribute&&t.getAttribute('data-wf');
   if(wi!=null&&wf){ state.writeins[+wi][wf]=t.value; }
+  var oi=t.getAttribute&&t.getAttribute('data-oos');
+  if(oi!=null){ state.oosHydrants[+oi]=t.value; }
 });
 document.addEventListener('change', function(e){
   var t=e.target, ux=t.getAttribute&&t.getAttribute('data-ux');
@@ -1156,7 +1250,8 @@ document.addEventListener('change', function(e){
   if(wi!=null&&wf){ state.writeins[+wi][wf]=t.value; return; }
   var hid=t.getAttribute&&t.getAttribute('data-hid');
   if(hid){ var v=t.value; if(v==='OPEN'){ delete state.hospitals[hid]; } else { state.hospitals[hid]=v; }
-    var r=t.closest('.hosp-row'); if(r) r.classList.toggle('diverted', v!=='OPEN'); return; }
+    var r=t.closest('.hosp-row'); if(r) r.classList.toggle('diverted', v!=='OPEN');
+    try{ updateHospSum(); }catch(e){} return; }
   var i=t.getAttribute&&t.getAttribute('data-i'), f=t.getAttribute&&t.getAttribute('data-f');
   if(i!=null && f==='annexp'){ state.announcements[+i].exp=t.value; }   /* iOS picker commits via change */
 });
@@ -1215,7 +1310,9 @@ function save(){
   var action = lastSaved ? describeChange(lastSaved, state) : '';   /* what changed, for the access log */
   var t=$('savedToast');
   Store.set(state, action).then(function(ok){ saving=false;
-    if(ok){ lastSaved=clone(state); setDirty(false); t.textContent='✓ Saved to board'; t.classList.remove('err'); t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},1600); }
+    if(ok){ lastSaved=clone(state); setDirty(false);
+      document.querySelectorAll('.card.fold').forEach(function(c){ c.classList.add('clps'); });   /* tidy: fold the collapsibles back after a good save */
+      t.textContent='✓ Saved to board'; t.classList.remove('err'); t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},1600); }
     else { t.textContent='✕ Save failed — not on board'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},2800); }
   });
 }
