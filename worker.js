@@ -155,6 +155,16 @@ async function districtRings() { const e = await esdData(); return e ? e.ours : 
    flipped highway N/S addresses; observed flips land >1 km from any ESD while genuine edge calls
    sit ≤~430 m). Unsnappable points go to "LOC?" — a data-quality bucket, not a fake destination. */
 const AID_SNAP_M = 600;
+/* GEOCODE-FLIP INFERENCE — when coordinates are unattributable, the ADDRESS TEXT is the better
+   witness. Verified against the polygons: the south US-281 / S Loop 1604 corridor is ESD 6 GROUND
+   (the department's own 161/162 territory) along its entire length, and Active911 has been observed
+   geocoding "…US Hwy 281 S" addresses onto the NORTH 281/1604 interchange 30 km away. A LOC? point
+   whose address names that corridor is OUR run — not aid, not an error. Patterns are deliberately
+   conservative: "N Loop 1604 E"-style addresses do NOT match. */
+function addrInfersOurs(ad) {
+  ad = String(ad || "");
+  return /US\s*HWY\s*281\s*S\b/i.test(ad) || /\bS\s+LOOP\s*1604\b/i.test(ad) || /\bLOOP\s*1604\s*S\b/i.test(ad);
+}
 function aidDistrictOf(esd, lng, lat) {
   if (!esd || lng == null || lat == null) return "LOC?";
   let bestN = null, bestD = Infinity;
@@ -573,8 +583,10 @@ export default {
               if (!Array.isArray(base.chutes)) base.chutes = [];
               aggs[mh.mon] = base;
             }
-            const sOut = !inOurs(esdA, c.lng, c.lat);
-            aggApply(aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), out: sOut, aid: sOut ? aidDistrictOf(esdA, c.lng, c.lat) : "", units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
+            let sOut = !inOurs(esdA, c.lng, c.lat);
+            let sAid = sOut ? aidDistrictOf(esdA, c.lng, c.lat) : "";
+            if (sAid === "LOC?" && addrInfersOurs(c.address)) { sOut = false; sAid = ""; }
+            aggApply(aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), out: sOut, aid: sAid, units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
             await env.PINS.put(akey, JSON.stringify({
               t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
               u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "" }));
@@ -598,9 +610,11 @@ export default {
               const cls = clsOf(c.ty); if (cls === "gen") continue;
               const mh = ctMonthHour(c.t);
               if (!aggs2[mh.mon]) aggs2[mh.mon] = newAgg();
-              const o = !inOurs(esdR, c.ln, c.la);
+              let o = !inOurs(esdR, c.ln, c.la);
+              let oAid = o ? aidDistrictOf(esdR, c.ln, c.la) : "";
+              if (oAid === "LOC?" && addrInfersOurs(c.ad)) { o = false; oAid = ""; }
               aggApply(aggs2[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.t), out: o,
-                aid: o ? aidDistrictOf(esdR, c.ln, c.la) : "", units: c.u || [], chute: (c.ch >= 1 ? c.ch : null) });
+                aid: oAid, units: c.u || [], chute: (c.ch >= 1 ? c.ch : null) });
             }
             cur2 = lst.list_complete ? null : lst.cursor;
           } while (cur2);
@@ -1002,8 +1016,9 @@ export default {
                     t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
                     u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "" }));
                   const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
-                  const out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */
-                  const aid = out ? aidDistrictOf(esdAll, c.lng, c.lat) : "";
+                  let out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */
+                  let aid = out ? aidDistrictOf(esdAll, c.lng, c.lat) : "";
+                  if (aid === "LOC?" && addrInfersOurs(c.address)) { out = false; aid = ""; }   /* flipped geocode, our corridor -> home */
                   (aggDelta[mh.mon] = aggDelta[mh.mon] || []).push(
                     isNewInc ? { kind: "new", cls, hour: mh.hour, sft, out, aid, units: newUnits, chute: chuteNew ? chute : null }
                              : { kind: "delta", cls, sft, out, units: newUnits, chute: chuteNew ? chute : null });
