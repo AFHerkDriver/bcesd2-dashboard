@@ -127,7 +127,10 @@ async function esdData() {
   try { const r = await fetch("https://afherkdriver.github.io/bcesd2-dashboard/esd-districts.json");
     if (r.ok) { const j = await r.json();
       const byName = {}; for (const nm in j) byName[nm] = fillHoles(j[nm]);
-      _esd = { ours: [...(byName.BC2 || []), ...(byName.BC6 || [])], byName }; _esdAt = Date.now(); } } catch (e) {}
+      let cities = {};
+      try { const rc = await fetch("https://afherkdriver.github.io/bcesd2-dashboard/bexar-cities.json");
+        if (rc.ok) { const jc = await rc.json(); for (const nm in jc) cities[nm] = fillHoles(jc[nm]); } } catch (e) {}
+      _esd = { ours: [...(byName.BC2 || []), ...(byName.BC6 || [])], byName, cities }; _esdAt = Date.now(); } } catch (e) {}
   return _esd;
 }
 /* Metres from a point to the nearest boundary segment — the annexed 1604/US-90 corridor strips are
@@ -171,8 +174,15 @@ function aidDistrictOf(esd, lng, lat) {
   for (const nm in esd.byName) { if (nm === "BC2" || nm === "BC6") continue;
     if (inDistrict(esd.byName[nm], lng, lat)) return nm.replace("BC", "ESD ");
     const d = distToRingsM(esd.byName[nm], lng, lat);
-    if (d < bestD) { bestD = d; bestN = nm; } }
-  if (bestN && bestD <= AID_SNAP_M) return bestN.replace("BC", "ESD ");
+    if (d < bestD) { bestD = d; bestN = "ESD:" + nm; } }
+  /* Suburban CITY fire departments (Leon Valley, Helotes, Castle Hills…) from the county
+     jurisdictions layer — named destinations the department actually supports. SA itself and the
+     military installations are excluded from the file per department ground truth. */
+  for (const nm in (esd.cities || {})) {
+    if (inDistrict(esd.cities[nm], lng, lat)) return nm;
+    const d = distToRingsM(esd.cities[nm], lng, lat);
+    if (d < bestD) { bestD = d; bestN = "CITY:" + nm; } }
+  if (bestN && bestD <= AID_SNAP_M) return bestN.replace(/^ESD:BC/, "ESD ").replace(/^CITY:/, "");
   return "LOC?";
 }
 function inDistrict(rings, lng, lat) {
