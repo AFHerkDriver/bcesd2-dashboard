@@ -127,10 +127,18 @@ async function esdData() {
   try { const r = await fetch("https://afherkdriver.github.io/bcesd2-dashboard/esd-districts.json");
     if (r.ok) { const j = await r.json();
       const byName = {}; for (const nm in j) byName[nm] = fillHoles(j[nm]);
-      let cities = {};
+      let cities = {}, cityAlias = {};
       try { const rc = await fetch("https://afherkdriver.github.io/bcesd2-dashboard/bexar-cities.json");
-        if (rc.ok) { const jc = await rc.json(); for (const nm in jc) cities[nm] = fillHoles(jc[nm]); } } catch (e) {}
-      _esd = { ours: [...(byName.BC2 || []), ...(byName.BC6 || [])], byName, cities }; _esdAt = Date.now(); } } catch (e) {}
+        if (rc.ok) { const jc = await rc.json(); for (const nm in jc) cities[nm] = fillHoles(jc[nm]);
+          /* GEOMETRY-DERIVED ALIASES — small cities inside an ESD are served BY that ESD (dept ground
+             truth: "ESD 8 is Grey Forest"). Fold the city name into the ESD ledger key so one real
+             department never splits across two names (city fringes can poke outside the ESD polygon). */
+          for (const nm in cities) { const r0 = cities[nm][0]; if (!r0) continue;
+            let sx = 0, sy = 0; r0.forEach(p => { sx += p[0]; sy += p[1]; });
+            for (const en in byName) { if (en === "BC2" || en === "BC6") continue;
+              if (inDistrict(byName[en], sx / r0.length, sy / r0.length)) { cityAlias[nm] = en.replace("BC", "ESD "); break; } } }
+        } } catch (e) {}
+      _esd = { ours: [...(byName.BC2 || []), ...(byName.BC6 || [])], byName, cities, cityAlias }; _esdAt = Date.now(); } } catch (e) {}
   return _esd;
 }
 /* Metres from a point to the nearest boundary segment — the annexed 1604/US-90 corridor strips are
@@ -178,11 +186,12 @@ function aidDistrictOf(esd, lng, lat) {
   /* Suburban CITY fire departments (Leon Valley, Helotes, Castle Hills…) from the county
      jurisdictions layer — named destinations the department actually supports. SA itself and the
      military installations are excluded from the file per department ground truth. */
+  const alias = (nm) => (esd.cityAlias && esd.cityAlias[nm]) || nm;   /* Grey Forest -> ESD 8, etc. */
   for (const nm in (esd.cities || {})) {
-    if (inDistrict(esd.cities[nm], lng, lat)) return nm;
+    if (inDistrict(esd.cities[nm], lng, lat)) return alias(nm);
     const d = distToRingsM(esd.cities[nm], lng, lat);
     if (d < bestD) { bestD = d; bestN = "CITY:" + nm; } }
-  if (bestN && bestD <= AID_SNAP_M) return bestN.replace(/^ESD:BC/, "ESD ").replace(/^CITY:/, "");
+  if (bestN && bestD <= AID_SNAP_M) return bestN.indexOf("CITY:") === 0 ? alias(bestN.slice(5)) : bestN.replace(/^ESD:BC/, "ESD ");
   return "LOC?";
 }
 function inDistrict(rings, lng, lat) {
