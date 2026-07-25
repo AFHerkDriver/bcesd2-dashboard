@@ -308,14 +308,11 @@
       <span style="color:var(--dim)">&rsaquo;</span>
     </a>
 
-    <!-- Shift & UAV — auto from Firehawk, not editable here -->
-    <div class="card">
-      <h2>Shift &amp; UAV <span class="tag live">AUTO · FIREHAWK</span></h2>
-      <div class="hint">Who's on right now — pulled live from Firehawk. Advisory only; not set here.</div>
-      <div class="adv">
-        <div class="advchip" id="advShiftChip"><span class="k">ON DUTY</span><span class="v" id="advShift">…</span></div>
-        <div class="advchip"><span class="k">UAV</span><span class="v" id="advUav">…</span></div>
-      </div>
+    <!-- Chute Times — admin-only gee-whiz: turnout stats from the 48h call log -->
+    <div class="card" id="chuteCard" style="display:none">
+      <h2>Chute Times</h2>
+      <div class="hint">Turnout measured dispatch &rarr; FIRST apparatus attaching, from the 48h call log. Calls where dispatch auto-assigned an apparatus can&rsquo;t be measured and are skipped. NFPA 1710 turnout benchmarks: 60s EMS / 80s fire at the 90th percentile.</div>
+      <div id="chuteBody" class="chute-body">Loading&hellip;</div>
     </div>
 
     <!-- Announcements (top ticker) — collapsible, count in header -->
@@ -452,12 +449,6 @@
       </div>
     </div>
 
-    <!-- Chute Times — admin-only gee-whiz: turnout stats from the 48h call log -->
-    <div class="card" id="chuteCard" style="display:none">
-      <h2>Chute Times</h2>
-      <div class="hint">Turnout measured dispatch &rarr; FIRST apparatus attaching, from the 48h call log. Calls where dispatch auto-assigned an apparatus can&rsquo;t be measured and are skipped. NFPA 1710 turnout benchmarks: 60s EMS / 80s fire at the 90th percentile.</div>
-      <div id="chuteBody" class="chute-body">Loading&hellip;</div>
-    </div>
 
     <!-- Access Log — admin PIN only; who opened (or tried to open) this control panel -->
     <div class="card" id="accCard">
@@ -1317,36 +1308,6 @@ function save(){
   });
 }
 $('saveTop').addEventListener('click',save);
-
-/* ── advisory: on-duty shift + UAV, read-only (mirrors the board) ── */
-(function(){
-  var K='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ', B='https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents';
-  var ANCHOR=Date.UTC(2026,0,1), PAT=['A','A','B','B','C','C'], LEAD=1;
-  function todayShift(){   /* CENTRAL calendar fields, not device — a phone in another zone must show the same shift as the wall */
-    try{
-      var p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit'}).formatToParts(new Date());
-      var g=function(t){ return +((p.find(function(x){ return x.type===t; })||{}).value); };
-      var y=g('year'), mo=g('month'), da=g('day');
-      if((g('hour')%24)<7){ var dd=new Date(Date.UTC(y,mo-1,da)); dd.setUTCDate(dd.getUTCDate()-1); y=dd.getUTCFullYear(); mo=dd.getUTCMonth()+1; da=dd.getUTCDate(); }
-      var d=Math.floor((Date.UTC(y,mo-1,da)-ANCHOR)/86400000); return PAT[((d%6)+6)%6];
-    }catch(e){ var s=new Date(Date.now()-7*3600000); var d2=Math.floor((Date.UTC(s.getFullYear(),s.getMonth(),s.getDate())-ANCHOR)/86400000); return PAT[((d2%6)+6)%6]; }
-  }
-  function decodeDay(day){ var N=function(x){ if(x==null) return null; var v=parseInt(x,10); return isNaN(v)?null:v; };   /* NaN must read as "no pilot", never as a value */ var ex=(day.extra||[]).map(N).filter(function(x){return x!=null;}); var a,r;
-    if(day.lead!==undefined){a=!!day.lead;r=N(day.rpic);} else {var id=N(day.rpic);a=(id===LEAD)||ex.indexOf(LEAD)!==-1;r=(id!=null&&id!==LEAD)?id:null;} return {u121:!!a,u124:r!=null}; }
-  function setTxt(id,t){ var e=document.getElementById(id); if(e)e.textContent=t; }
-  var _sh=todayShift(); setTxt('advShift', _sh);
-  var _sc=document.getElementById('advShiftChip'); if(_sc) _sc.className='advchip s'+String(_sh).toLowerCase();   /* A red · B blue · C green, matching the board */
-  var now=new Date();
-  fetch(B+'/firehawk/schedule_'+now.getFullYear()+'_'+now.getMonth()+'?key='+K).then(function(r){
-    if(r.status===404) return {__none:true}; if(!r.ok) throw new Error('HTTP '+r.status); return r.json();
-  }).then(function(doc){
-    if(doc&&doc.__none){ setTxt('advUav','OOS'); return; }
-    var dj=doc&&doc.fields&&doc.fields.daysJson&&doc.fields.daysJson.stringValue; if(!dj){ setTxt('advUav','OOS'); return; }
-    var days=JSON.parse(dj), d=now.getDate(), day=days[d]||days[String(d)]||days['d'+d]||null;
-    if(!day){ setTxt('advUav','OOS'); return; }
-    var dec=decodeDay(day); setTxt('advUav', dec.u121&&dec.u124?'121 / 124':dec.u121?'121':dec.u124?'124':'OOS');
-  }).catch(function(){ setTxt('advUav','?'); });
-})();
 
 /* ── load shared state from Firestore, then render; fail loud on read error ── */
 function ensureShape(s){ var d=defaults();

@@ -1384,7 +1384,7 @@
       var C2D={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};
       function ensure(){ if(cv) return;
         cv=document.createElement("canvas");
-        cv.style.cssText="position:absolute;left:0;top:0;pointer-events:none;z-index:398";
+        cv.style.cssText="position:absolute;left:0;top:0;pointer-events:none;z-index:650";   /* Leaflet's map pane stack is z-400 — the canvas must sit ABOVE it (and below controls at 1000) or the particles render under the tiles, invisible */
         map.getContainer().appendChild(cv); ctx=cv.getContext("2d"); }
       function fit(){ var s=map.getSize(); if(cv.width!==s.x||cv.height!==s.y){ cv.width=s.x; cv.height=s.y; } }
       function field(x,y){
