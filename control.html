@@ -417,14 +417,6 @@
       </div>
     </div>
 
-    <!-- Diagnostics — owner only: live health sweep of every data connection the board depends on -->
-    <div class="card" id="diagCard" style="display:none">
-      <h2>🩺 Diagnostics</h2>
-      <div class="hint">Checks every connection the board depends on, from THIS device: worker routes, NWS (+ hourly), backup weather, flood sensors, burn ban, rain radar sources, county parcel &amp; hydrant services, map tiles, Firestore state, and the Firehawk schedule. Green = healthy; red = that source is down (the board fails loud on it, not silently).</div>
-      <button type="button" class="diag-btn" id="diagRun">Run Diagnostics</button>
-      <div class="diag-out" id="diagOut" hidden></div>
-    </div>
-
     <!-- Chute Times — admin-only gee-whiz: turnout stats from the 48h call log -->
     <div class="card" id="chuteCard" style="display:none">
       <h2>Chute Times</h2>
@@ -438,6 +430,14 @@
       <div class="hint">Who&rsquo;s opened this control panel and what they changed &mdash; grouped by person, most-recently-active first. Tap a name to expand their logins (🔑) and board edits (✏️). Rejected PINs bucket under &ldquo;Unknown / failed.&rdquo; Admin PIN only.</div>
       <div class="acc-body" id="accBody"><div class="acc-empty">Loading&hellip;</div></div>
       <button type="button" class="acc-reset" id="accReset">Reset Log</button>
+    </div>
+
+    <!-- Diagnostics — owner only, LAST card on the page: live health sweep of every data connection -->
+    <div class="card" id="diagCard" style="display:none">
+      <h2>🩺 Diagnostics</h2>
+      <div class="hint">Checks every connection the board depends on, from THIS device: worker routes, NWS (+ hourly), backup weather, flood sensors, burn ban, rain radar sources, county parcel &amp; hydrant services, map tiles, Firestore state, and the Firehawk schedule. Green = healthy; red = that source is down (the board fails loud on it, not silently).</div>
+      <button type="button" class="diag-btn" id="diagRun">Run Diagnostics</button>
+      <div class="diag-out" id="diagOut" hidden></div>
     </div>
 
   </div>
@@ -583,8 +583,10 @@
         var med=vals[Math.floor((vals.length-1)/2)];
         var p90=vals[Math.min(vals.length-1, Math.ceil(vals.length*0.9)-1)];
         var fast=runs.reduce(function(a,b){ return b.chute<a.chute?b:a; });
-        var st={}; runs.forEach(function(c){ var m=/(\d{3})$/.exec(String(c.chuteUnit||'')); var k=m?('S'+m[1]):'?';
-          (st[k]=st[k]||[]).push(c.chute); });
+        var st={}; runs.forEach(function(c){ var m=/(\d{3})$/.exec(String(c.chuteUnit||'')); if(!m) return;
+          var s=m[1]; s=s==='126'?'123':s==='120'?'121':(s==='119'||s==='127')?'124':s;   /* extra ambulances ride with their staffed station */
+          if(['121','122','123','124','125','161','162'].indexOf(s)<0) return;            /* department stations only */
+          (st['S'+s]=st['S'+s]||[]).push(c.chute); });
         var rows=Object.keys(st).sort().map(function(k){ var v=st[k];
           return '<tr><td>'+k+'</td><td class="num">'+fmt(v.reduce(function(a,b){return a+b;},0)/v.length)+'</td><td>'+v.length+'</td></tr>'; }).join('');
         body.innerHTML=

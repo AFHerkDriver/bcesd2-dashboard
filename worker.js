@@ -115,21 +115,55 @@ function sftOf(iso) {
    excluded from class/hour/station/chute stats. Unknown location or fetch failure -> counted as ours
    (our dispatch feed is our work by default). The live TENDER OPS call flag ignores borders on purpose. */
 let _esd = null, _esdAt = 0;
+function ringHas(r, lng, lat) { let ins = false, jj = r.length - 1;
+  for (let i = 0; i < r.length; i++) { const xi = r[i][0], yi = r[i][1], xj = r[jj][0], yj = r[jj][1];
+    if ((yi > lat) !== (yj > lat) && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) ins = !ins; jj = i; }
+  return ins; }
+/* Drop HOLE rings (a ring whose first vertex sits inside another ring of the same district) — those
+   are annexed city pockets; a call inside one is operationally the department's ground. */
+function fillHoles(rings) { return (rings || []).filter((r, i) => !(rings || []).some((r2, i2) => i2 !== i && ringHas(r2, r[0][0], r[0][1]))); }
 async function esdData() {
   if (_esd && Date.now() - _esdAt < 6 * 3600 * 1000) return _esd;
   try { const r = await fetch("https://afherkdriver.github.io/bcesd2-dashboard/esd-districts.json");
     if (r.ok) { const j = await r.json();
-      _esd = { ours: [...(j.BC2 || []), ...(j.BC6 || [])], byName: j }; _esdAt = Date.now(); } } catch (e) {}
+      const byName = {}; for (const nm in j) byName[nm] = fillHoles(j[nm]);
+      _esd = { ours: [...(byName.BC2 || []), ...(byName.BC6 || [])], byName }; _esdAt = Date.now(); } } catch (e) {}
   return _esd;
 }
+/* Metres from a point to the nearest boundary segment — the annexed 1604/US-90 corridor strips are
+   carved OUT of the legal ESD 2 polygon yet are the department's first-due, so "ours" is inside the
+   filled polygon OR within OURS_BUFFER_M of its edge. Verified against live calls: corridor runs sit
+   133-177 m out; the nearest TRUE mutual-aid run is 2.8 km out — clean separation. */
+const OURS_BUFFER_M = 1200;
+function distToRingsM(rings, lng, lat) {
+  const mLat = 111320, mLng = 111320 * Math.cos(lat * Math.PI / 180); let best = Infinity;
+  for (const r of rings) { for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length];
+    const ax = (a[0] - lng) * mLng, ay = (a[1] - lat) * mLat, bx = (b[0] - lng) * mLng, by = (b[1] - lat) * mLat;
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    let t = L2 ? ((-ax) * dx + (-ay) * dy) / L2 : 0; t = Math.max(0, Math.min(1, t));
+    const d = Math.hypot(ax + t * dx, ay + t * dy); if (d < best) best = d; } }
+  return best; }
+function inOurs(esd, lng, lat) {
+  if (!esd || lng == null || lat == null) return true;          /* unknown -> ours */
+  if (inDistrict(esd.ours, lng, lat)) return true;
+  return distToRingsM(esd.ours, lng, lat) <= OURS_BUFFER_M;
+}
 async function districtRings() { const e = await esdData(); return e ? e.ours : null; }
-/* Which NEIGHBOR district a cross-border call landed in — mutual-aid attribution ("7" = ESD 7…);
-   ground in no ESD (City of SA proper etc.) attributes to "SA/OTHER". */
+/* Which NEIGHBOR district a cross-border call landed in. GROUND TRUTH from the department: they
+   only ever support other ESDs, never the City of SA — so a point in no ESD is either boundary
+   imprecision (snap to the nearest ESD when within AID_SNAP_M) or a GEOCODE ERROR (Active911 has
+   flipped highway N/S addresses; observed flips land >1 km from any ESD while genuine edge calls
+   sit ≤~430 m). Unsnappable points go to "LOC?" — a data-quality bucket, not a fake destination. */
+const AID_SNAP_M = 600;
 function aidDistrictOf(esd, lng, lat) {
-  if (!esd || lng == null || lat == null) return "SA/OTHER";
+  if (!esd || lng == null || lat == null) return "LOC?";
+  let bestN = null, bestD = Infinity;
   for (const nm in esd.byName) { if (nm === "BC2" || nm === "BC6") continue;
-    if (inDistrict(esd.byName[nm], lng, lat)) return nm.replace("BC", "ESD "); }
-  return "SA/OTHER";
+    if (inDistrict(esd.byName[nm], lng, lat)) return nm.replace("BC", "ESD ");
+    const d = distToRingsM(esd.byName[nm], lng, lat);
+    if (d < bestD) { bestD = d; bestN = nm; } }
+  if (bestN && bestD <= AID_SNAP_M) return bestN.replace("BC", "ESD ");
+  return "LOC?";
 }
 function inDistrict(rings, lng, lat) {
   if (!rings || lng == null || lat == null) return true;      /* unknown -> ours */
@@ -150,9 +184,16 @@ function aggApply(agg, ev) {
     if (ev.hour >= 0 && ev.hour < 24) agg.byHour[ev.hour]++;
     if (ev.sft) { agg.bySft = agg.bySft || {}; agg.bySft[ev.sft] = (agg.bySft[ev.sft] || 0) + 1; }
   }
+  /* Department stations ONLY (121-125, 161, 162). Extra ambulances ride with a staffed station:
+     M126 -> 123, M120 -> 121, M119/M127 -> 124 (same remap as the board tally). Units that map to
+     no department station (neighbor apparatus on our ground) are excluded from workload stats. */
   (ev.units || []).forEach(u => { if (!isRealApparatus(u)) return;
+    const m = /(\d{3})$/.exec(u); if (!m) return;
+    let st = m[1];
+    st = st === "126" ? "123" : st === "120" ? "121" : (st === "119" || st === "127") ? "124" : st;
+    if (["121","122","123","124","125","161","162"].indexOf(st) < 0) return;
     agg.byUnit[u] = (agg.byUnit[u] || 0) + 1;
-    const m = /(\d{3})$/.exec(u); if (m) agg.bySta[m[1]] = (agg.bySta[m[1]] || 0) + 1; });
+    agg.bySta[st] = (agg.bySta[st] || 0) + 1; });
   if (ev.chute != null && agg.chutes.length < 2000) agg.chutes.push([ev.cls, ev.chute, ev.sft || ""]);
 }
 function stationsOf(units) {
@@ -516,7 +557,6 @@ export default {
           const cl = await env.PINS.list({ prefix: "call:", limit: 1000 });
           const aggs = {};
           const esdA = await esdData();
-          const dR = esdA ? esdA.ours : null;
           for (const kk of cl.keys) {
             const v = await env.PINS.get(kk.name); if (!v) continue;
             let c; try { c = JSON.parse(v); } catch { continue; }
@@ -533,7 +573,7 @@ export default {
               if (!Array.isArray(base.chutes)) base.chutes = [];
               aggs[mh.mon] = base;
             }
-            const sOut = !inDistrict(dR, c.lng, c.lat);
+            const sOut = !inOurs(esdA, c.lng, c.lat);
             aggApply(aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), out: sOut, aid: sOut ? aidDistrictOf(esdA, c.lng, c.lat) : "", units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
             await env.PINS.put(akey, JSON.stringify({
               t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
@@ -541,6 +581,33 @@ export default {
           }
           for (const m in aggs) await env.PINS.put("agg:" + m, JSON.stringify(aggs[m]));
           await env.PINS.put("archmeta:seeded", new Date().toISOString());
+        }
+        /* ?rebuild=1 (admin only): re-aggregate ALL history from the permanent arch: rows under the
+           CURRENT rules — run after a rules change (ours-buffer, station remap) so history matches
+           the new definitions instead of only new calls. Archive rows are the ground truth. */
+        if (url.searchParams.get("rebuild") === "1") {
+          if ((gate.who.tier || "") !== "admin") return json({ ok: false, error: "admin only" }, 403);
+          const esdR = await esdData();
+          const aggs2 = {}; let scanned = 0, cur2;
+          do {
+            const lst = await env.PINS.list({ prefix: "arch:", cursor: cur2, limit: 1000 });
+            for (const kk of lst.keys) {
+              const v = await env.PINS.get(kk.name); if (!v) continue;
+              let c; try { c = JSON.parse(v); } catch { continue; }
+              scanned++;
+              const cls = clsOf(c.ty); if (cls === "gen") continue;
+              const mh = ctMonthHour(c.t);
+              if (!aggs2[mh.mon]) aggs2[mh.mon] = newAgg();
+              const o = !inOurs(esdR, c.ln, c.la);
+              aggApply(aggs2[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.t), out: o,
+                aid: o ? aidDistrictOf(esdR, c.ln, c.la) : "", units: c.u || [], chute: (c.ch >= 1 ? c.ch : null) });
+            }
+            cur2 = lst.list_complete ? null : lst.cursor;
+          } while (cur2);
+          const oldA = await env.PINS.list({ prefix: "agg:", limit: 60 });
+          for (const kk of oldA.keys) if (!aggs2[kk.name.slice(4)]) await env.PINS.delete(kk.name);
+          for (const m in aggs2) await env.PINS.put("agg:" + m, JSON.stringify(aggs2[m]));
+          /* falls through to the normal listing so the caller sees the corrected months */
         }
         const listed = await env.PINS.list({ prefix: "agg:", limit: 60 });
         const months = [];
@@ -882,8 +949,7 @@ export default {
            attachments. Every call here came from a SUCCESSFUL detail fetch, so no write-from-failed-read.
            Log failures never break the live feed. */
         const aggDelta = {};   /* month -> events; flushed once per poll so rollup writes stay bounded */
-        const esdAll = await esdData();          /* official borders: ours for the metrics split, neighbors for mutual-aid attribution */
-        const dRings = esdAll ? esdAll.ours : null;
+        const esdAll = await esdData();          /* official borders (holes filled): ours+buffer for the metrics split, neighbors for mutual-aid attribution */
         for (const c of calls) {
           try {
             /* Key the log by CAD case number when present, so a re-tone that surfaces long after the
@@ -936,7 +1002,7 @@ export default {
                     t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
                     u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "" }));
                   const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
-                  const out = !inDistrict(dRings, c.lng, c.lat);   /* cross-border response -> mutual-aid tally */
+                  const out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */
                   const aid = out ? aidDistrictOf(esdAll, c.lng, c.lat) : "";
                   (aggDelta[mh.mon] = aggDelta[mh.mon] || []).push(
                     isNewInc ? { kind: "new", cls, hour: mh.hour, sft, out, aid, units: newUnits, chute: chuteNew ? chute : null }

@@ -172,8 +172,9 @@
     $('volMonths').innerHTML=months.slice(0,13).reverse().map(function(m){
       return '<div class="bar"><span class="l">'+esc(m.m)+'</span><span class="t"><i style="width:'+Math.round((m.n||0)/mx*100)+'%"></i></span><span class="v">'+(m.n||0)+'</span></div>';}).join('');
     var aidKeys=Object.keys(all.byAid).sort(function(a,b){return all.byAid[b]-all.byAid[a];});
+    var aidLbl=function(k){ return (k==='LOC?'||k==='SA/OTHER') ? 'unverified loc (geocode)' : k; };   /* dept never supports SA — leftovers are location-data errors */
     $('xborder').innerHTML = all.nOut ? ('🤝 <b style="color:var(--text)">Mutual aid given: '+all.nOut+'</b> response'+(all.nOut===1?'':'s')+
-      (aidKeys.length?(' — '+aidKeys.map(function(k){return esc(k)+' <b style="color:var(--teal)">×'+all.byAid[k]+'</b>';}).join(' · ')):'')+
+      (aidKeys.length?(' — '+aidKeys.map(function(k){return esc(aidLbl(k))+' <b style="color:var(--teal)">×'+all.byAid[k]+'</b>';}).join(' · ')):'')+
       ' <span style="color:var(--dim)">(excluded from department metrics; TENDER flags still apply on scene)</span>') : '';
 
     /* class mix */
