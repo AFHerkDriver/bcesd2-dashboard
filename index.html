@@ -1411,7 +1411,11 @@
         if(!windOn()){ if(cv){ ctx.clearRect(0,0,cv.width,cv.height); cv.style.display="none"; parts=[]; } return; }
         ensure(); fit(); cv.style.display="block";
         while(parts.length<300) parts.push(spawn());
-        ctx.fillStyle="rgba(13,17,23,0.10)"; ctx.fillRect(0,0,cv.width,cv.height);
+        /* fade the canvas's OWN alpha (destination-out) — painting a translucent dark wash instead
+           compounds to solid black over the map within seconds (the bug the user caught live) */
+        ctx.globalCompositeOperation="destination-out";
+        ctx.fillStyle="rgba(0,0,0,0.08)"; ctx.fillRect(0,0,cv.width,cv.height);
+        ctx.globalCompositeOperation="source-over";
         ctx.strokeStyle="rgba(190,230,255,0.55)"; ctx.lineWidth=1.1; ctx.beginPath();
         for(var i=0;i<parts.length;i++){ var p=parts[i];
           var f=field(p.x,p.y); if(!f){ parts[i]=spawn(); continue; }
