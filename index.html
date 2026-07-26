@@ -1417,9 +1417,13 @@
         ctx.fillStyle="rgba(0,0,0,0.08)"; ctx.fillRect(0,0,cv.width,cv.height);
         ctx.globalCompositeOperation="source-over";
         ctx.strokeStyle="rgba(190,230,255,0.55)"; ctx.lineWidth=1.1; ctx.beginPath();
+        /* windy.com pacing: ~0.028 px/frame per mph at district zoom (a 10 mph breeze DRIFTS at
+           ~17 px/s — the trail length carries the speed impression, not frantic motion), scaled
+           with zoom so particles read as ground motion. The old 0.16 ran ~6x too hot. */
+        var kz=0.028*Math.min(3,Math.max(0.5,Math.pow(2,(map.getZoom()||12)-12)));
         for(var i=0;i<parts.length;i++){ var p=parts[i];
           var f=field(p.x,p.y); if(!f){ parts[i]=spawn(); continue; }
-          var nx=p.x+f.u*0.16, ny=p.y+f.v*0.16;
+          var nx=p.x+f.u*kz, ny=p.y+f.v*kz;
           ctx.moveTo(p.x,p.y); ctx.lineTo(nx,ny);
           p.x=nx; p.y=ny; p.life--;
           if(p.life<=0||nx<-4||ny<-4||nx>cv.width+4||ny>cv.height+4) parts[i]=spawn(); }
