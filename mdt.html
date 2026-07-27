@@ -36,6 +36,9 @@
   .ccard .uline { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; font-size: 13px; }
   .ccard .uline b { color: #FFC107; font-weight: 500; margin-right: 4px; }
   .ccard .utag { border: 1px solid #8B949E; border-radius: 6px; padding: 1px 9px; color: #E6EDF3; font-size: 13px; }
+  .ccard.slim { display: flex; gap: 10px; align-items: baseline; padding: 8px 12px; }
+  .ccard.slim .sty { font-family: 'Bebas Neue', sans-serif; font-size: 17px; letter-spacing: 1px; white-space: nowrap; }
+  .ccard.slim .sad { font-size: 13px; color: #E6EDF3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .ccard .navbtn { margin-top: 8px; display: inline-flex; align-items: center; gap: 7px; background: #1C2230;
                    color: #3FB950; border: 1px solid #3FB950; text-decoration: none;
                    height: 38px; vertical-align: top; line-height: 1;   /* fixed height + top align: the Apple glyph's font metrics can't skew the pair */
@@ -428,6 +431,39 @@
     return "https://maps.apple.com/?daddr=" + encodeURIComponent(String(c.address || "") + ", Bexar County, TX") + "&dirflg=d";
   }
   function ageMin(c) { const t = Date.parse(c.logged || c.started || ""); return isNaN(t) ? 999 : (Date.now() - t) / 60000; }
+  /* ── call band rendering. PHONE with two calls: only ONE card expands at a time — the other
+     collapses to a slim colored bar (type + address); tapping the bar swaps which is expanded, so
+     the map is never buried under two full cards on a pocket screen. Tablet/MDT show both full. */
+  let lastTop = [], expandedId = null;
+  const phoneMode = () => { try { return window.matchMedia("(max-width: 640px)").matches; } catch (e) { return false; } };
+  function buildCard(c, slim) {
+    const col = callColor(c.type);
+    const attrs = ' data-id="' + esc(c.id) + '"' + (c.lat != null && c.lng != null ? ' data-ll="' + c.lat + "," + c.lng + '"' : "");
+    if (slim) return '<div class="ccard slim"' + attrs + ' style="border-color:' + col + '">' +
+      '<span class="sty" style="color:' + col + '">' + esc(c.type) + "</span>" +
+      '<span class="sad">' + esc(c.address) + "</span></div>";
+    return '<div class="ccard"' + attrs + ' style="border-color:' + col + '">' +
+            '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
+            '<div class="ad">' + esc(c.address) + '</div>' +
+            (c.cross ? '<div class="meta"><span>X: ' + esc(c.cross) + "</span></div>" : "") +
+            (() => {                                       /* channel + assigned units get their OWN line, units as visible tags */
+              const us = (c.units || []).filter(isApp).length ? (c.units || []).filter(isApp) : (c.units || []);
+              const inner = (c.channel ? "<b>" + esc(c.channel) + "</b>" : "") + us.map(u => '<span class="utag">' + esc(u) + "</span>").join("");
+              return inner ? '<div class="uline">' + inner + "</div>" : "";
+            })() +
+            '<a class="navbtn" href="' + gmapsUrl(c) + '" target="_blank" rel="noopener"><span class="gbadge"><svg viewBox="0 0 48 48" width="13" height="13"><path fill="currentColor" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="currentColor" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="currentColor" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="currentColor" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg></span><span class="btxt">GOOGLE MAPS &#10148;</span></a> ' +
+            '<a class="navbtn apple" href="' + amapsUrl(c) + '" target="_blank" rel="noopener"><span class="alogo">&#63743;</span><span class="btxt">APPLE MAPS</span></a>' +
+          "</div>";
+  }
+
+  function renderBand() {
+    if (!lastTop.length) { $("callBand").innerHTML = '<div id="noCalls">NO ACTIVE CALLS · live</div>'; return; }
+    if (!phoneMode() || lastTop.length === 1) { $("callBand").innerHTML = lastTop.map(c => buildCard(c, false)).join(""); return; }
+    const exp = lastTop.find(c => c.id === expandedId) || lastTop[0];
+    $("callBand").innerHTML = lastTop.map(c => buildCard(c, c.id !== exp.id)).join("");
+  }
+  try { window.matchMedia("(max-width: 640px)").addEventListener("change", renderBand); } catch (e) {}
+
   function loadDispatch() {
     fetch(WORKER + "/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: PIN }) })
       .then(r => { if (r.status === 401) { showGate("PIN expired — sign in again"); throw 0; } return r.json(); })
@@ -440,23 +476,9 @@
         const live = (j.calls || []).filter(c => ageMin(c) <= (isGen(c) ? 5 : 15) && String(c.address || "").trim());
         /* call band: newest two */
         live.sort((a, b) => String(b.started).localeCompare(String(a.started)));
-        const top = live.slice(0, 2);
-        $("callBand").innerHTML = top.length ? top.map(c => {
-          const col = callColor(c.type);
-          return '<div class="ccard"' + (c.lat != null && c.lng != null ? ' data-ll="' + c.lat + ',' + c.lng + '"' : "") +
-            ' style="border-color:' + col + '">' +
-            '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
-            '<div class="ad">' + esc(c.address) + '</div>' +
-            (c.cross ? '<div class="meta"><span>X: ' + esc(c.cross) + "</span></div>" : "") +
-            (() => {                                       /* channel + assigned units get their OWN line, units as visible tags */
-              const us = (c.units || []).filter(isApp).length ? (c.units || []).filter(isApp) : (c.units || []);
-              const inner = (c.channel ? "<b>" + esc(c.channel) + "</b>" : "") + us.map(u => '<span class="utag">' + esc(u) + "</span>").join("");
-              return inner ? '<div class="uline">' + inner + "</div>" : "";
-            })() +
-            '<a class="navbtn" href="' + gmapsUrl(c) + '" target="_blank" rel="noopener"><span class="gbadge"><svg viewBox="0 0 48 48" width="13" height="13"><path fill="currentColor" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="currentColor" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="currentColor" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="currentColor" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg></span><span class="btxt">GOOGLE MAPS &#10148;</span></a> ' +
-            '<a class="navbtn apple" href="' + amapsUrl(c) + '" target="_blank" rel="noopener"><span class="alogo">&#63743;</span><span class="btxt">APPLE MAPS</span></a>' +
-          "</div>"; }).join("")
-          : '<div id="noCalls">NO ACTIVE CALLS · live</div>';
+        lastTop = live.slice(0, 2);
+        renderBand();
+
         /* map pins + one-time focus per new call */
         callLayer.clearLayers();
         let newest = null;
@@ -502,7 +524,9 @@
   $("callBand").addEventListener("click", (e) => {
     if (e.target.closest(".navbtn")) return;
     const card = e.target.closest(".ccard");
-    if (!card || !card.dataset.ll || !map) return;
+    if (!card) return;
+    if (card.classList.contains("slim")) { expandedId = card.dataset.id; renderBand(); }   /* tap a slim bar -> it becomes the expanded card */
+    if (!card.dataset.ll || !map) return;
     const p = card.dataset.ll.split(",").map(Number);
     if (p.length === 2 && isFinite(p[0])) try { map.setView(p, 15.5); } catch (err) {}
   });
