@@ -44,6 +44,7 @@
     -webkit-appearance:none;appearance:none}
   .btn:hover{border-color:var(--accent)}
   .btn.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:500}
+  button:active,.btn:active{transform:translateY(1px);filter:brightness(.85)}   /* gentle press feedback — consistent across every BC2FD page */
   .btn.ghost{color:var(--dim)}
 
   .notice{margin:12px 0;padding:10px 14px;border:1px solid var(--amber);border-radius:9px;
@@ -1082,7 +1083,14 @@ function expireSweep(){                                     /* control mirrors t
       state.tExp[k]=''; var el=document.querySelector('.uexp[data-ux="t:'+k+'"]'); if(el) el.value='';
       var seg=document.getElementById('seg'+k.charAt(0).toUpperCase()+k.slice(1)); if(seg) segSet(seg.id,'off'); }
   });
-  Object.keys(state.aExp||{}).forEach(function(k){ if(state.aExp[k]) state.aExp[k]=''; });   /* ladders carry no dates — purge legacy values, never auto-flip */
+  /* apparatus expiries flip the unit BACK IN SERVICE when they pass — same contract as teams.
+     (The old "ladders carry no dates" purge predates cross-staffing: it wiped the AP124/L125 dates
+     the E124/E125 auto-OOS flow writes, leaving the unit OOS forever — the 7/27 AP124 bug.) */
+  Object.keys(state.aExp||{}).forEach(function(k){
+    if(past(state.aExp[k])){ if(state.apparatus[k]){ state.apparatus[k]=false; changed=true; }
+      state.aExp[k]=''; var el=document.querySelector('.uexp[data-ux="a:'+k+'"]'); if(el) el.value='';
+      var seg=document.getElementById('seg'+k.toUpperCase()); if(seg) segSet(seg.id,'in'); }
+  });
   var before=state.writeins.length;
   state.writeins=state.writeins.filter(function(u){ return !past(u.exp); });
   if(state.writeins.length!==before){ renderWi(); changed=true; }
