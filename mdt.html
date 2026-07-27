@@ -26,7 +26,7 @@
   #callBandWrap { position: fixed; top: 0; left: 0; right: 0; z-index: 800; display: flex; gap: 8px;
                   padding: 8px; pointer-events: none; align-items: flex-start; }
   #callBand { display: flex; gap: 8px; flex: 1 1 auto; min-width: 0; pointer-events: none; }
-  .ccard { pointer-events: auto; flex: 1; max-width: 640px; background: rgba(13,17,23,.94);
+  .ccard { pointer-events: auto; flex: 1; min-width: 0; max-width: 640px; background: rgba(13,17,23,.94);   /* min-width:0 lets cards compress in portrait instead of overflowing under the chips */
            border: 2px solid #F85149; border-radius: 12px; padding: 10px 14px; cursor: pointer; }
   .ccard:active { background: rgba(28,34,48,.96); }
   .ccard .ty { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 1px; color: #F85149; line-height: 1.05; }
