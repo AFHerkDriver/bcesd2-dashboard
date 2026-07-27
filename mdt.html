@@ -206,9 +206,21 @@
     map.createPane("radarPane"); map.getPane("radarPane").style.zIndex = 350;
     /* layer choices — same set as the wall: bases, Wind Flow particles, radar (manual on top of
        its storm auto-on) */
-    const radarOverlay = L.layerGroup(), windOverlay = L.layerGroup();
+    const radarOverlay = L.layerGroup(), windOverlay = L.layerGroup(), tenderOverlay = L.layerGroup();
     L.control.layers({ "Satellite": satellite, "Dark": dark, "Positron": positron },
-      { "Wind Flow": windOverlay, "Radar": radarOverlay }, { collapsed: true, position: "bottomright" }).addTo(map);
+      { "Wind Flow": windOverlay, "Radar": radarOverlay, "Tender Zones": tenderOverlay }, { collapsed: true, position: "bottomright" }).addTo(map);
+    /* TENDER OPS ZONES — the wall's precomputed no-hydrant territory (>1,000 ft from any plug),
+       here as an opt-in overlay instead of always-on wash. One polygon per district keeps the SVG
+       even-odd fill: covered islands inside a zone stay unshaded. Slightly more ink than the wall's
+       ambient .07 — a deliberately toggled layer on a sunlit cab screen has to actually read. */
+    map.createPane("tenderPane"); map.getPane("tenderPane").style.zIndex = 370; map.getPane("tenderPane").style.pointerEvents = "none";
+    fetch("tender-zones.json").then(r => r.ok ? r.json() : null).then(z => {
+      if (!z) return;
+      ["esd2", "esd6"].forEach(k => {
+        if ((z[k] || []).length) L.polygon(z[k], { pane: "tenderPane", color: "#FF3B30", weight: 1,
+          opacity: .35, fillColor: "#FF3B30", fillOpacity: .12, interactive: false }).addTo(tenderOverlay);
+      });
+    }).catch(() => {});
     map.on("overlayadd", e => { if (e.layer === radarOverlay) { radarManual = true; radarSync(); }
                                 if (e.layer === windOverlay) { windManual = true; fetchWindGrid(); wKick(); } });
     map.on("overlayremove", e => { if (e.layer === radarOverlay) { radarManual = false; radarSync(); }
