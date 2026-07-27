@@ -104,6 +104,15 @@
     #ctrls button { padding: 10px 13px; font-size: 13px; }
   }
 
+  /* layers control — Leaflet ships it white; restyle to the page's dark chrome */
+  .leaflet-control-layers { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 10px;
+                            color: #E6EDF3; box-shadow: none; }
+  .leaflet-control-layers-toggle { filter: invert(1); }   /* stock glyph is dark-on-transparent — inverted it reads on the dark chip */
+  .leaflet-control-layers-expanded { padding: 8px 12px; font-size: 13px; }
+  .leaflet-control-layers label { margin-bottom: 2px; }
+  .leaflet-control-layers input { accent-color: #FF6B35; }
+  .leaflet-control-layers-separator { border-top-color: #30363D; }
+
   /* feed-down banner — fail LOUD */
   #feedDown { position: fixed; top: 0; left: 0; right: 0; z-index: 1200; display: none; background: #F85149;
               color: #0D1117; font-weight: 700; text-align: center; padding: 8px; font-size: 15px; letter-spacing: 1px; }
