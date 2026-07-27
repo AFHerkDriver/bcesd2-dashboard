@@ -415,7 +415,7 @@
             '<div class="meta">' + (c.cross ? "<span>X: " + esc(c.cross) + "</span>" : "") +
               (c.channel ? "<span><b>" + esc(c.channel) + "</b></span>" : "") +
               '<span>' + esc((c.units || []).filter(isApp).join(" ") || (c.units || []).join(" ")) + "</span></div>" +
-            '<a class="navbtn" href="' + gmapsUrl(c) + '" target="_blank" rel="noopener">NAVIGATE &#10148;</a> ' +
+            '<a class="navbtn" href="' + gmapsUrl(c) + '" target="_blank" rel="noopener">GOOGLE MAPS &#10148;</a> ' +
             '<a class="navbtn apple" href="' + amapsUrl(c) + '" target="_blank" rel="noopener">&#63743; APPLE MAPS</a>' +
           "</div>"; }).join("")
           : '<div id="noCalls">NO ACTIVE CALLS · live</div>';
