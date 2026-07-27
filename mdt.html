@@ -20,6 +20,11 @@
   button { font-family: 'DM Mono', monospace; cursor: pointer; }
   #map { position: fixed; inset: 0; background: #0D1117; }
   .leaflet-container { background: #0D1117; font-family: 'DM Mono', monospace; }
+  /* parcel house-number labels (close zoom) — context under the pins, never competition */
+  .addr-lbl-wrap{background:none;border:0}
+  .addr-lbl{position:absolute;transform:translate(-50%,-50%);font-family:'DM Mono',monospace;font-size:10px;
+    line-height:1;color:#C9D1D9;opacity:.85;white-space:nowrap;pointer-events:none;
+    text-shadow:0 0 3px #000,0 0 3px #000,0 1px 2px #000}
 
   /* top band — one flex row over the map: call cards on the left, status chips pinned right.
      Sharing the row is what makes card/chip overlap structurally impossible. */
@@ -176,7 +181,7 @@
   /* ── MAP — cab composition of the board's stack: sun-follow imagery, stations, borders,
      hydrants (incl. officer OOS reds), crossing pins, radar in storms. No burn-in orbit, no
      wall-tier logic — this is its own tier. ── */
-  let map, callLayer, hydLayer, cxLayer, radarOn = false;
+  let map, callLayer, hydLayer, cxLayer, addrLayer, radarOn = false;
   const TL = (u, o) => { o = o || {}; o.updateWhenIdle = true; o.updateWhenZooming = false; o.keepBuffer = 4; return L.tileLayer(u, o); };
   function sunUp() { const lat = 29.465, lng = -98.73, now = new Date(), rad = Math.PI / 180, deg = 180 / Math.PI;
     const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
@@ -222,7 +227,12 @@
     callLayer = L.layerGroup().addTo(map);
     hydLayer = L.layerGroup().addTo(map);
     cxLayer = L.layerGroup().addTo(map);
+    /* address labels live UNDER the call circles: MDT call pins are vectors in the z-400 overlay
+       pane (unlike the wall's z-600 divIcon pins), so this pane must sit below 400, above radar */
+    map.createPane("addrPane"); map.getPane("addrPane").style.zIndex = 380; map.getPane("addrPane").style.pointerEvents = "none";
+    addrLayer = L.layerGroup().addTo(map);
     map.on("moveend zoomend", hydUpdate);
+    map.on("moveend zoomend", () => { if (addrDeb) clearTimeout(addrDeb); addrDeb = setTimeout(addrUpdate, 400); });
     districtView();
     /* day/night swap every 5 min */
     let day = sunUp();
@@ -270,6 +280,41 @@
         hydCache[bbox] = j.features; hydKeys.push(bbox);
         if (hydKeys.length > 40) delete hydCache[hydKeys.shift()];
         if (map.getZoom() >= HYD_Z) hydPaint(j.features, bbox);
+      }).catch(() => {});
+  }
+
+  /* ── ADDRESS LABELS — the CAD map's "every address", same source + rules as the wall: Bexar
+     appraisal parcels (Situs) from maps.bexar.org, house numbers past ADDR_Z, client centroids,
+     bbox cache. Only Situs is ever requested — owner data never leaves the county server.
+     Enhancement layer: county GIS unreachable = labels simply absent. ── */
+  const ADDR_URL = "https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0/query";
+  const ADDR_Z = 16.2, addrCache = {}, addrKeys = [];
+  let addrSeq = 0, addrPainted = "", addrDeb = null;
+  function addrPaint(feats, key) {
+    if (key && key === addrPainted) return;   /* view already painted — rebuilding 300+ DOM labels per pan tick is what made the wall map drag */
+    addrPainted = key || "";
+    addrLayer.clearLayers();
+    feats.slice(0, 350).forEach(f => {
+      const g = f.geometry && f.geometry.rings && f.geometry.rings[0]; if (!g || !g.length) return;
+      let sx = 0, sy = 0; g.forEach(p => { sx += p[0]; sy += p[1]; });
+      const num = (String((f.attributes && f.attributes.Situs) || "").trim().match(/^\d+/) || [""])[0]; if (!num) return;
+      L.marker([sy / g.length, sx / g.length], { pane: "addrPane", interactive: false, keyboard: false,
+        icon: L.divIcon({ className: "addr-lbl-wrap", html: '<span class="addr-lbl">' + num + "</span>", iconSize: [0, 0] }) }).addTo(addrLayer);
+    });
+  }
+  function addrUpdate() {
+    if (!map) return;
+    if (map.getZoom() < ADDR_Z) { addrLayer.clearLayers(); addrPainted = ""; return; }
+    const b = map.getBounds().pad(0.12);
+    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(x => x.toFixed(4)).join(",");
+    if (addrCache[bbox]) { addrPaint(addrCache[bbox], bbox); return; }
+    const seq = ++addrSeq;
+    fetch(ADDR_URL + "?geometry=" + bbox + "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Situs&returnGeometry=true&geometryPrecision=5&maxAllowableOffset=0.0002&resultRecordCount=800&f=json")
+      .then(r => r.ok ? r.json() : null).then(j => {
+        if (seq !== addrSeq || !j || !Array.isArray(j.features)) return;   /* stale response or bad reply -> drop */
+        addrCache[bbox] = j.features; addrKeys.push(bbox);
+        if (addrKeys.length > 40) delete addrCache[addrKeys.shift()];
+        if (map.getZoom() >= ADDR_Z) addrPaint(j.features, bbox);
       }).catch(() => {});
   }
 
@@ -420,7 +465,7 @@
     if (/RESCUE/.test(t)) return "#FF7EB6";
     if (/\bHAZ/.test(t)) return "#3FB950";
     if (/GAS|FUEL|LEAK|SPILL|ODOR|FLUID/.test(t)) return "#2DD4BF";
-    if (/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "#58A6FF";
+    if (/ASSIST|ASST\b|\bLAW\b|POLICE|SHERIFF|CONSTAB|OFFICER|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "#58A6FF";   /* LE-assist tones arrive abbreviated (ASST/LAW ENF) or agency-named — they must class BLUE here, before the MED test can claim them. \bLAW\b not bare LAW: "LAWN MOWER" is not an assist */
     if (/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZ|OVERDOSE|DIABET|ASSAULT|OB\b|HEADACHE|ALLERG|HEART/.test(t)) return "#FFC107";
     return "#8B949E"; }
   function gmapsUrl(c) {
