@@ -207,10 +207,12 @@
   function initMap() {
     const dark = TL("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 20 });
     const positron = TL("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 20 });
+    /* hybrid labels are Carto (OSM), not Esri reference tiles: OSM carries new-subdivision streets
+       within weeks while World_Transportation lags years — and its halo'd text reads over bright
+       imagery. One label source, streets + places both, so nothing double-draws. */
     const satellite = L.layerGroup([
       TL("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }),
-      TL("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }),
-      TL("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 })]);
+      TL("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 19 })]);
     map = L.map("map", { center: [29.44, -98.72], zoom: 12, layers: [sunUp() ? satellite : dark], zoomControl: false });
     map.attributionControl.setPrefix(false);
     map.createPane("radarPane"); map.getPane("radarPane").style.zIndex = 350;
