@@ -217,8 +217,8 @@
        its storm auto-on) */
     const radarOverlay = L.layerGroup(), windOverlay = L.layerGroup(), tenderOverlay = L.layerGroup();
     tourLayer = L.layerGroup();
-    L.control.layers({ "Satellite": satellite, "Dark": dark, "Positron": positron },
-      { "Wind Flow": windOverlay, "Radar": radarOverlay, "Tender Zones": tenderOverlay, "Tour Calls": tourLayer },
+    L.control.layers({ "Dark": dark, "Positron": positron, "Satellite": satellite },   /* both lists alphabetical — the panel reads as a menu, not an accretion log */
+      { "Radar": radarOverlay, "Tender Zones": tenderOverlay, "Tour Calls": tourLayer, "Wind Flow": windOverlay },
       { collapsed: true, position: "bottomright" }).addTo(map);
     /* tour pins live at z-390: over labels/tender, UNDER the live call circles (z-400 overlay pane) —
        a finished run must never sit on top of an active one */
