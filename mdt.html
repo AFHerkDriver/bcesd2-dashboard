@@ -150,7 +150,9 @@
     const H = 15 * ((utcH + lng / 15 + eot / 60) - 12);
     return deg * Math.asin(Math.sin(rad * lat) * Math.sin(rad * decl) + Math.cos(rad * lat) * Math.cos(rad * decl) * Math.cos(rad * H)) > -0.833; }
   const IDLE_PTS = [[29.454183,-98.755111],[29.505141,-98.782267],[29.405115,-98.701876],[29.413373,-98.785885],[29.49202,-98.74346]];
+  const SOUTH_PTS = [[29.21967,-98.45806],[29.17785,-98.42410]];   /* 161 + 162 — ESD 6 frame */
   function districtView() { try { map.fitBounds(IDLE_PTS, { padding: [40, 40], maxZoom: 15 }); } catch (e) {} }
+  function southView() { try { map.fitBounds(SOUTH_PTS, { padding: [70, 70], maxZoom: 13 }); } catch (e) {} }
   function initMap() {
     const dark = TL("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 20 });
     const positron = TL("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 20 });
@@ -192,7 +194,14 @@
       [satellite, dark].forEach(l => { try { map.removeLayer(l); } catch (e) {} });
       map.addLayer(d ? satellite : dark); } }, 5 * 60 * 1000);
   }
-  $("refit").addEventListener("click", districtView);
+  /* ⌖ toggles between the two districts: first tap frames D2 (121-125), next frames the south
+     (161/162), and so on — the label always names where the NEXT tap goes */
+  let refitSouth = false;
+  $("refit").addEventListener("click", () => {
+    if (refitSouth) { southView(); $("refit").innerHTML = "&#8982; District 2"; }
+    else { districtView(); $("refit").innerHTML = "&#8982; South 161/162"; }
+    refitSouth = !refitSouth;
+  });
 
   /* ── HYDRANTS — same CAD layer + officer OOS reds as the board (zoom-gated) ── */
   const HYD_URL = "https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query";
