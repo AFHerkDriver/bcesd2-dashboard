@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>BC2FD MDT</title>
+<link rel="icon" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  /* MDT tier — Windows touchscreen in the cab. One screen, map-dominant, big touch targets.
+     If it doesn't change a decision in the next ten minutes, it isn't on this screen. */
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body { background: #0D1117; color: #E6EDF3; font-family: 'DM Mono', monospace; }
+  button { font-family: 'DM Mono', monospace; cursor: pointer; }
+  #map { position: fixed; inset: 0; background: #0D1117; }
+  .leaflet-container { background: #0D1117; font-family: 'DM Mono', monospace; }
+
+  /* top call band — overlays the map, never blocks more than it must */
+  #callBand { position: fixed; top: 0; left: 0; right: 0; z-index: 800; display: flex; gap: 8px;
+              padding: 8px; pointer-events: none; }
+  .ccard { pointer-events: auto; flex: 1; max-width: 640px; background: rgba(13,17,23,.94);
+           border: 2px solid #F85149; border-radius: 12px; padding: 10px 14px; }
+  .ccard .ty { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 1px; color: #F85149; line-height: 1.05; }
+  .ccard .ad { font-size: 17px; color: #E6EDF3; margin-top: 2px; font-weight: 500; }
+  .ccard .meta { font-size: 12px; color: #8B949E; margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .ccard .meta b { color: #FFC107; font-weight: 500; }
+  .ccard .navbtn { margin-top: 8px; display: inline-block; background: #238636; color: #fff; text-decoration: none;
+                   border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 500; }
+  .ccard.sec { border-color: #D29922; } .ccard.sec .ty { color: #D29922; }
+  #noCalls { pointer-events: none; background: rgba(13,17,23,.85); border: 1px solid #30363D; border-radius: 10px;
+             padding: 8px 14px; font-size: 13px; color: #3FB950; align-self: flex-start; }
+
+  /* right rail chips */
+  #rail { position: fixed; top: 8px; right: 8px; z-index: 800; display: flex; flex-direction: column; gap: 6px;
+          align-items: flex-end; max-width: 46vw; }
+  .chip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 10px; padding: 7px 12px;
+          font-size: 12px; color: #8B949E; text-align: right; }
+  .chip.ok { color: #3FB950; border-color: rgba(63,185,80,.5); }
+  .chip.bad { color: #F85149; border-color: #F85149; font-weight: 500; }
+  .chip.warn { color: #FFC107; border-color: rgba(255,193,7,.6); font-weight: 500; }
+  .chip .sub { display: block; font-size: 10px; color: #8B949E; font-weight: 400; }
+
+  /* drone PiP */
+  #dronePip { position: fixed; right: 8px; bottom: 8px; z-index: 850; width: min(340px, 40vw); display: none; }
+  #dronePip video { width: 100%; border-radius: 10px; border: 2px solid #FF6B35; background: #000; display: block; }
+  #dronePip .lbl { position: absolute; top: 6px; left: 8px; font-size: 11px; color: #FF6B35; font-weight: 500;
+                   text-shadow: 0 0 4px #000, 0 0 4px #000; }
+
+  /* bottom-left controls */
+  #ctrls { position: fixed; left: 8px; bottom: 8px; z-index: 800; display: flex; gap: 8px; }
+  #ctrls button { background: rgba(13,17,23,.94); border: 1px solid #30363D; color: #E6EDF3; border-radius: 10px;
+                  padding: 12px 16px; font-size: 15px; }
+  #ctrls button:active { border-color: #FF6B35; color: #FF6B35; }
+
+  /* feed-down banner — fail LOUD */
+  #feedDown { position: fixed; top: 0; left: 0; right: 0; z-index: 1200; display: none; background: #F85149;
+              color: #0D1117; font-weight: 700; text-align: center; padding: 8px; font-size: 15px; letter-spacing: 1px; }
+
+  /* PIN gate */
+  #gate { position: fixed; inset: 0; background: #0D1117; z-index: 2000; display: flex; align-items: center; justify-content: center; }
+  .gatebox { width: min(340px, 88vw); background: #161B22; border: 1px solid #30363D; border-radius: 12px; padding: 28px 22px; text-align: center; }
+  .gatebox h1 { font-family: 'Bebas Neue', sans-serif; font-size: 34px; letter-spacing: 2px; }
+  .gatebox h1 b { color: #FF6B35; font-weight: 400; }
+  .gatebox .s { font-size: 11px; color: #8B949E; margin-bottom: 18px; }
+  .gatebox input { width: 100%; background: #0D1117; border: 1px solid #30363D; color: #E6EDF3; border-radius: 8px;
+                   padding: 14px; font-size: 22px; text-align: center; letter-spacing: 8px; outline: none; }
+  .gatebox input:focus { border-color: #FF6B35; }
+  .gatebox button { width: 100%; margin-top: 12px; background: #FF6B35; border: none; color: #0D1117; font-weight: 500;
+                    border-radius: 8px; padding: 14px; font-size: 16px; letter-spacing: 1px; }
+  .gatebox .gerr { color: #F85149; font-size: 12px; margin-top: 10px; min-height: 15px; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gatebox">
+    <h1>BC2FD <b>MDT</b></h1>
+    <div class="s">MOBILE DATA TERMINAL &middot; STATION PIN</div>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN" maxlength="8">
+    <button id="go">Unlock</button>
+    <div class="gerr" id="gerr"></div>
+  </div>
+</div>
+
+<div id="feedDown">DISPATCH FEED DOWN — RELY ON RADIO</div>
+<div id="map"></div>
+<div id="callBand"></div>
+<div id="rail">
+  <div class="chip" id="hospChip">hospitals &hellip;</div>
+  <div class="chip" id="wxChip" style="display:none"></div>
+</div>
+<div id="dronePip"><span class="lbl" id="droneLbl"></span><video id="droneVid" muted autoplay playsinline controls></video></div>
+<div id="ctrls">
+  <button id="refit" title="Frame the district">&#8982; District</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script>
+(() => {
+  const WORKER = "https://bc2fd-dash-auth.usafsentinel-45e.workers.dev";
+  const STATE_DOC = "https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents/firehawk/dashboard_state?key=AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  /* ── PIN gate — station PIN, verified against /dispatch (the feed this screen lives on) ── */
+  let PIN = sessionStorage.getItem("mdtPin") || "";
+  function showGate(msg) { $("gate").style.display = "flex"; $("gerr").textContent = msg || ""; sessionStorage.removeItem("mdtPin"); }
+  async function unlock() {
+    const p = $("pin").value.trim();
+    if (!/^\d{4,8}$/.test(p)) { $("gerr").textContent = "Enter the station PIN"; return; }
+    $("gerr").textContent = "checking…";
+    try {
+      const r = await fetch(WORKER + "/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: p }) });
+      const j = await r.json().catch(() => null);
+      if (r.status === 401) { $("gerr").textContent = "PIN not recognized"; return; }
+      if (r.status === 429) { $("gerr").textContent = "Too many tries — locked 5 min"; return; }
+      if (!j) { $("gerr").textContent = "Feed error — try again"; return; }
+      PIN = p; sessionStorage.setItem("mdtPin", p);
+      $("gate").style.display = "none";
+      boot();
+    } catch (e) { $("gerr").textContent = "Worker unreachable — check signal"; }
+  }
+  $("go").addEventListener("click", unlock);
+  $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+
+  /* ── MAP — cab composition of the board's stack: sun-follow imagery, stations, borders,
+     hydrants (incl. officer OOS reds), crossing pins, radar in storms. No burn-in orbit, no
+     wall-tier logic — this is its own tier. ── */
+  let map, callLayer, hydLayer, cxLayer, radarOn = false;
+  const TL = (u, o) => { o = o || {}; o.updateWhenIdle = true; o.updateWhenZooming = false; o.keepBuffer = 4; return L.tileLayer(u, o); };
+  function sunUp() { const lat = 29.465, lng = -98.73, now = new Date(), rad = Math.PI / 180, deg = 180 / Math.PI;
+    const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+    const utcH = now.getUTCHours() + now.getUTCMinutes() / 60;
+    const decl = -23.44 * Math.cos(rad * 360 / 365 * (doy + 10));
+    const B = rad * 360 / 365 * (doy - 81), eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+    const H = 15 * ((utcH + lng / 15 + eot / 60) - 12);
+    return deg * Math.asin(Math.sin(rad * lat) * Math.sin(rad * decl) + Math.cos(rad * lat) * Math.cos(rad * decl) * Math.cos(rad * H)) > -0.833; }
+  const IDLE_PTS = [[29.454183,-98.755111],[29.505141,-98.782267],[29.405115,-98.701876],[29.413373,-98.785885],[29.49202,-98.74346]];
+  function districtView() { try { map.fitBounds(IDLE_PTS, { padding: [40, 40], maxZoom: 15 }); } catch (e) {} }
+  function initMap() {
+    const dark = TL("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 20 });
+    const satellite = L.layerGroup([
+      TL("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }),
+      TL("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }),
+      TL("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 })]);
+    map = L.map("map", { center: [29.44, -98.72], zoom: 12, layers: [sunUp() ? satellite : dark], zoomControl: false });
+    map.attributionControl.setPrefix(false);
+    map.createPane("radarPane"); map.getPane("radarPane").style.zIndex = 350;
+    /* stations + borders */
+    [["120",29.392122,-98.709906],["121",29.454183,-98.755111],["122",29.505141,-98.782267],
+     ["123",29.405115,-98.701876],["124",29.413373,-98.785885],["125",29.49202,-98.74346],
+     ["161",29.21967,-98.45806],["162",29.17785,-98.42410]].forEach(s =>
+      L.marker([s[1], s[2]], { icon: L.icon({ iconUrl: "station-" + s[0] + ".png", iconSize: [30, 30], iconAnchor: [15, 15] }),
+        interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(map));
+    fetch("district-bounds.json").then(r => r.json()).then(b => {
+      ["esd2", "esd6"].forEach(k => (b[k] || []).forEach(ring =>
+        L.polygon(ring.map(p => [p[1], p[0]]), { color: "#FF6B35", weight: 1.5, fill: false, opacity: .55 }).addTo(map)));
+    }).catch(() => {});
+    callLayer = L.layerGroup().addTo(map);
+    hydLayer = L.layerGroup().addTo(map);
+    cxLayer = L.layerGroup().addTo(map);
+    map.on("moveend zoomend", hydUpdate);
+    districtView();
+    /* day/night swap every 5 min */
+    let day = sunUp();
+    setInterval(() => { const d = sunUp(); if (d !== day) { day = d;
+      [satellite, dark].forEach(l => { try { map.removeLayer(l); } catch (e) {} });
+      map.addLayer(d ? satellite : dark); } }, 5 * 60 * 1000);
+  }
+  $("refit").addEventListener("click", districtView);
+
+  /* ── HYDRANTS — same CAD layer + officer OOS reds as the board (zoom-gated) ── */
+  const HYD_URL = "https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query";
+  const HYD_Z = 16.2, hydCache = {}, hydKeys = [];
+  let hydSeq = 0, hydPainted = "", oosHyd = [];
+  const hIc = (f, s) => L.icon({ iconUrl: f + ".png", iconRetinaUrl: f + "@2x.png", iconSize: [s, s], iconAnchor: [s / 2, s] });
+  const hydIcon = hIc("hydrant-marker", 20), hydIconBig = hIc("hydrant-marker-hv", 26), hydIconOOS = hIc("hydrant-marker-oos", 26);
+  const hydNorm = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const hydIsOOS = (a) => { a = hydNorm(a); return !!a && oosHyd.some(o => o && o.length >= 4 && a.indexOf(o) >= 0); };
+  function hydPaint(feats, key) {
+    if (key && key === hydPainted) return; hydPainted = key || "";
+    hydLayer.clearLayers();
+    feats.slice(0, 400).forEach(f => {
+      const g = f.geometry; if (!g || g.x == null || g.y == null) return;
+      const at = f.attributes || {};
+      const icon = hydIsOOS(at.Address) ? hydIconOOS : ((+at.Main_Size || 0) >= 10 ? hydIconBig : hydIcon);
+      L.marker([g.y, g.x], { icon, interactive: false, keyboard: false, zIndexOffset: -500 }).addTo(hydLayer);
+    });
+  }
+  function hydUpdate() {
+    if (!map) return;
+    if (map.getZoom() < HYD_Z) { hydLayer.clearLayers(); hydPainted = ""; return; }
+    const b = map.getBounds().pad(0.12);
+    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(x => x.toFixed(4)).join(",");
+    if (hydCache[bbox]) { hydPaint(hydCache[bbox], bbox); return; }
+    const seq = ++hydSeq;
+    fetch(HYD_URL + "?geometry=" + bbox + "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Main_Size,Address&returnGeometry=true&resultRecordCount=800&f=json")
+      .then(r => r.ok ? r.json() : null).then(j => {
+        if (seq !== hydSeq || !j || !Array.isArray(j.features)) return;
+        hydCache[bbox] = j.features; hydKeys.push(bbox);
+        if (hydKeys.length > 40) delete hydCache[hydKeys.shift()];
+        if (map.getZoom() >= HYD_Z) hydPaint(j.features, bbox);
+      }).catch(() => {});
+  }
+
+  /* ── LOW-WATER CROSSINGS — same rules as the wall: closed/caution pin, offline only in storms ── */
+  const cxIcon = L.icon({ iconUrl: "flood-marker.png", iconRetinaUrl: "flood-marker@2x.png", iconSize: [27, 34], iconAnchor: [13, 33] });
+  const CX_WATCH = { "2311":1,"2325":1,"2322":1,"2321":1,"2308":1,"2561":1,"2580":1,"2377":1 };
+  let stormNow = false;
+  function cxPins() {
+    fetch("https://api.bexarflood.org/api/sensors/GetAll").then(r => r.ok ? r.json() : null).then(j => {
+      const arr = Array.isArray(j) ? j : []; if (!arr.length) return;
+      cxLayer.clearLayers();
+      arr.forEach(s => {
+        if (!CX_WATCH[String(s.id)] || s.lat == null || s.lng == null) return;
+        const st = +s.statusTypeID;
+        if (st === 2) return;
+        if (st === 3 && !stormNow) return;
+        const lbl = st === 1 ? "CLOSED" : st === 4 ? "CAUTION" : "SENSOR OFFLINE — assume unsafe";
+        L.marker([s.lat, s.lng], { icon: cxIcon, zIndexOffset: 500, keyboard: false })
+          .bindTooltip(esc(s.title || "crossing") + " — " + lbl).addTo(cxLayer);
+      });
+    }).catch(() => {});
+  }
+
+  /* ── RADAR — auto-on during precip/wind warnings (same event-text rule as the wall) ── */
+  const RF = ["nexrad-n0q-900913-m25m","nexrad-n0q-900913-m20m","nexrad-n0q-900913-m15m","nexrad-n0q-900913-m10m","nexrad-n0q-900913-m05m","nexrad-n0q-900913"];
+  const rUrl = (id, bk) => "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/" + id + "/{z}/{x}/{y}.png" + (bk ? "?_=" + bk : "");
+  let rLayers = null, rAnim = null, rFi = RF.length - 1, rHold = 0, rBucket = 0;
+  function radarShow(on) {
+    if (!rLayers) rLayers = RF.map(id => L.tileLayer(rUrl(id), { pane: "radarPane", opacity: 0, maxZoom: 19, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 2 }));
+    if (on === radarOn) return; radarOn = on;
+    rLayers.forEach(l => { try { on ? map.addLayer(l) : map.removeLayer(l); } catch (e) {} });
+    if (on && !rAnim) { rFi = RF.length - 1; rAnim = setInterval(() => {
+      if (rHold > 0) { rHold--; return; }
+      rLayers[rFi].setOpacity(0); rFi = (rFi + 1) % RF.length; rLayers[rFi].setOpacity(0.5);
+      if (rFi === RF.length - 1) rHold = 3;
+      const bk = Math.floor(Date.now() / 300000);
+      if (bk !== rBucket) { rBucket = bk; rLayers.forEach((l, i) => { try { l.setUrl(rUrl(RF[i], bk)); } catch (e) {} }); }
+    }, 500); }
+    else if (!on && rAnim) { clearInterval(rAnim); rAnim = null; }
+  }
+
+  /* ── NWS ALERTS — direct api.weather.gov; chip + storm trigger for radar/crossings ── */
+  function loadWx() {
+    fetch("https://api.weather.gov/alerts/active?zone=TXZ205,TXC029", { headers: { "Accept": "application/geo+json" } })
+      .then(r => r.ok ? r.json() : null).then(j => {
+        const feats = (j && j.features) || [];
+        const events = feats.map(f => (f.properties && f.properties.event) || "").filter(Boolean);
+        stormNow = events.some(e => /TORNADO|THUNDER|FLOOD|SEVERE|STORM|HURRICANE|TROPICAL|HAIL|WIND/i.test(e));
+        radarShow(stormNow);
+        const chip = $("wxChip");
+        if (!events.length) { chip.style.display = "none"; return; }
+        chip.style.display = "block";
+        chip.className = "chip " + (events.some(e => /TORNADO|WARNING/i.test(e)) ? "bad" : "warn");
+        chip.innerHTML = esc([...new Set(events)].slice(0, 3).join(" · "));
+      }).catch(() => { /* wx chip is enhancement; dispatch banner is the loud one */ });
+  }
+
+  /* ── BOARD STATE — hospital diversions + officer OOS hydrants (public state doc, same as the wall) ── */
+  let stateFails = 0;
+  function loadState() {
+    fetch(STATE_DOC).then(r => { if (!r.ok) throw 0; return r.json(); }).then(doc => {
+      stateFails = 0;
+      const dj = doc && doc.fields && doc.fields.stateJson && doc.fields.stateJson.stringValue;
+      const st = dj ? JSON.parse(dj) : null;
+      const chip = $("hospChip");
+      if (!st) { chip.className = "chip bad"; chip.textContent = "DIVERSION STATUS UNKNOWN — verify via MEDCOM"; return; }
+      const divs = st.diversions || [];
+      if (!divs.length) { chip.className = "chip ok"; chip.textContent = "ALL FACILITIES OPEN"; }
+      else { chip.className = "chip bad";
+        chip.innerHTML = divs.length + " ON DIVERSION<span class='sub'>" + divs.slice(0, 4).map(d => esc(d.name) + " — " + esc(d.status)).join(" · ") + "</span>"; }
+      const next = (st.oosHydrants || []).map(x => hydNorm(x && x.addr != null ? x.addr : x)).filter(Boolean);
+      if (JSON.stringify(next) !== JSON.stringify(oosHyd)) { oosHyd = next; hydPainted = ""; hydUpdate(); }
+    }).catch(() => {
+      if (++stateFails >= 2) { const chip = $("hospChip"); chip.className = "chip bad"; chip.textContent = "DIVERSION STATUS UNKNOWN — verify via MEDCOM"; }
+    });
+  }
+
+  /* ── DISPATCH — the reason this screen exists. Poll every 15 s; two consecutive failures =
+     the loud red banner. New calls auto-focus the map once; District button reframes. ── */
+  let dispatchFails = 0, knownIds = {}, focusId = null;
+  const isApp = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
+  function navUrl(c) {
+    if (c.lat != null && c.lng != null) return "https://www.google.com/maps/dir/?api=1&destination=" + c.lat + "," + c.lng;
+    return "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(String(c.address || "") + ", Bexar County, TX");
+  }
+  function ageMin(c) { const t = Date.parse(c.logged || c.started || ""); return isNaN(t) ? 999 : (Date.now() - t) / 60000; }
+  function loadDispatch() {
+    fetch(WORKER + "/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: PIN }) })
+      .then(r => { if (r.status === 401) { showGate("PIN expired — sign in again"); throw 0; } return r.json(); })
+      .then(j => {
+        if (!j || !j.ok) throw 0;
+        dispatchFails = 0; $("feedDown").style.display = "none";
+        const live = (j.calls || []).filter(c => ageMin(c) <= 15 && String(c.address || "").trim());
+        /* call band: newest two */
+        live.sort((a, b) => String(b.started).localeCompare(String(a.started)));
+        const top = live.slice(0, 2);
+        $("callBand").innerHTML = top.length ? top.map((c, i) =>
+          '<div class="ccard' + (i ? " sec" : "") + '">' +
+            '<div class="ty">' + esc(c.type) + '</div>' +
+            '<div class="ad">' + esc(c.address) + '</div>' +
+            '<div class="meta">' + (c.cross ? "<span>X: " + esc(c.cross) + "</span>" : "") +
+              (c.channel ? "<span><b>" + esc(c.channel) + "</b></span>" : "") +
+              '<span>' + esc((c.units || []).filter(isApp).join(" ") || (c.units || []).join(" ")) + "</span></div>" +
+            '<a class="navbtn" href="' + navUrl(c) + '" target="_blank" rel="noopener">NAVIGATE &#10148;</a>' +
+          "</div>").join("")
+          : '<div id="noCalls">NO ACTIVE CALLS · live</div>';
+        /* map pins + one-time focus per new call */
+        callLayer.clearLayers();
+        let newest = null;
+        live.forEach(c => {
+          if (c.lat == null || c.lng == null) return;
+          L.circleMarker([c.lat, c.lng], { radius: 10, weight: 3, color: "#F85149", fillColor: "#F85149", fillOpacity: .35 })
+            .bindTooltip(esc(c.type)).addTo(callLayer);
+          if (!knownIds[c.id]) { knownIds[c.id] = 1; newest = c; }
+        });
+        if (newest && newest.id !== focusId) { focusId = newest.id;
+          try { map.setView([newest.lat, newest.lng], 15.5); } catch (e) {} }
+      })
+      .catch(() => {
+        if (++dispatchFails >= 2) $("feedDown").style.display = "block";   /* never a silent stale board */
+      });
+  }
+
+  /* ── DRONE PiP — live DroneSense video over the map corner when a bird is up ── */
+  let pipHls = null, pipUrl = "";
+  function loadDrones() {
+    fetch(WORKER + "/drones?pin=" + encodeURIComponent(PIN)).then(r => r.ok ? r.json() : null).then(j => {
+      const d = j && j.ok && (j.drones || []).find(x => x.video_url);
+      const pip = $("dronePip"), v = $("droneVid");
+      if (!d) { pip.style.display = "none";
+        if (pipHls) { try { pipHls.destroy(); } catch (e) {} pipHls = null; }
+        if (pipUrl) { try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {} pipUrl = ""; }
+        return; }
+      pip.style.display = "block";
+      $("droneLbl").textContent = (d.callSign || d.model || "UAS") + (d.mission ? " · " + d.mission : "");
+      if (d.video_url !== pipUrl) {
+        pipUrl = d.video_url;
+        if (pipHls) { try { pipHls.destroy(); } catch (e) {} pipHls = null; }
+        if (window.Hls && Hls.isSupported() && /\.m3u8/i.test(pipUrl)) {
+          pipHls = new Hls({ liveDurationInfinity: true }); pipHls.loadSource(pipUrl); pipHls.attachMedia(v);
+        } else v.src = pipUrl;
+        v.play().catch(() => {});
+      }
+    }).catch(() => {});
+  }
+
+  /* ── boot ── */
+  let booted = false;
+  function boot() {
+    if (booted) return; booted = true;
+    initMap();
+    loadDispatch(); setInterval(loadDispatch, 15000);
+    loadState(); setInterval(loadState, 15000);
+    loadWx(); setInterval(loadWx, 10 * 60 * 1000);
+    cxPins(); setInterval(cxPins, 5 * 60 * 1000);
+    loadDrones(); setInterval(loadDrones, 20000);
+  }
+  if (PIN) { $("gate").style.display = "none"; boot(); }
+  else setTimeout(() => $("pin").focus(), 60);
+})();
+</script>
+</body>
+</html>
