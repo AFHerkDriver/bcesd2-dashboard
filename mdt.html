@@ -71,6 +71,22 @@
                   padding: 12px 16px; font-size: 15px; }
   #ctrls button:active { border-color: #FF6B35; color: #FF6B35; }
 
+  /* phone tier — the same screen, sized for a pocket: chips become a slim top row, call cards
+     stack full-width (two calls read as a list, not a squeeze), buttons compact but still thumbable */
+  @media (max-width: 640px) {
+    #callBandWrap { flex-direction: column-reverse; align-items: stretch; gap: 6px; }
+    #rail { flex-direction: row; justify-content: flex-end; max-width: none; margin-left: 0; }
+    #callBand { flex-direction: column; }
+    .ccard { max-width: none; }
+    .ccard .ty { font-size: 21px; }
+    .ccard .ad { font-size: 15px; }
+    .ccard .meta { font-size: 11px; }
+    .ccard .navbtn { height: 34px; padding: 0 12px; font-size: 13px; margin-top: 6px; }
+    .chip { font-size: 10px; padding: 5px 9px; }
+    #dronePip { width: 58vw; }
+    #ctrls button { padding: 10px 13px; font-size: 13px; }
+  }
+
   /* feed-down banner — fail LOUD */
   #feedDown { position: fixed; top: 0; left: 0; right: 0; z-index: 1200; display: none; background: #F85149;
               color: #0D1117; font-weight: 700; text-align: center; padding: 8px; font-size: 15px; letter-spacing: 1px; }
