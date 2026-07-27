@@ -190,7 +190,7 @@
   /* ── MAP — cab composition of the board's stack: sun-follow imagery, stations, borders,
      hydrants (incl. officer OOS reds), crossing pins, radar in storms. No burn-in orbit, no
      wall-tier logic — this is its own tier. ── */
-  let map, callLayer, hydLayer, cxLayer, addrLayer, radarOn = false;
+  let map, callLayer, hydLayer, cxLayer, addrLayer, tourLayer, radarOn = false;
   const TL = (u, o) => { o = o || {}; o.updateWhenIdle = true; o.updateWhenZooming = false; o.keepBuffer = 4; return L.tileLayer(u, o); };
   function sunUp() { const lat = 29.465, lng = -98.73, now = new Date(), rad = Math.PI / 180, deg = 180 / Math.PI;
     const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
@@ -216,8 +216,13 @@
     /* layer choices — same set as the wall: bases, Wind Flow particles, radar (manual on top of
        its storm auto-on) */
     const radarOverlay = L.layerGroup(), windOverlay = L.layerGroup(), tenderOverlay = L.layerGroup();
+    tourLayer = L.layerGroup();
     L.control.layers({ "Satellite": satellite, "Dark": dark, "Positron": positron },
-      { "Wind Flow": windOverlay, "Radar": radarOverlay, "Tender Zones": tenderOverlay }, { collapsed: true, position: "bottomright" }).addTo(map);
+      { "Wind Flow": windOverlay, "Radar": radarOverlay, "Tender Zones": tenderOverlay, "Tour Calls": tourLayer },
+      { collapsed: true, position: "bottomright" }).addTo(map);
+    /* tour pins live at z-390: over labels/tender, UNDER the live call circles (z-400 overlay pane) —
+       a finished run must never sit on top of an active one */
+    map.createPane("tourPane"); map.getPane("tourPane").style.zIndex = 390; map.getPane("tourPane").style.pointerEvents = "auto";
     /* TENDER OPS ZONES — the wall's precomputed no-hydrant territory (>1,000 ft from any plug),
        here as an opt-in overlay instead of always-on wash. One polygon per district keeps the SVG
        even-odd fill: covered islands inside a zone stay unshaded. Slightly more ink than the wall's
@@ -231,7 +236,8 @@
       });
     }).catch(() => {});
     map.on("overlayadd", e => { if (e.layer === radarOverlay) { radarManual = true; radarSync(); }
-                                if (e.layer === windOverlay) { windManual = true; fetchWindGrid(); wKick(); } });
+                                if (e.layer === windOverlay) { windManual = true; fetchWindGrid(); wKick(); }
+                                if (e.layer === tourLayer) tourLoad(); });
     map.on("overlayremove", e => { if (e.layer === radarOverlay) { radarManual = false; radarSync(); }
                                    if (e.layer === windOverlay) { windManual = false; wKick(); } });
     map.on("move zoom", () => { if (wcv && wctx) wctx.clearRect(0, 0, wcv.width, wcv.height); });
@@ -337,6 +343,50 @@
         if (addrKeys.length > 40) delete addrCache[addrKeys.shift()];
         if (map.getZoom() >= ADDR_Z) addrPaint(j.features, bbox);
       }).catch(() => {});
+  }
+
+  /* ── TOUR CALLS — the wall's pin accumulation as an opt-in overlay: every run of the CURRENT
+     tour from the /calls log (worker returns it already folded to incidents), same 0700 AABBCC
+     tour window and type palette as the board. Runs without a coordinate simply aren't pinned;
+     announcements are not runs. Cached 4 min — toggling off/on re-shows instantly, no refetch. ── */
+  const CT_ZONE = "America/Chicago";
+  const ctNow = () => { try { return new Date(new Date().toLocaleString("en-US", { timeZone: CT_ZONE })); } catch (e) { return new Date(); } };
+  function ctEpoch(y, mo, d, hh, mm) {   /* real epoch for a Central wall-clock time — device zone would mis-slice the tour on any phone outside CT, and this stays right across DST */
+    const guess = Date.UTC(y, mo, d, hh || 0, mm || 0, 0, 0);
+    try { const t = new Date(guess);
+      const asCT = new Date(t.toLocaleString("en-US", { timeZone: CT_ZONE }));
+      const asUTC = new Date(t.toLocaleString("en-US", { timeZone: "UTC" }));
+      return guess + (asUTC.getTime() - asCT.getTime());
+    } catch (e) { return new Date(y, mo, d, hh || 0, mm || 0, 0, 0).getTime(); }
+  }
+  function tourStart() {   /* 0700 Central on day 1 of the AABBCC pair — same anchor/flip as the wall's tally */
+    const n = ctNow(), s = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    if (n.getHours() < 7) s.setDate(s.getDate() - 1);
+    const d = Math.floor((Date.UTC(s.getFullYear(), s.getMonth(), s.getDate()) - Date.UTC(2026, 0, 1)) / 86400000);
+    if (((d % 6) + 6) % 6 % 2 !== 0) s.setDate(s.getDate() - 1);   /* odd index in AABBCC = day 2 -> step back to day 1 */
+    return ctEpoch(s.getFullYear(), s.getMonth(), s.getDate(), 7, 0);
+  }
+  let tourAt = 0, tourBusy = false;
+  function tourLoad() {
+    if (!tourLayer || !map || !map.hasLayer(tourLayer)) return;   /* overlay off -> not even a fetch */
+    if (tourBusy || Date.now() - tourAt < 4 * 60000) return;
+    tourBusy = true;
+    fetch(WORKER + "/calls?pin=" + encodeURIComponent(PIN)).then(r => r.ok ? r.json() : null).then(j => {
+      tourBusy = false;
+      if (!j || !j.ok) return;   /* enhancement layer — the dispatch loop owns loud auth/feed failures */
+      tourAt = Date.now();
+      const since = tourStart();
+      tourLayer.clearLayers();
+      (j.calls || []).forEach(c => {
+        if (c.lat == null || c.lng == null) return;
+        if (/GENERAL|BURNING|BURN BAN|HYDRANT|CAD OUTAGE|DISREGARD/i.test(String(c.type || ""))) return;
+        const t = Date.parse(c.logged || c.started || ""); if (isNaN(t) || t < since) return;
+        const col = callColor(c.type);
+        let when = ""; try { when = new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: CT_ZONE }); } catch (e) {}
+        L.circleMarker([c.lat, c.lng], { pane: "tourPane", radius: 6, weight: 2, color: col, fillColor: col, fillOpacity: .45 })
+          .bindTooltip(esc(c.type) + (when ? " · " + when : "")).addTo(tourLayer);
+      });
+    }).catch(() => { tourBusy = false; });
   }
 
   /* ── LOW-WATER CROSSINGS — same rules as the wall: closed/caution pin, offline only in storms ── */
@@ -616,6 +666,7 @@
     loadState(); setInterval(loadState, 15000);
     loadWx(); setInterval(loadWx, 10 * 60 * 1000);
     cxPins(); setInterval(cxPins, 5 * 60 * 1000);
+    setInterval(tourLoad, 5 * 60 * 1000);   /* no-ops while the Tour Calls overlay is off; tourStart recomputed each pass so the 0700 reset lands */
     loadDrones(); setInterval(loadDrones, 20000);
   }
   if (PIN) { $("gate").style.display = "none"; boot(); }
