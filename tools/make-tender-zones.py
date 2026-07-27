@@ -41,7 +41,7 @@ for k in ("esd2", "esd6"):
     all_pts = new_pts + old_pts                      # union coverage: a plug in EITHER db is water on the ground
     cover = unary_union([Point(fwd(x, y)).buffer(FT1000, quad_segs=8) for x, y in all_pts])
     zone = dist.difference(cover)
-    zone = zone.simplify(12.0, preserve_topology=True)
+    zone = zone.simplify(5.0, preserve_topology=True)
     # drop slivers under 2 acres
     parts = [p for p in (zone.geoms if isinstance(zone, MultiPolygon) else [zone]) if p.area >= 2*ACRE]
     zone = unary_union(parts) if parts else Polygon()

@@ -60,6 +60,12 @@
                    height: 38px; vertical-align: top; line-height: 1;   /* fixed height + top align: the Apple glyph's font metrics can't skew the pair */
                    border-radius: 8px; padding: 0 16px; font-size: 14px; font-weight: 500; }
   .ccard .navbtn.apple { background: #1C2230; border: 1px solid #58A6FF; color: #58A6FF; }
+  /* tender water-supply chip — red solid = fire call in a hydrant gap; amber dashed = alarm call
+     in a gap (tenders if it turns into a working fire). Same rules as the wall's call rows. */
+  .ccard .tdops { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 6px;
+                  font-size: 12.5px; font-weight: 500; letter-spacing: .5px;
+                  border: 1px solid #F85149; color: #F85149; background: rgba(248,81,73,.12); }
+  .ccard .tdops.if { border: 1px dashed #FFC107; color: #FFC107; background: rgba(255,193,7,.10); }
   .gbadge { display: inline-flex; align-items: center; }
   #noCalls { pointer-events: none; background: rgba(13,17,23,.85); border: 1px solid #30363D; border-radius: 10px;
              padding: 8px 14px; font-size: 13px; color: #3FB950; align-self: flex-start; }
@@ -566,6 +572,39 @@
     if (/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "#58A6FF";
     if (/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZ|OVERDOSE|DIABET|ASSAULT|OB\b|HEADACHE|ALLERG|HEART/.test(t)) return "#FFC107";
     return "#8B949E"; }
+  /* ── TENDER chip — the wall's live water-supply check, in the cab: a fire-class call with no
+     plug within 1,000 ft in EITHER hydrant db gets the red TENDER OPS chip; an alarm-class call
+     in the same gap gets the amber TENDER IF FIRE advisory. SAWS export counts IN-SVC plugs only;
+     the legacy CAD layer contributes the private systems it misses — union rule, matching
+     tender-zones.json. Unknown/failed check -> no chip, retried next poll. ── */
+  const TENDER_DBS = [
+    "https://services1.arcgis.com/8onVmslF2KXErTHT/arcgis/rest/services/FireHydrant/FeatureServer/0/query?where=SERVSTAT%3D%27IN%20SVC%27",
+    "https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query?where=1%3D1"
+  ];
+  const tenderCache = {}, tenderPending = {};
+  const tenderKey = (c) => c.cad_code || ("id:" + (c && c.id));
+  function tenderClass(t) { t = String(t || "").toUpperCase();   /* wall's classify order: ALARM, then MVC (excluded), then FIRE */
+    if (/ALARM/.test(t)) return "alarm";
+    if (/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "";
+    if (/FIRE|STRUCT|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "fire";
+    return ""; }
+  function tenderCheck(c) {
+    const k = tenderKey(c);
+    if ((k in tenderCache) || tenderPending[k]) return;
+    const cls = tenderClass(c.type);
+    if (!cls || c.lat == null || c.lng == null) { tenderCache[k] = null; return; }
+    tenderPending[k] = 1;
+    Promise.all(TENDER_DBS.map(base =>
+      fetch(base + "&geometry=" + c.lng + "," + c.lat +
+            "&geometryType=esriGeometryPoint&inSR=4326&distance=305&units=esriSRUnit_Meter&spatialRel=esriSpatialRelIntersects&returnCountOnly=true&f=json")
+        .then(r => r.ok ? r.json() : null)))
+      .then(js => { delete tenderPending[k];
+        if (js.some(j => !j || j.count == null)) return;   /* either db unknown -> no chip; retried next poll */
+        tenderCache[k] = js.some(j => j.count > 0) ? null : (cls === "fire" ? "need" : "if");
+        if (tenderCache[k]) renderBand();                  /* flag found -> repaint now, not in 15s */
+      })
+      .catch(() => { delete tenderPending[k]; });
+  }
   function gmapsUrl(c) {
     if (c.lat != null && c.lng != null) return "https://www.google.com/maps/dir/?api=1&destination=" + c.lat + "," + c.lng;
     return "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(String(c.address || "") + ", Bexar County, TX");
@@ -586,9 +625,12 @@
     if (slim) return '<div class="ccard slim"' + attrs + ' style="border-color:' + col + '">' +
       '<span class="sty" style="color:' + col + '">' + esc(c.type) + "</span>" +
       '<span class="sad">' + esc(c.address) + "</span></div>";
+    const td = tenderCache[tenderKey(c)];
     return '<div class="ccard"' + attrs + ' style="border-color:' + col + '">' +
             '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
             '<div class="ad">' + esc(c.address) + '</div>' +
+            (td === "need" ? '<div><span class="tdops">TENDER OPS</span></div>'
+           : td === "if" ? '<div><span class="tdops if">TENDER IF FIRE</span></div>' : '') +
             (c.cross ? '<div class="meta"><span>X: ' + esc(c.cross) + "</span></div>" : "") +
             (() => {                                       /* channel + assigned units get their OWN line, units as visible tags */
               const us = (c.units || []).filter(isApp).length ? (c.units || []).filter(isApp) : (c.units || []);
@@ -621,6 +663,7 @@
         /* call band: newest two */
         live.sort((a, b) => String(b.started).localeCompare(String(a.started)));
         lastTop = live.slice(0, 2);
+        lastTop.forEach(tenderCheck);   /* async; a found flag repaints the band itself */
         renderBand();
 
         /* map pins + one-time focus per new call */
