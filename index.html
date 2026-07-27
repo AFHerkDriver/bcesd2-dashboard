@@ -1528,6 +1528,32 @@
           if(map.getZoom()>=HYD_Z) hydPaint(j.features,bbox);
         }).catch(function(){});
     }
+    /* ── LOW-WATER CROSSING PINS — the HALT/BexarFlood watched crossings on the MAP (the Program
+       Manager's marker art). The flood tile stays the fail-loud LIST; these pins make closures
+       spatial for route planning. Rules: CLOSED (1) and CAUTION (4) always pin; OFFLINE (3) pins
+       only during flood ops (unknown ≠ safe, but a chronically dark sensor shouldn't clutter a dry
+       week); verified-open (2) never pins. Feed verified live 2026-07-26: lat/lng on all 8 watched
+       sensors. Enhancement layer: feed down -> pins absent, the tile still carries the loud state.
+       Same 8 sensors as FloodOps WATCH — keep the two lists in sync. */
+    var cxIcon=L.icon({iconUrl:"flood-marker.png",iconRetinaUrl:"flood-marker@2x.png",iconSize:[27,34],iconAnchor:[13,33]});
+    var cxPinLayer=L.layerGroup().addTo(map);
+    var CX_PIN_WATCH={"2311":1,"2325":1,"2322":1,"2321":1,"2308":1,"2561":1,"2580":1,"2377":1};
+    function cxPins(){
+      fetch("https://api.bexarflood.org/api/sensors/GetAll").then(function(r){ return r.ok?r.json():null; }).then(function(j){
+        var arr=Array.isArray(j)?j:[]; if(!arr.length) return;      /* feed hiccup: keep last known pins */
+        cxPinLayer.clearLayers();
+        arr.forEach(function(s){
+          if(!CX_PIN_WATCH[String(s.id)] || s.lat==null || s.lng==null) return;
+          var st=+s.statusTypeID;
+          if(st===2) return;                                        /* verified open */
+          if(st===3 && !window.FLOOD_ACTIVE) return;                /* offline sensor: pin only when flood ops on */
+          var lbl=st===1?"CLOSED":st===4?"CAUTION":"SENSOR OFFLINE — assume unsafe";
+          L.marker([s.lat,s.lng],{icon:cxIcon,zIndexOffset:500,keyboard:false})
+            .bindTooltip(String(s.title||"crossing")+" — "+lbl).addTo(cxPinLayer);
+        });
+      }).catch(function(){ /* enhancement layer — the tile carries the loud failure state */ });
+    }
+    setTimeout(cxPins,20000); setInterval(cxPins,5*60*1000);
     /* Fresh new-call pins live in their OWN layer so the 5-min tally rebuild (BC2FD_CALL_PINS, which
        clearLayers() on pinLayer) can't wipe a pin the tally hasn't caught up to yet — that was making
        a just-dropped call flash its sonar and then vanish. A fresh pin is retired only once the tally

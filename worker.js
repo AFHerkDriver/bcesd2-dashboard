@@ -81,7 +81,9 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
    agg:<YYYY-MM>    monthly rollup the metrics page reads: run count, class mix, hour-of-day bands,
                     station + apparatus workload, chute samples [cls,seconds]. Central-time months. */
 function clsOf(t) { t = String(t || "").toUpperCase();
-  if (/GENERAL|BURNING|BURN BAN|HYDRANT/.test(t)) return "gen";      /* announcements, not runs */
+  /* announcements, not runs. CAD OUTAGE / DISREGARD: the county's manual status + cancellation
+     pages during a CAD outage (observed 2026-07-26) — dispatcher traffic, never workload. */
+  if (/GENERAL|BURNING|BURN BAN|HYDRANT|CAD OUTAGE|DISREGARD/.test(t)) return "gen";
   if (/MUTUAL/.test(t)) return "mutual";
   if (/ALARM/.test(t)) return "alarm";
   if (/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "mvc";
@@ -258,6 +260,218 @@ function stationsOf(units) {
   return [...s];
 }
 
+/* ── UAV OPERATIONS (Firehawk UAV Ops page — served from the firehawk-ops repo, powered here) ──
+   Mission-appropriate call rules. VISIBLE + TUNABLE: this list is returned verbatim by /uav so the
+   page can display exactly what counts, and editing a pattern here re-classifies ALL history on the
+   next /uav?fresh=1 (classification happens at read time from the permanent arch: rows — nothing is
+   baked in at write time). Department ground truth: missing persons arrive as "assist law
+   enforcement" tones, so the missing rule matches those too. */
+const UAV_RULES = [
+  { k: "missing", label: "Missing Person / Assist LE", pat: "MISSING|LOST\\s+PERSON|\\bSEARCH\\b|ASSIST.*(LAW|POLICE|SHERIFF|CONSTAB|OFFICER|\\bLE\\b)" },
+  { k: "smoke",   label: "Smoke Investigation",        pat: "SMOKE" },
+  { k: "brush",   label: "Brush / Grass / Wildland",   pat: "BRUSH|GRASS|WILDLAND|WOODS|FOREST" },
+  { k: "struct",  label: "Structure Fire",             pat: "STRUCT" },
+  { k: "hazmat",  label: "Hazmat",                     pat: "\\bHAZ" },
+  { k: "water",   label: "Water Rescue",               pat: "WATER\\s*RESCUE|DROWN|SWIFT\\s*WATER|\\bBOAT\\b|LOW\\s*WATER\\s*RESCUE" },
+];
+const _uavRes = UAV_RULES.map(r => ({ k: r.k, re: new RegExp(r.pat, "i") }));
+function uavRuleOf(ty) { ty = String(ty || ""); for (const r of _uavRes) if (r.re.test(ty)) return r.k; return ""; }
+const uavAttached = (units) => (units || []).filter(u => /^UAV\d{3}$/i.test(String(u))).map(u => String(u).toUpperCase());
+
+/* DRONESENSE FLIGHT SESSIONS — the CAD attach list says a UAV was DISPATCHED; only DroneSense says
+   it actually FLEW. Piggybacks on the board's /drones polling (24/7 while a wall board is open):
+   fltopen:<id>  live session, heartbeat "last" refreshed at most every 3 min (bounded writes)
+   flt:<startISO>:<id8>  permanent closed session {s,e,cs,mo,dur} once the aircraft drops off the
+                         feed for >3 min. Sub-60s sessions are stream flaps, not flights — dropped.
+   End times are accurate to the 3-min heartbeat; per-isolate 60s throttle keeps KV traffic flat. */
+let _fltAt = 0;
+async function logFlights(env, drones) {
+  const now = Date.now();
+  if (now - _fltAt < 60 * 1000) return;
+  _fltAt = now;
+  try {
+    const open = await env.PINS.list({ prefix: "fltopen:", limit: 100 });
+    const openMap = {};
+    for (const k of open.keys) { const v = await env.PINS.get(k.name);
+      if (v) { try { openMap[k.name.slice(8)] = JSON.parse(v); } catch (e) {} } }
+    const live = {};
+    for (const d of (drones || [])) {
+      if (!d.id) continue;
+      live[d.id] = 1;
+      const o = openMap[d.id];
+      if (!o) await env.PINS.put("fltopen:" + d.id,
+        JSON.stringify({ s: new Date(now).toISOString(), cs: d.callSign || "", mo: d.model || "", last: now }),
+        { expirationTtl: 24 * 3600 });
+      else if (now - (o.last || 0) > 3 * 60 * 1000) { o.last = now;
+        await env.PINS.put("fltopen:" + d.id, JSON.stringify(o), { expirationTtl: 24 * 3600 }); }
+    }
+    for (const id in openMap) {
+      if (live[id]) continue;
+      const o = openMap[id], endMs = o.last || now;
+      if (now - endMs < 3 * 60 * 1000) continue;                 /* brief dropout — keep the session open */
+      const dur = Math.max(0, Math.round((endMs - Date.parse(o.s)) / 1000));
+      if (isFinite(dur) && dur >= 60)
+        await env.PINS.put("flt:" + o.s + ":" + String(id).slice(0, 8),
+          JSON.stringify({ s: o.s, e: new Date(endMs).toISOString(), cs: o.cs || "", mo: o.mo || "", dur }));
+      await env.PINS.delete("fltopen:" + id);
+    }
+  } catch (e) { /* flight logging must never break the drone feed */ }
+}
+
+/* One normalized DroneSense pull — shared by /drones (dashboard pins) and /uavdrones (Firehawk
+   pins) so the two routes can never drift. Field names verified against the live API. */
+async function fetchDroneList(env) {
+  try {
+    const dr = await fetch("https://external.dronesense.com/v1/drones/with-sensors",
+      { headers: { "X-API-KEY": String(env.DRONE_FEED).trim(), "Accept": "application/json" } });
+    if (!dr.ok) return { ok: false, error: "dronesense " + dr.status };
+    const arr = await dr.json();
+    const list = Array.isArray(arr) ? arr : [];
+    const num = (v) => (typeof v === "number" && isFinite(v)) ? v : null;
+    const drones = list.map(d => {
+      const sensors = Array.isArray(d && d.sensors) ? d.sensors : [];
+      const vid = sensors.find(s => s && typeof s.video_url === "string" && /^https:\/\//i.test(s.video_url));
+      return {
+        id:         String((d && d.id) ?? ""),
+        callSign:   String((d && d.callSign) ?? "").trim(),
+        mission:    String((d && d.missionName) ?? "").trim(),
+        model:      String((d && d.model) ?? "").trim(),
+        video_url:  vid ? vid.video_url : "",
+        lat:        num(d && d.latitude),
+        lng:        num(d && d.longitude),
+        altAgl:     num(d && d.altitudeAgl),   // meters
+        altMsl:     num(d && d.altitudeMsl),   // meters
+        speed:      num(d && d.speed),         // m/s
+        heading:    num(d && d.heading),       // degrees
+        poiLat:     num(d && d.spoiLat) || null,   // sensor POI (0 => unset)
+        poiLng:     num(d && d.spoiLng) || null,
+        lastUpdate: (d && d.lastUpdate) || null,
+      };
+    });
+    return { ok: true, drones };
+  } catch (e) { return { ok: false, error: "dronesense unreachable" }; }
+}
+
+/* Firehawk PIN check against the firehawk-auth worker. Cloudflare BLOCKS a Worker fetching another
+   Worker's *.workers.dev URL on the same account (error 1042), so the call goes through the FHAUTH
+   SERVICE BINDING when it exists (Worker settings -> Bindings -> Service binding, name FHAUTH ->
+   firehawk-auth); the direct fetch stays as a fallback for environments where it's allowed.
+   Returns true (pin good) / false (pin rejected by firehawk-auth) / "down" (verification
+   INFRASTRUCTURE failed) — three states so a broken auth link can NEVER masquerade as a bad pin.
+   Successful pins are cached per isolate for 10 min so live polling doesn't hammer firehawk-auth;
+   failures are never cached (each one re-verifies and costs the caller an rl strike). */
+let _fhOk = {};
+async function fhVerify(env, rawPin) {
+  const pin = String(rawPin || "").trim();
+  if (!/^\d{4,8}$/.test(pin)) return false;
+  const now = Date.now();
+  if (_fhOk[pin] && _fhOk[pin] > now) return true;
+  try {
+    const req = new Request("https://firehawk-auth.usafsentinel-45e.workers.dev/auth",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin }) });
+    const fr = env.FHAUTH ? await env.FHAUTH.fetch(req) : await fetch(req);
+    if (fr.status === 401 || fr.status === 403) return false;      /* firehawk-auth SAW the pin and said no */
+    if (fr.ok) {
+      const fj = await fr.json().catch(() => null);
+      if (fj && fj.ok) { _fhOk[pin] = now + 10 * 60 * 1000; return true; }
+      if (fj && fj.ok === false) return false;
+    }
+  } catch (e) { /* fall through to "down" */ }
+  return "down";
+}
+
+/* FIREHAWK SCHEDULE CROSS — reads the firehawk-scheduler Firestore schedule docs (public REST, same
+   key the Firehawk page ships) so /uav can say whether a MISSED mission-appropriate call happened
+   while a pilot was actually on the duty schedule. Minimal Firestore value decoder + the same
+   staffed test the Firehawk grid uses: explicit format = lead flag / rpic / extra upstaff; legacy
+   format = any rpic. */
+function fsv(v) {
+  if (!v || typeof v !== "object") return null;
+  if ("stringValue" in v) return v.stringValue;
+  if ("integerValue" in v) return parseInt(v.integerValue);
+  if ("doubleValue" in v) return v.doubleValue;
+  if ("booleanValue" in v) return v.booleanValue;
+  if ("mapValue" in v) { const o = {}; const f = v.mapValue.fields || {}; for (const k in f) o[k] = fsv(f[k]); return o; }
+  if ("arrayValue" in v) return (v.arrayValue.values || []).map(fsv);
+  return null;
+}
+function dayStaffed(day) {
+  if (!day || typeof day !== "object") return false;
+  const extra = Array.isArray(day.extra) ? day.extra.filter(x => x != null) : [];
+  if (day.lead !== undefined) return !!day.lead || day.rpic != null || extra.length > 0;
+  return day.rpic != null || extra.length > 0;                   /* legacy rows: rpic set = someone on */
+}
+/* Crew roster (firehawk/crew) — id -> pilot name, so the duty cross can NAME who was on. The doc
+   carries both a members array (ids 1-6) and a membersById map (newer timestamp ids); merge both.
+   VERIFIED live shape 2026-07. Cached per isolate for 1 h; null on any failure (names then omitted,
+   staffed/unstaffed verdicts unaffected). */
+let _fhCrew = null, _fhCrewAt = 0;
+async function fhCrew() {
+  if (_fhCrew && Date.now() - _fhCrewAt < 3600 * 1000) return _fhCrew;
+  try {
+    const r = await fetch("https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents/firehawk/crew?key=AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ",
+      { headers: { "Accept": "application/json" } });
+    if (!r.ok) return _fhCrew;
+    const j = await r.json(), f = (j.fields || {}), out = {};
+    const take = (m) => { if (m && m.id != null) out[String(m.id)] = { name: m.name || m.initials || ("Pilot " + m.id), initials: m.initials || "" }; };
+    if (f.members) (fsv(f.members) || []).forEach(take);
+    if (f.membersById) { const map = fsv(f.membersById) || {}; for (const k in map) take(map[k]); }
+    if (Object.keys(out).length) { _fhCrew = out; _fhCrewAt = Date.now(); }
+  } catch (e) { /* names are enhancement only */ }
+  return _fhCrew;
+}
+/* Who was on that day, as a display string ("UAV121 Sanchez · UAV124 Rodriguez +CR"). Lead flag =
+   UAV121 flown by the lead pilot (id 1, same convention as the Firehawk app); rpic = UAV124. */
+function dayWho(day, crew) {
+  if (!day || typeof day !== "object") return "";
+  const nm = (id) => { const c = crew && crew[String(id)]; return c ? c.name : ("#" + id); };
+  const extra = Array.isArray(day.extra) ? day.extra.filter(x => x != null) : [];
+  const parts = [];
+  if (day.lead !== undefined) {
+    if (day.lead) parts.push("UAV121 " + nm(1));
+    if (day.rpic != null) parts.push("UAV124 " + nm(day.rpic));
+  } else if (day.rpic != null) {
+    parts.push((String(day.rpic) === "1" ? "UAV121 " : "UAV124 ") + nm(day.rpic));
+  }
+  if (extra.length) parts.push("+" + extra.map(id => { const c = crew && crew[String(id)]; return c ? (c.initials || c.name) : ("#" + id); }).join(","));
+  return parts.join(" · ");
+}
+async function fhSchedule(mon) {                                 /* mon = "YYYY-MM" -> {dayNum: staffed} or null */
+  try {
+    /* DOC NAME MONTH IS 0-BASED (verified against the live app + the board's own working UAV-duty
+       reader): July 2026 lives at schedule_2026_6. A 1-based read here returns the NEXT month's
+       (empty) doc and every miss reports "no schedule data" — that bug shipped once; don't re-make it. */
+    const y = mon.slice(0, 4), m = String(parseInt(mon.slice(5), 10) - 1);
+    const r = await fetch("https://firestore.googleapis.com/v1/projects/firehawk-scheduler/databases/(default)/documents/firehawk/schedule_"
+      + y + "_" + m + "?key=AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ", { headers: { "Accept": "application/json" } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    /* VERIFIED live shape (2026-07): the month grid is a JSON STRING under daysJson (Firestore
+       numeric-field-name workaround, same as the Firehawk app reads). Legacy days mapValue kept as
+       fallback. An EMPTY month ({}) means the schedule was never filled in — return null so misses
+       report "no schedule data", never a fabricated "pilot was off". */
+    let days = null;
+    const f = j.fields || {};
+    if (f.daysJson && typeof f.daysJson.stringValue === "string") {
+      try { days = JSON.parse(f.daysJson.stringValue); } catch (e) { days = null; }
+    } else if (f.days && f.days.mapValue) {
+      days = fsv(f.days);
+    }
+    if (!days || !Object.keys(days).length) return null;
+    const crew = await fhCrew();
+    const out = {};
+    for (const k in days) out[parseInt(k, 10)] = { st: dayStaffed(days[k]), who: dayWho(days[k], crew) };
+    return out;
+  } catch (e) { return null; }
+}
+/* Central-time calendar date of a timestamp, for schedule lookups (the schedule is a calendar-day
+   grid, not a 0700 tour — a 2 AM missed call belongs to that calendar day's duty entry). */
+function ctDate(iso) {
+  try { const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(iso));
+    const g = (t) => (p.find(x => x.type === t) || {}).value || "";
+    return { mon: g("year") + "-" + g("month"), day: parseInt(g("day"), 10) };
+  } catch (e) { return { mon: "unknown", day: 0 }; } }
+
 /* Shared PIN gate for every PIN-bearing route, backed by the SAME rl:<ip> failed-attempt counter
    /verify and /state already use. Previously only those two consulted it, so /calls, /diag, /drones,
    /dupes and /accesslog were unthrottled brute-force oracles — ten bad PINs to /calls returned 401
@@ -314,7 +528,32 @@ function dedupeIncidents(rows) {
     if (!g) { g = { key, t: ms(c), rows: [] }; groups.push(g); }
     g.rows.push(c);
   }
-  return groups.map(g => {
+  /* SECOND PASS — cad codes are not trustworthy incident identity on a degraded CAD day. Observed
+     live 2026-07-26 (the county was broadcasting "DISREGARD ACTIVE911" that morning): the SAME
+     incident re-toned seconds apart under DIFFERENT cad_codes, and the cad fast-path above kept
+     both because cad-keyed groups were never compared by address. Merge groups whose normalized
+     address+type match inside the same 5-minute window, cad codes notwithstanding. Two GENUINE
+     calls at one address are hours apart, not seconds — same risk trade the window already makes.
+     Pure broadcasts (no address text) are untouched; identical general-alert text DOES merge. */
+  /* Identity key: address+type when an address exists. When it does NOT — the county's manual
+     free-text pages during a CAD outage carry the address INSIDE the type text and nothing in the
+     address field (observed live 2026-07-26: "MED - ASSAULT - 1297 W LOOP 1604 N APT 2705", empty
+     address, no cad, pushed twice in the same second) — fall back to the FULL normalized type text.
+     Identical free-text within the window = one page; genuinely distinct broadcasts differ in text. */
+  const akOf = (g) => {
+    for (const r of g.rows) {
+      const a = String(r.address || "").toLowerCase().replace(/\s+/g, " ").trim();
+      if (a) return "a|" + a + "|" + String(r.type || "").toLowerCase().trim(); }
+    const tt = String((g.rows[0] || {}).type || "").toLowerCase().replace(/\s+/g, " ").trim();
+    return tt ? "t|" + tt : null; };
+  const merged2 = [];
+  for (const g of [...groups].sort((a, b) => a.t - b.t)) {
+    const ak = akOf(g);
+    const hit = ak && merged2.find(x => x.ak === ak && Math.abs(x.t - g.t) <= 5 * 60 * 1000);
+    if (hit) hit.rows.push(...g.rows);
+    else { g.ak = ak; merged2.push(g); }
+  }
+  return merged2.map(g => {
     if (g.rows.length === 1) return g.rows[0];
     const base = g.rows.reduce((a, b) => (seenAt(b) < seenAt(a) ? b : a));   /* earliest first-sighting wins */
     const seen = {}, units = [];
@@ -363,7 +602,7 @@ async function logAccess(env, entry) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     /* CORS: normally locked to the GitHub Pages origin. Also reflect a localhost/127.0.0.1 origin
        (any port) so a local dev preview (npx serve) behaves like the wall — PIN + live data work.
        Everything stays PIN-gated, so this doesn't open access; it only relaxes the browser origin
@@ -406,37 +645,32 @@ export default {
       const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
       if (gate.res) return gate.res;
       if (!env.DRONE_FEED) return json({ ok: false, error: "not configured" }, 501);
-      try {
-        const dr = await fetch("https://external.dronesense.com/v1/drones/with-sensors",
-          { headers: { "X-API-KEY": String(env.DRONE_FEED).trim(), "Accept": "application/json" } });
-        if (!dr.ok) return json({ ok: false, error: "dronesense " + dr.status }, 502);
-        const arr = await dr.json();
-        const list = Array.isArray(arr) ? arr : [];
-        const num = (v) => (typeof v === "number" && isFinite(v)) ? v : null;
-        const drones = list.map(d => {
-          const sensors = Array.isArray(d && d.sensors) ? d.sensors : [];
-          const vid = sensors.find(s => s && typeof s.video_url === "string" && /^https:\/\//i.test(s.video_url));
-          return {
-            id:         String((d && d.id) ?? ""),
-            callSign:   String((d && d.callSign) ?? "").trim(),
-            mission:    String((d && d.missionName) ?? "").trim(),
-            model:      String((d && d.model) ?? "").trim(),
-            video_url:  vid ? vid.video_url : "",
-            lat:        num(d && d.latitude),
-            lng:        num(d && d.longitude),
-            altAgl:     num(d && d.altitudeAgl),   // meters
-            altMsl:     num(d && d.altitudeMsl),   // meters
-            speed:      num(d && d.speed),         // m/s
-            heading:    num(d && d.heading),       // degrees
-            poiLat:     num(d && d.spoiLat) || null,   // sensor POI (0 => unset)
-            poiLng:     num(d && d.spoiLng) || null,
-            lastUpdate: (d && d.lastUpdate) || null,
-          };
-        });
-        return json({ ok: true, count: drones.length, drones }, 200);
-      } catch (e) {
-        return json({ ok: false, error: "dronesense unreachable" }, 502);
+      const r = await fetchDroneList(env);
+      if (!r.ok) return json({ ok: false, error: r.error }, 502);
+      /* UAV flight-session logging rides the same poll — after the response is built so the
+         board's feed latency is untouched (waitUntil), 60s-throttled inside logFlights */
+      try { if (ctx && ctx.waitUntil) ctx.waitUntil(logFlights(env, r.drones)); else await logFlights(env, r.drones); } catch (e) {}
+      return json({ ok: true, count: r.drones.length, drones: r.drones }, 200);
+    }
+
+    /* ── GET /uavdrones?pin=XXXX — the SAME live DroneSense list, gated by FIREHAWK pins for the
+       UAV Ops page (dashboard pins do not open it, mirroring /uav). Polls here also feed the
+       flight-session log, so airtime accrues even if no wall board is open. ── */
+    if (req.method === "GET" && url.pathname === "/uavdrones") {
+      const rlKey = "rl:" + ip;
+      const fails = parseInt((await env.PINS.get(rlKey)) || "0", 10);
+      if (fails >= 8) return json({ ok: false, error: "rate-limited" }, 429);
+      const fhv = await fhVerify(env, url.searchParams.get("pin"));
+      if (fhv === "down") return json({ ok: false, error: "auth link down — add the FHAUTH service binding" }, 503);
+      if (fhv !== true) {
+        try { await env.PINS.put(rlKey, String(fails + 1), { expirationTtl: 300 }); } catch (e) {}
+        return json({ ok: false, error: "unauthorized" }, 401);
       }
+      if (!env.DRONE_FEED) return json({ ok: false, error: "not configured" }, 501);
+      const r = await fetchDroneList(env);
+      if (!r.ok) return json({ ok: false, error: r.error }, 502);
+      try { if (ctx && ctx.waitUntil) ctx.waitUntil(logFlights(env, r.drones)); else await logFlights(env, r.drones); } catch (e) {}
+      return json({ ok: true, count: r.drones.length, drones: r.drones }, 200);
     }
 
     /* ── GET /diag?pin=XXXX — open in any browser to see exactly which Active911 step fails.
@@ -692,9 +926,156 @@ export default {
       } catch (e) { return json({ ok: false, error: "heat error" }, 502); }
     }
 
+    /* ── GET /uav?pin=XXXX[&fresh=1] — Firehawk UAV Ops rollup. FIREHAWK PINS ONLY (department
+       call): every pin is verified server-side against the firehawk-auth worker, fail-closed —
+       any error there = not authorized. Dashboard officer pins do NOT open this route. Shares the
+       same rl:<ip> failed-attempt counter as every other route. Classification happens at READ
+       time from the permanent arch: rows, so editing UAV_RULES re-scores all history. 15-min KV
+       cache; ?fresh=1 bypasses it. ── */
+    if (req.method === "GET" && url.pathname === "/uav") {
+      const rlKey = "rl:" + ip;
+      const fails = parseInt((await env.PINS.get(rlKey)) || "0", 10);
+      if (fails >= 8) return json({ ok: false, error: "rate-limited" }, 429);
+      const fhv = await fhVerify(env, url.searchParams.get("pin"));
+      if (fhv === "down") return json({ ok: false, error: "auth link down — add the FHAUTH service binding" }, 503);
+      if (fhv !== true) {
+        try { await env.PINS.put(rlKey, String(fails + 1), { expirationTtl: 300 }); } catch (e) {}
+        return json({ ok: false, error: "unauthorized" }, 401);
+      }
+      const fresh = url.searchParams.get("fresh") === "1";
+      if (!fresh) {
+        const cv = await env.PINS.get("uavcache:v1");
+        if (cv) return new Response(cv, { status: 200, headers: { "Content-Type": "application/json", ...cors } });
+      }
+      try {
+        /* one pass over the permanent archive — classify, split flown/missed, collect map points */
+        const months = {}, missed = [], byHour = new Array(24).fill(0), pts = [], tyCounts = {};
+        let qFl = 0, qMiss = 0, qOpp = 0;
+        let cur;
+        do {
+          const lst = await env.PINS.list({ prefix: "arch:", cursor: cur, limit: 1000 });
+          for (const kk of lst.keys) {
+            const v = await env.PINS.get(kk.name); if (!v) continue;
+            let c; try { c = JSON.parse(v); } catch { continue; }
+            const rule = uavRuleOf(c.ty), uavs = uavAttached(c.u), flew = uavs.length > 0;
+            const tk = String(c.ty || "").trim().toUpperCase() || "(BLANK)";
+            const tc = tyCounts[tk] = tyCounts[tk] || { n: 0, r: rule, f: 0 };
+            tc.n++; if (flew) tc.f++;
+            if (!rule && !flew) continue;                        /* neither mission-appropriate nor flown */
+            const mh = ctMonthHour(c.t);
+            const m = months[mh.mon] = months[mh.mon] || { app: 0, fl: 0, opp: 0, byRule: {} };
+            if (rule) {
+              m.app++; m.byRule[rule] = (m.byRule[rule] || 0) + 1;
+              if (mh.hour >= 0 && mh.hour < 24) byHour[mh.hour]++;
+              if (flew) { m.fl++; qFl++; }
+              else { qMiss++; missed.push({ t: c.t, ty: c.ty || "", ad: c.ad || "", r: rule, la: c.la ?? null, ln: c.ln ?? null }); }
+            } else { m.opp++; qOpp++; }                          /* UAV flew a call outside the rules — flight of opportunity */
+            if (c.la != null && c.ln != null && pts.length < 600)
+              pts.push([+(+c.la).toFixed(4), +(+c.ln).toFixed(4), flew ? 1 : 0, rule]);
+          }
+          cur = lst.list_complete ? null : lst.cursor;
+        } while (cur);
+        missed.sort((a, b) => String(b.t).localeCompare(String(a.t)));
+        if (missed.length > 120) missed.length = 120;
+        /* schedule cross — was a pilot ON THE DUTY SCHEDULE when we missed it? st: true/false/null(no data) */
+        const schedByMon = {}, monsNeeded = [...new Set(missed.map(x => ctDate(x.t).mon))].slice(0, 8);
+        for (const mn of monsNeeded) schedByMon[mn] = await fhSchedule(mn);
+        let msStaffed = 0, msOff = 0, msUnk = 0;
+        for (const x of missed) {
+          const cd = ctDate(x.t), sc = schedByMon[cd.mon], d = sc && sc[cd.day];
+          x.st = d ? !!d.st : (sc ? false : null);                /* day absent from a POPULATED month = nobody assigned */
+          x.who = (d && d.st) ? (d.who || "") : "";               /* name the on-duty pilot(s) on staffed misses */
+          if (x.st === true) msStaffed++; else if (x.st === false) msOff++; else msUnk++;
+        }
+        /* DroneSense flight sessions accrued so far (permanent flt: rows) */
+        const flights = { n: 0, secs: 0, byCs: {}, recent: [] };
+        let fcur;
+        do {
+          const fl = await env.PINS.list({ prefix: "flt:", cursor: fcur, limit: 1000 });
+          for (const kk of fl.keys) {
+            const v = await env.PINS.get(kk.name); if (!v) continue;
+            let s; try { s = JSON.parse(v); } catch { continue; }
+            flights.n++; flights.secs += (s.dur || 0);
+            const cs = s.cs || s.mo || "?";
+            flights.byCs[cs] = flights.byCs[cs] || { n: 0, secs: 0 };
+            flights.byCs[cs].n++; flights.byCs[cs].secs += (s.dur || 0);
+            flights.recent.push({ s: s.s, e: s.e, cs: s.cs || "", mo: s.mo || "", dur: s.dur || 0 });
+          }
+          fcur = fl.list_complete ? null : fl.cursor;
+        } while (fcur);
+        flights.recent.sort((a, b) => String(b.s).localeCompare(String(a.s)));
+        if (flights.recent.length > 40) flights.recent.length = 40;
+        const types = Object.entries(tyCounts).sort((a, b) => b[1].n - a[1].n).slice(0, 60)
+          .map(([ty, x]) => [ty, x.n, x.r, x.f]);
+        const out = { ok: true, gen: new Date().toISOString(),
+          rules: UAV_RULES.map(r => ({ k: r.k, label: r.label, pat: r.pat })),
+          quad: { fl: qFl, miss: qMiss, opp: qOpp },
+          months, missed, byHour, pts, types, flights,
+          sched: { loaded: monsNeeded.filter(mn => schedByMon[mn]), msStaffed, msOff, msUnk } };
+        const body = JSON.stringify(out);
+        try { await env.PINS.put("uavcache:v1", body, { expirationTtl: 900 }); } catch (e) {}
+        return new Response(body, { status: 200, headers: { "Content-Type": "application/json", ...cors } });
+      } catch (e) { return json({ ok: false, error: "uav rollup error" }, 502); }
+    }
+
     if (req.method === "GET" && url.pathname === "/dupes") {
       const gate = await pinGate(env, ip, url.searchParams.get("pin"), json, "unauthorized — add ?pin=<station pin>");
       if (gate.res) return gate.res;
+      /* ?clean=1 (admin only): SCRUB existing duplicate rows — the 48h call log (board tally/run
+         sheet) AND the permanent archive (metrics). Same identity rule as the read-time dedupe:
+         normalized address+type within 5 min = one incident, cad codes notwithstanding; keeps the
+         EARLIEST row, unions units into the survivor, deletes the rest. Run /metrics?rebuild=1
+         afterwards so the monthly rollups drop the padding. */
+      if (url.searchParams.get("clean") === "1") {
+        if ((gate.who.tier || "") !== "admin") return json({ ok: false, error: "admin only" }, 403);
+        try {
+          const WIN = 5 * 60 * 1000;
+          async function scrub(prefix, adOf, tyOf, tOf, uOf) {
+            const rows = []; let cur;
+            do {
+              const lst = await env.PINS.list({ prefix, cursor: cur, limit: 1000 });
+              for (const kk of lst.keys) {
+                const v = await env.PINS.get(kk.name); if (!v) continue;
+                try { const c = JSON.parse(v); rows.push({ key: kk.name, c }); } catch (e) {}
+              }
+              cur = lst.list_complete ? null : lst.cursor;
+            } while (cur);
+            const ms = (r) => { const t = Date.parse(tOf(r.c) || ""); return isNaN(t) ? 0 : t; };
+            /* same identity rule as the read-time dedupe: address+type, else the full free-text type
+               (CAD-outage manual pages have no address field) */
+            const ak = (r) => { const a = String(adOf(r.c) || "").toLowerCase().replace(/\s+/g, " ").trim();
+              if (a) return "a|" + a + "|" + String(tyOf(r.c) || "").toLowerCase().trim();
+              const tt = String(tyOf(r.c) || "").toLowerCase().replace(/\s+/g, " ").trim();
+              return tt ? "t|" + tt : null; };
+            rows.sort((a, b) => ms(a) - ms(b));
+            const keep = []; let removed = 0;
+            for (const r of rows) {
+              const k = ak(r);
+              const hit = k && keep.find(x => x.k === k && Math.abs(x.t - ms(r)) <= WIN);
+              if (hit) {
+                const seen = {}, uni = [];
+                for (const u of (uOf(hit.r.c) || []).concat(uOf(r.c) || [])) {
+                  const uk = String(u).toUpperCase(); if (u && !seen[uk]) { seen[uk] = 1; uni.push(u); } }
+                if (uni.length > (uOf(hit.r.c) || []).length) {           /* survivor absorbs the dupe's units */
+                  if (prefix === "call:") { hit.r.c.units = uni; hit.r.c.stations = stationsOf(uni); }
+                  else hit.r.c.u = uni;
+                  await env.PINS.put(hit.r.key, JSON.stringify(hit.r.c),
+                    prefix === "call:" ? { expirationTtl: 48 * 3600 } : undefined);
+                }
+                await env.PINS.delete(r.key); removed++;
+              } else keep.push({ k, t: ms(r), r });
+            }
+            return removed;
+          }
+          /* window on DISPATCH time (started), not first-sighting — a re-tone the relay first saw
+             20 min later is still the same incident (the flagged heart-problems pair survived the
+             first scrub exactly this way) */
+          const calls = await scrub("call:", c => c.address, c => c.type, c => c.started || c.logged, c => c.units);
+          const arch  = await scrub("arch:", c => c.ad, c => c.ty, c => c.t, c => c.u);
+          return json({ ok: true, cleaned: { calls, arch },
+            next: arch ? "run /metrics?rebuild=1 to re-aggregate the months" : "aggregates unaffected" }, 200);
+        } catch (e) { return json({ ok: false, error: "clean failed" }, 502); }
+      }
       try {
         const listed = await env.PINS.list({ prefix: "call:", limit: 1000 });
         const out = [];
@@ -991,6 +1372,10 @@ export default {
                 const uk = String(u).toUpperCase(); if (u && !seenU[uk]) { seenU[uk] = 1; merged.push(u); }
               }
               canon.units = merged;
+              /* The dupe's LOG ROW is keyed by ITS cad_code when it has one — deleting only call:<id>
+                 left cad-keyed dupe rows alive in the 48h log (today's doubles). Record both keys;
+                 same-cad rows were already unioned upstream, so this can never delete the canonical. */
+              if (c.cad_code) absorbed.push(c.cad_code);
               if (c.id) absorbed.push(c.id);
             } else {
               if (!buckets.has(k)) buckets.set(k, []);
