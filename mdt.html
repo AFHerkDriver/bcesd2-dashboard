@@ -35,8 +35,8 @@
   #noCalls { pointer-events: none; background: rgba(13,17,23,.85); border: 1px solid #30363D; border-radius: 10px;
              padding: 8px 14px; font-size: 13px; color: #3FB950; align-self: flex-start; }
 
-  /* right rail chips — pushed down so the Leaflet layers button owns the top-right corner */
-  #rail { position: fixed; top: 58px; right: 8px; z-index: 800; display: flex; flex-direction: column; gap: 6px;
+  /* right rail chips — top-right corner (layers button lives bottom-right) */
+  #rail { position: fixed; top: 8px; right: 8px; z-index: 800; display: flex; flex-direction: column; gap: 6px;
           align-items: flex-end; max-width: 46vw; }
   .chip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 10px; padding: 7px 12px;
           font-size: 12px; color: #8B949E; text-align: right; }
@@ -46,7 +46,7 @@
   .chip .sub { display: block; font-size: 10px; color: #8B949E; font-weight: 400; }
 
   /* drone PiP — three sizes: corner, half screen, full screen (tap ⤢ to cycle) */
-  #dronePip { position: fixed; right: 8px; bottom: 8px; z-index: 850; width: min(340px, 40vw); display: none; }
+  #dronePip { position: fixed; right: 8px; bottom: 64px; z-index: 850; width: min(340px, 40vw); display: none; }   /* clears the bottom-right layers button */
   #dronePip.half { width: min(50vw, 720px); }
   #dronePip.full { left: 0; top: 0; right: 0; bottom: 0; width: auto; z-index: 1500;
                    background: rgba(13,17,23,.97); display: flex; align-items: center; justify-content: center; }
@@ -159,12 +159,16 @@
     map = L.map("map", { center: [29.44, -98.72], zoom: 12, layers: [sunUp() ? satellite : dark], zoomControl: false });
     map.attributionControl.setPrefix(false);
     map.createPane("radarPane"); map.getPane("radarPane").style.zIndex = 350;
-    /* layer choices — same trio as the wall, radar togglable by hand on top of its storm auto-on */
-    const radarOverlay = L.layerGroup();
+    /* layer choices — same set as the wall: bases, Wind Flow particles, radar (manual on top of
+       its storm auto-on) */
+    const radarOverlay = L.layerGroup(), windOverlay = L.layerGroup();
     L.control.layers({ "Satellite": satellite, "Dark": dark, "Positron": positron },
-      { "Radar": radarOverlay }, { collapsed: true, position: "topright" }).addTo(map);
-    map.on("overlayadd", e => { if (e.layer === radarOverlay) { radarManual = true; radarSync(); } });
-    map.on("overlayremove", e => { if (e.layer === radarOverlay) { radarManual = false; radarSync(); } });
+      { "Wind Flow": windOverlay, "Radar": radarOverlay }, { collapsed: true, position: "bottomright" }).addTo(map);
+    map.on("overlayadd", e => { if (e.layer === radarOverlay) { radarManual = true; radarSync(); }
+                                if (e.layer === windOverlay) { windManual = true; fetchWindGrid(); wKick(); } });
+    map.on("overlayremove", e => { if (e.layer === radarOverlay) { radarManual = false; radarSync(); }
+                                   if (e.layer === windOverlay) { windManual = false; wKick(); } });
+    map.on("move zoom", () => { if (wcv && wctx) wctx.clearRect(0, 0, wcv.width, wcv.height); });
     /* stations + borders */
     [["120",29.392122,-98.709906],["121",29.454183,-98.755111],["122",29.505141,-98.782267],
      ["123",29.405115,-98.701876],["124",29.413373,-98.785885],["125",29.49202,-98.74346],
@@ -260,6 +264,65 @@
     }, 500); }
     else if (!on && rAnim) { clearInterval(rAnim); rAnim = null; }
   }
+
+  /* ── WIND FLOW — the wall's windy-style particles: Open-Meteo 6x6 county model grid, IDW²
+     steering, destination-out trail fade, zoom-scaled pacing. Manual overlay toggle. ── */
+  let wcv = null, wctx = null, wparts = [], wraf = null, windManual = false;
+  let windGrid = null, windGridAt = 0, windGridBusy = false;
+  function fetchWindGrid() {
+    if (windGridBusy || Date.now() - windGridAt < 15 * 60000) return;
+    windGridBusy = true;
+    const lats = [], lngs = [];
+    for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) { lats.push((29.08 + r * 0.112).toFixed(3)); lngs.push((-98.93 + c * 0.132).toFixed(3)); }
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=" + lats.join(",") + "&longitude=" + lngs.join(",") +
+          "&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=mph")
+      .then(r => r.ok ? r.json() : null).then(j => { windGridBusy = false;
+        const arr = Array.isArray(j) ? j : (j ? [j] : []), g = [];
+        arr.forEach(loc => { const c = loc && loc.current; if (!c || c.wind_direction_10m == null) return;
+          g.push({ lat: loc.latitude, lng: loc.longitude, deg: +c.wind_direction_10m,
+                   spd: (+c.wind_speed_10m || 0) + Math.max(0, ((+c.wind_gusts_10m || 0) - (+c.wind_speed_10m || 0)) * 0.3) }); });
+        if (g.length >= 8) { windGrid = g; windGridAt = Date.now(); }
+      }).catch(() => { windGridBusy = false; });
+  }
+  function wEnsure() { if (wcv) return;
+    wcv = document.createElement("canvas");
+    wcv.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;z-index:650";   /* above the z-400 pane stack, below controls */
+    map.getContainer().appendChild(wcv); wctx = wcv.getContext("2d"); }
+  function wField(x, y) {
+    if (!windGrid || !windGrid.length) return null;
+    let ll; try { ll = map.containerPointToLatLng([x, y]); } catch (e) { return null; }
+    let sx = 0, sy = 0, sw = 0;
+    for (const w of windGrid) {
+      const dd = Math.max(1e-6, (w.lat - ll.lat) * (w.lat - ll.lat) + (w.lng - ll.lng) * (w.lng - ll.lng));
+      const wt = 1 / (dd * dd);
+      const deg = (w.deg + 180) * Math.PI / 180;                /* met FROM -> flow TO */
+      sx += wt * w.spd * Math.sin(deg); sy += wt * (-w.spd * Math.cos(deg)); sw += wt; }
+    return { u: sx / sw, v: sy / sw };
+  }
+  const wSpawn = () => ({ x: Math.random() * wcv.width, y: Math.random() * wcv.height, life: 50 + Math.random() * 90 });
+  function wStep() {
+    wraf = null;
+    if (!windManual) { if (wcv) { wctx.clearRect(0, 0, wcv.width, wcv.height); wcv.style.display = "none"; wparts = []; } return; }
+    fetchWindGrid();
+    wEnsure();
+    const s = map.getSize(); if (wcv.width !== s.x || wcv.height !== s.y) { wcv.width = s.x; wcv.height = s.y; }
+    wcv.style.display = "block";
+    while (wparts.length < 300) wparts.push(wSpawn());
+    wctx.globalCompositeOperation = "destination-out";          /* fade own alpha — a dark wash compounds to black */
+    wctx.fillStyle = "rgba(0,0,0,0.08)"; wctx.fillRect(0, 0, wcv.width, wcv.height);
+    wctx.globalCompositeOperation = "source-over";
+    wctx.strokeStyle = "rgba(190,230,255,0.55)"; wctx.lineWidth = 1.1; wctx.beginPath();
+    const kz = 0.028 * Math.min(3, Math.max(0.5, Math.pow(2, (map.getZoom() || 12) - 12)));
+    for (let i = 0; i < wparts.length; i++) { const p = wparts[i];
+      const f = wField(p.x, p.y); if (!f) { wparts[i] = wSpawn(); continue; }
+      const nx = p.x + f.u * kz, ny = p.y + f.v * kz;
+      wctx.moveTo(p.x, p.y); wctx.lineTo(nx, ny);
+      p.x = nx; p.y = ny; p.life--;
+      if (p.life <= 0 || nx < -4 || ny < -4 || nx > wcv.width + 4 || ny > wcv.height + 4) wparts[i] = wSpawn(); }
+    wctx.stroke();
+    wraf = requestAnimationFrame(wStep);
+  }
+  const wKick = () => { if (!wraf) wraf = requestAnimationFrame(wStep); };
 
   /* ── NWS ALERTS — direct api.weather.gov; chip + storm trigger for radar/crossings ── */
   function loadWx() {
