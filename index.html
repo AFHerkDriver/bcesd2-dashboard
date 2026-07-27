@@ -1489,11 +1489,11 @@
           }).catch(function(){ heatLoaded=false; });
       }
     })();
-    /* ── HYDRANTS — the CAD hydrant layer (SAFD/SAWS "CADHydrants", SA open-data hub; coverage
-       verified in the unincorporated district). Teal dots past HYD_Z, bigger for 10"+ mains, with the
-       address numbers — one zoom nudge from a call focus shows water supply around the fire. Same
-       enhancement failure mode as addresses: source down -> dots simply absent. ── */
-    var HYD_URL="https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query";
+    /* ── HYDRANTS — Bexar County's SAWS asset export (Apr 2022; ~200 more in-district than the old
+       Feb 2022 CADHydrants snapshot, coverage verified in the unincorporated district). Teal dots
+       past HYD_Z, bigger for 10"+ FEEDERDIAM mains; SAWS' own SERVSTAT reds join the officer-flagged
+       ones. Same enhancement failure mode as addresses: source down -> dots simply absent. ── */
+    var HYD_URL="https://services1.arcgis.com/8onVmslF2KXErTHT/arcgis/rest/services/FireHydrant/FeatureServer/0/query";
     var hydLayer=L.layerGroup().addTo(map), HYD_Z=16.2, hydCache={}, hydKeys=[], hydSeq=0, hydPainted="";
     /* Officer-supplied hydrant pins (backgrounds keyed out), teardrop tip anchored, addr pane under
        the call pins. Standard mains = teal; 10"+ mains = the BLUE pin, a size up — main size is our
@@ -1517,7 +1517,7 @@
       feats.slice(0,400).forEach(function(f){
         var g=f.geometry; if(!g||g.x==null||g.y==null) return;
         var at=f.attributes||{};
-        var icon = hydIsOOS(at.Address) ? hydIconOOS : ((+at.Main_Size||0)>=10 ? hydIconBig : hydIcon);
+        var icon = ((at.SERVSTAT&&at.SERVSTAT!=="IN SVC")||hydIsOOS(at.ADDRQUAL)) ? hydIconOOS : ((+at.FEEDERDIAM||0)>=10 ? hydIconBig : hydIcon);   /* officer flags match the address text inside ADDRQUAL */
         L.marker([g.y,g.x],{icon:icon,pane:"addrPane",interactive:false,keyboard:false}).addTo(hydLayer);
       });
     }
@@ -1531,7 +1531,7 @@
       var bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(function(x){return x.toFixed(4);}).join(",");
       if(hydCache[bbox]){ hydPaint(hydCache[bbox],bbox); return; }
       var seq=++hydSeq;
-      fetch(HYD_URL+"?geometry="+bbox+"&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Main_Size,Address&returnGeometry=true&resultRecordCount=800&f=json")
+      fetch(HYD_URL+"?geometry="+bbox+"&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=FEEDERDIAM,SERVSTAT,ADDRQUAL&returnGeometry=true&resultRecordCount=800&f=json")
         .then(function(r){ return r.ok?r.json():null; }).then(function(j){
           if(seq!==hydSeq||!j||!Array.isArray(j.features)) return;
           hydCache[bbox]=j.features; hydKeys.push(bbox);
