@@ -465,7 +465,7 @@
     if (/RESCUE/.test(t)) return "#FF7EB6";
     if (/\bHAZ/.test(t)) return "#3FB950";
     if (/GAS|FUEL|LEAK|SPILL|ODOR|FLUID/.test(t)) return "#2DD4BF";
-    if (/ASSIST|ASST\b|\bLAW\b|POLICE|SHERIFF|CONSTAB|OFFICER|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "#58A6FF";   /* LE-assist tones arrive abbreviated (ASST/LAW ENF) or agency-named — they must class BLUE here, before the MED test can claim them. \bLAW\b not bare LAW: "LAWN MOWER" is not an assist */
+    if (/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "#58A6FF";
     if (/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZ|OVERDOSE|DIABET|ASSAULT|OB\b|HEADACHE|ALLERG|HEART/.test(t)) return "#FFC107";
     return "#8B949E"; }
   function gmapsUrl(c) {
