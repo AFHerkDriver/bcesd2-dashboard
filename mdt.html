@@ -31,12 +31,12 @@
   .ccard .meta b { color: #FFC107; font-weight: 500; }
   .ccard .navbtn { margin-top: 8px; display: inline-block; background: #238636; color: #fff; text-decoration: none;
                    border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 500; }
-  .ccard.sec { border-color: #D29922; } .ccard.sec .ty { color: #D29922; }
+  .ccard .navbtn.apple { background: #1C2230; border: 1px solid #58A6FF; color: #58A6FF; }
   #noCalls { pointer-events: none; background: rgba(13,17,23,.85); border: 1px solid #30363D; border-radius: 10px;
              padding: 8px 14px; font-size: 13px; color: #3FB950; align-self: flex-start; }
 
-  /* right rail chips */
-  #rail { position: fixed; top: 8px; right: 8px; z-index: 800; display: flex; flex-direction: column; gap: 6px;
+  /* right rail chips — pushed down so the Leaflet layers button owns the top-right corner */
+  #rail { position: fixed; top: 58px; right: 8px; z-index: 800; display: flex; flex-direction: column; gap: 6px;
           align-items: flex-end; max-width: 46vw; }
   .chip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 10px; padding: 7px 12px;
           font-size: 12px; color: #8B949E; text-align: right; }
@@ -45,11 +45,17 @@
   .chip.warn { color: #FFC107; border-color: rgba(255,193,7,.6); font-weight: 500; }
   .chip .sub { display: block; font-size: 10px; color: #8B949E; font-weight: 400; }
 
-  /* drone PiP */
+  /* drone PiP — three sizes: corner, half screen, full screen (tap ⤢ to cycle) */
   #dronePip { position: fixed; right: 8px; bottom: 8px; z-index: 850; width: min(340px, 40vw); display: none; }
+  #dronePip.half { width: min(50vw, 720px); }
+  #dronePip.full { left: 0; top: 0; right: 0; bottom: 0; width: auto; z-index: 1500;
+                   background: rgba(13,17,23,.97); display: flex; align-items: center; justify-content: center; }
+  #dronePip.full video { height: 100vh; width: 100vw; object-fit: contain; border: none; border-radius: 0; }
   #dronePip video { width: 100%; border-radius: 10px; border: 2px solid #FF6B35; background: #000; display: block; }
   #dronePip .lbl { position: absolute; top: 6px; left: 8px; font-size: 11px; color: #FF6B35; font-weight: 500;
-                   text-shadow: 0 0 4px #000, 0 0 4px #000; }
+                   text-shadow: 0 0 4px #000, 0 0 4px #000; z-index: 5; }
+  #pipSize { position: absolute; top: 4px; right: 6px; z-index: 6; background: rgba(13,17,23,.85);
+             border: 1px solid #FF6B35; color: #FF6B35; border-radius: 8px; padding: 8px 14px; font-size: 15px; }
 
   /* bottom-left controls */
   #ctrls { position: fixed; left: 8px; bottom: 8px; z-index: 800; display: flex; gap: 8px; }
@@ -94,7 +100,7 @@
   <div class="chip" id="hospChip">hospitals &hellip;</div>
   <div class="chip" id="wxChip" style="display:none"></div>
 </div>
-<div id="dronePip"><span class="lbl" id="droneLbl"></span><video id="droneVid" muted autoplay playsinline controls></video></div>
+<div id="dronePip"><span class="lbl" id="droneLbl"></span><button id="pipSize" title="Resize">&#10530;</button><video id="droneVid" muted autoplay playsinline controls></video></div>
 <div id="ctrls">
   <button id="refit" title="Frame the district">&#8982; District</button>
 </div>
@@ -145,6 +151,7 @@
   function districtView() { try { map.fitBounds(IDLE_PTS, { padding: [40, 40], maxZoom: 15 }); } catch (e) {} }
   function initMap() {
     const dark = TL("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 20 });
+    const positron = TL("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 20 });
     const satellite = L.layerGroup([
       TL("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }),
       TL("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }),
@@ -152,6 +159,12 @@
     map = L.map("map", { center: [29.44, -98.72], zoom: 12, layers: [sunUp() ? satellite : dark], zoomControl: false });
     map.attributionControl.setPrefix(false);
     map.createPane("radarPane"); map.getPane("radarPane").style.zIndex = 350;
+    /* layer choices — same trio as the wall, radar togglable by hand on top of its storm auto-on */
+    const radarOverlay = L.layerGroup();
+    L.control.layers({ "Satellite": satellite, "Dark": dark, "Positron": positron },
+      { "Radar": radarOverlay }, { collapsed: true, position: "topright" }).addTo(map);
+    map.on("overlayadd", e => { if (e.layer === radarOverlay) { radarManual = true; radarSync(); } });
+    map.on("overlayremove", e => { if (e.layer === radarOverlay) { radarManual = false; radarSync(); } });
     /* stations + borders */
     [["120",29.392122,-98.709906],["121",29.454183,-98.755111],["122",29.505141,-98.782267],
      ["123",29.405115,-98.701876],["124",29.413373,-98.785885],["125",29.49202,-98.74346],
@@ -232,7 +245,8 @@
   /* ── RADAR — auto-on during precip/wind warnings (same event-text rule as the wall) ── */
   const RF = ["nexrad-n0q-900913-m25m","nexrad-n0q-900913-m20m","nexrad-n0q-900913-m15m","nexrad-n0q-900913-m10m","nexrad-n0q-900913-m05m","nexrad-n0q-900913"];
   const rUrl = (id, bk) => "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/" + id + "/{z}/{x}/{y}.png" + (bk ? "?_=" + bk : "");
-  let rLayers = null, rAnim = null, rFi = RF.length - 1, rHold = 0, rBucket = 0;
+  let rLayers = null, rAnim = null, rFi = RF.length - 1, rHold = 0, rBucket = 0, radarManual = false;
+  function radarSync() { radarShow(stormNow || radarManual); }
   function radarShow(on) {
     if (!rLayers) rLayers = RF.map(id => L.tileLayer(rUrl(id), { pane: "radarPane", opacity: 0, maxZoom: 19, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 2 }));
     if (on === radarOn) return; radarOn = on;
@@ -254,7 +268,7 @@
         const feats = (j && j.features) || [];
         const events = feats.map(f => (f.properties && f.properties.event) || "").filter(Boolean);
         stormNow = events.some(e => /TORNADO|THUNDER|FLOOD|SEVERE|STORM|HURRICANE|TROPICAL|HAIL|WIND/i.test(e));
-        radarShow(stormNow);
+        radarSync();
         const chip = $("wxChip");
         if (!events.length) { chip.style.display = "none"; return; }
         chip.style.display = "block";
@@ -287,9 +301,25 @@
      the loud red banner. New calls auto-focus the map once; District button reframes. ── */
   let dispatchFails = 0, knownIds = {}, focusId = null;
   const isApp = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
-  function navUrl(c) {
+  /* call-type palette — SAME colors as the wall's Runs by Type keypad, so the two screens speak
+     one visual language. Order matters: ALARM/FIRE before MED so "ALARM - FIRE" classes purple. */
+  function callColor(t) { t = String(t || "").toUpperCase();
+    if (/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "#FF8C42";
+    if (/ALARM/.test(t)) return "#A371F7";
+    if (/FIRE|STRUCT|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "#F85149";
+    if (/RESCUE/.test(t)) return "#FF7EB6";
+    if (/\bHAZ/.test(t)) return "#3FB950";
+    if (/GAS|FUEL|LEAK|SPILL|ODOR|FLUID/.test(t)) return "#2DD4BF";
+    if (/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "#58A6FF";
+    if (/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZ|OVERDOSE|DIABET|ASSAULT|OB\b|HEADACHE|ALLERG|HEART/.test(t)) return "#FFC107";
+    return "#8B949E"; }
+  function gmapsUrl(c) {
     if (c.lat != null && c.lng != null) return "https://www.google.com/maps/dir/?api=1&destination=" + c.lat + "," + c.lng;
     return "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(String(c.address || "") + ", Bexar County, TX");
+  }
+  function amapsUrl(c) {
+    if (c.lat != null && c.lng != null) return "https://maps.apple.com/?daddr=" + c.lat + "," + c.lng + "&dirflg=d";
+    return "https://maps.apple.com/?daddr=" + encodeURIComponent(String(c.address || "") + ", Bexar County, TX") + "&dirflg=d";
   }
   function ageMin(c) { const t = Date.parse(c.logged || c.started || ""); return isNaN(t) ? 999 : (Date.now() - t) / 60000; }
   function loadDispatch() {
@@ -302,22 +332,25 @@
         /* call band: newest two */
         live.sort((a, b) => String(b.started).localeCompare(String(a.started)));
         const top = live.slice(0, 2);
-        $("callBand").innerHTML = top.length ? top.map((c, i) =>
-          '<div class="ccard' + (i ? " sec" : "") + '">' +
-            '<div class="ty">' + esc(c.type) + '</div>' +
+        $("callBand").innerHTML = top.length ? top.map(c => {
+          const col = callColor(c.type);
+          return '<div class="ccard" style="border-color:' + col + '">' +
+            '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
             '<div class="ad">' + esc(c.address) + '</div>' +
             '<div class="meta">' + (c.cross ? "<span>X: " + esc(c.cross) + "</span>" : "") +
               (c.channel ? "<span><b>" + esc(c.channel) + "</b></span>" : "") +
               '<span>' + esc((c.units || []).filter(isApp).join(" ") || (c.units || []).join(" ")) + "</span></div>" +
-            '<a class="navbtn" href="' + navUrl(c) + '" target="_blank" rel="noopener">NAVIGATE &#10148;</a>' +
-          "</div>").join("")
+            '<a class="navbtn" href="' + gmapsUrl(c) + '" target="_blank" rel="noopener">NAVIGATE &#10148;</a> ' +
+            '<a class="navbtn apple" href="' + amapsUrl(c) + '" target="_blank" rel="noopener">&#63743; APPLE MAPS</a>' +
+          "</div>"; }).join("")
           : '<div id="noCalls">NO ACTIVE CALLS · live</div>';
         /* map pins + one-time focus per new call */
         callLayer.clearLayers();
         let newest = null;
         live.forEach(c => {
           if (c.lat == null || c.lng == null) return;
-          L.circleMarker([c.lat, c.lng], { radius: 10, weight: 3, color: "#F85149", fillColor: "#F85149", fillOpacity: .35 })
+          const col = callColor(c.type);
+          L.circleMarker([c.lat, c.lng], { radius: 10, weight: 3, color: col, fillColor: col, fillOpacity: .35 })
             .bindTooltip(esc(c.type)).addTo(callLayer);
           if (!knownIds[c.id]) { knownIds[c.id] = 1; newest = c; }
         });
@@ -351,6 +384,15 @@
       }
     }).catch(() => {});
   }
+
+  /* PiP size cycle: corner -> half -> full -> corner */
+  const PIP_SIZES = ["", "half", "full"];
+  let pipSizeIdx = 0;
+  $("pipSize").addEventListener("click", () => {
+    pipSizeIdx = (pipSizeIdx + 1) % PIP_SIZES.length;
+    $("dronePip").className = PIP_SIZES[pipSizeIdx];
+    $("pipSize").innerHTML = pipSizeIdx === 2 ? "&#10529;" : "&#10530;";   /* ⤡ collapse hint at full */
+  });
 
   /* ── boot ── */
   let booted = false;
