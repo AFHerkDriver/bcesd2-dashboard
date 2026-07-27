@@ -20,6 +20,7 @@
   button { font-family: 'DM Mono', monospace; cursor: pointer; }
   #map { position: fixed; inset: 0; background: #0D1117; }
   .leaflet-container { background: #0D1117; font-family: 'DM Mono', monospace; }
+  .call-pin{filter:drop-shadow(0 0 3px rgba(0,0,0,.85))}   /* keeps a pin legible over bright satellite imagery — same halo as the wall */
   /* parcel house-number labels (close zoom) — context under the pins, never competition */
   .addr-lbl-wrap{background:none;border:0}
   .addr-lbl{position:absolute;transform:translate(-50%,-50%);font-family:'DM Mono',monospace;font-size:10px;
@@ -383,8 +384,9 @@
         const t = Date.parse(c.logged || c.started || ""); if (isNaN(t) || t < since) return;
         const col = callColor(c.type);
         let when = ""; try { when = new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: CT_ZONE }); } catch (e) {}
-        L.circleMarker([c.lat, c.lng], { pane: "tourPane", radius: 6, weight: 2, color: col, fillColor: col, fillOpacity: .45 })
-          .bindTooltip(esc(c.type) + (when ? " · " + when : "")).addTo(tourLayer);
+        L.circleMarker([c.lat, c.lng], { pane: "tourPane", radius: 7, color: "#0D1117", weight: 2, opacity: .9,
+            fillColor: col, fillOpacity: .92, className: "call-pin" })   /* wall's tour-pin look: dark outline, near-solid type fill */
+          .bindTooltip(esc(c.type) + (when ? " · " + when : ""), { direction: "top", offset: [0, -8] }).addTo(tourLayer);
       });
     }).catch(() => { tourBusy = false; });
   }
