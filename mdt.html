@@ -78,6 +78,8 @@
      stack full-width (two calls read as a list, not a squeeze), buttons compact but still thumbable */
   @media (max-width: 640px) {
     #callBandWrap { flex-direction: column-reverse; align-items: stretch; gap: 6px; }
+    #callBandWrap:has(#noCalls) { flex-direction: row; align-items: flex-start; }   /* idle: NO ACTIVE CALLS and the facilities chip share one row */
+    #callBandWrap:has(#noCalls) #rail { flex-direction: column; margin-left: auto; }
     #rail { flex-direction: row; justify-content: flex-end; max-width: none; margin-left: 0; }
     #callBand { flex-direction: column; }
     .ccard { max-width: none; }
