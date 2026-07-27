@@ -21,6 +21,15 @@
   #map { position: fixed; inset: 0; background: #0D1117; }
   .leaflet-container { background: #0D1117; font-family: 'DM Mono', monospace; }
   .call-pin{filter:drop-shadow(0 0 3px rgba(0,0,0,.85))}   /* keeps a pin legible over bright satellite imagery — same halo as the wall */
+  /* hydrant detail popup — dark chrome to match the page */
+  .leaflet-popup-content-wrapper{background:rgba(13,17,23,.96);color:#E6EDF3;border:1px solid #30363D;
+    border-radius:10px;font-family:'DM Mono',monospace;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+  .leaflet-popup-content{margin:10px 14px;font-size:12px;line-height:1.55}
+  .leaflet-popup-tip{background:rgba(13,17,23,.96)}
+  a.leaflet-popup-close-button{color:#8B949E}
+  .hyd-pop b{color:#58A6FF;font-weight:500}
+  .hyd-pop .hp-sz{color:#FFC107}
+  .hyd-pop .hp-oos{color:#F85149;font-weight:500}
   /* parcel house-number labels (close zoom) — context under the pins, never competition */
   .addr-lbl-wrap{background:none;border:0}
   .addr-lbl{position:absolute;transform:translate(-50%,-50%);font-family:'DM Mono',monospace;font-size:10px;
@@ -279,8 +288,12 @@
     refitSouth = !refitSouth;
   });
 
-  /* ── HYDRANTS — same CAD layer + officer OOS reds as the board (zoom-gated) ── */
-  const HYD_URL = "https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query";
+  /* ── HYDRANTS — Bexar County's SAWS asset export (Apr 2022), not the board's CAD snapshot
+     (Feb 2022): ~200 more hydrants in-district, FEEDERDIAM for the big-main icon, SERVSTAT so
+     SAWS-dead plugs go red alongside the officer-flagged ones, and per-hydrant detail on tap.
+     Officer OOS matching keys on ADDRQUAL, which embeds the same address text control.html
+     flags carry. Zoom-gated like the board. ── */
+  const HYD_URL = "https://services1.arcgis.com/8onVmslF2KXErTHT/arcgis/rest/services/FireHydrant/FeatureServer/0/query";
   const HYD_Z = 16.2, hydCache = {}, hydKeys = [];
   let hydSeq = 0, hydPainted = "", oosHyd = [];
   const hIc = (f, s) => L.icon({ iconUrl: f + ".png", iconRetinaUrl: f + "@2x.png", iconSize: [s, s], iconAnchor: [s / 2, s] });
@@ -293,8 +306,18 @@
     feats.slice(0, 400).forEach(f => {
       const g = f.geometry; if (!g || g.x == null || g.y == null) return;
       const at = f.attributes || {};
-      const icon = hydIsOOS(at.Address) ? hydIconOOS : ((+at.Main_Size || 0) >= 10 ? hydIconBig : hydIcon);
-      L.marker([g.y, g.x], { icon, interactive: false, keyboard: false, zIndexOffset: -500 }).addTo(hydLayer);
+      const sawsOOS = at.SERVSTAT && at.SERVSTAT !== "IN SVC";
+      const icon = (sawsOOS || hydIsOOS(at.ADDRQUAL)) ? hydIconOOS : ((+at.FEEDERDIAM || 0) >= 10 ? hydIconBig : hydIcon);
+      const addr = String(at.ADDRQUAL || "").split("/")[0].trim();   /* "7811 TWO ROCK OAK / BETWEEN ..." -> street address only */
+      let inst = ""; try { if (at.INSTDATE) inst = new Date(at.INSTDATE).getUTCFullYear() || ""; } catch (e) {}
+      L.marker([g.y, g.x], { icon, keyboard: false, zIndexOffset: -500 })
+        .bindPopup('<div class="hyd-pop"><b>HYD ' + esc(at.UNITID || "?") + '</b>' +
+          (sawsOOS ? ' <span class="hp-oos">' + esc(at.SERVSTAT) + '</span>' : '') +
+          (addr ? '<br>' + esc(addr) : '') +
+          '<br><span class="hp-sz">' + ((+at.FEEDERDIAM || 0) ? (+at.FEEDERDIAM) + '&Prime; main' : 'main size unknown') + '</span>' +
+          (inst ? ' &middot; inst ' + inst : '') + (at.OWN ? ' &middot; ' + esc(at.OWN) : '') +
+          '</div>', { maxWidth: 260 })
+        .addTo(hydLayer);
     });
   }
   function hydUpdate() {
@@ -304,7 +327,7 @@
     const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(x => x.toFixed(4)).join(",");
     if (hydCache[bbox]) { hydPaint(hydCache[bbox], bbox); return; }
     const seq = ++hydSeq;
-    fetch(HYD_URL + "?geometry=" + bbox + "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Main_Size,Address&returnGeometry=true&resultRecordCount=800&f=json")
+    fetch(HYD_URL + "?geometry=" + bbox + "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=UNITID,FEEDERDIAM,SERVSTAT,OWN,INSTDATE,ADDRQUAL&returnGeometry=true&resultRecordCount=800&f=json")
       .then(r => r.ok ? r.json() : null).then(j => {
         if (seq !== hydSeq || !j || !Array.isArray(j.features)) return;
         hydCache[bbox] = j.features; hydKeys.push(bbox);
