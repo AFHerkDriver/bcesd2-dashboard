@@ -266,13 +266,19 @@ function stationsOf(units) {
    next /uav?fresh=1 (classification happens at read time from the permanent arch: rows — nothing is
    baked in at write time). Department ground truth: missing persons arrive as "assist law
    enforcement" tones, so the missing rule matches those too. */
+/* Mirrors the crew's Active911 hunt list verbatim (2026-07-28): structure/struc, brush, haz,
+   missing, wildland, explosion, assist-LE, smoke investigation, rescue. UAV124/UAV121 are unit
+   attaches, tracked by uavAttached below, not type rules. ORDER MATTERS — first match wins:
+   water rescue must precede the general rescue catch-all or it loses its own bucket. */
 const UAV_RULES = [
   { k: "missing", label: "Missing Person / Assist LE", pat: "MISSING|LOST\\s+PERSON|\\bSEARCH\\b|ASSIST.*(LAW|POLICE|SHERIFF|CONSTAB|OFFICER|\\bLE\\b)" },
   { k: "smoke",   label: "Smoke Investigation",        pat: "SMOKE" },
   { k: "brush",   label: "Brush / Grass / Wildland",   pat: "BRUSH|GRASS|WILDLAND|WOODS|FOREST" },
-  { k: "struct",  label: "Structure Fire",             pat: "STRUCT" },
+  { k: "struct",  label: "Structure Fire",             pat: "STRUC" },
+  { k: "explosion", label: "Explosion",                pat: "EXPLOS" },
   { k: "hazmat",  label: "Hazmat",                     pat: "\\bHAZ" },
   { k: "water",   label: "Water Rescue",               pat: "WATER\\s*RESCUE|DROWN|SWIFT\\s*WATER|\\bBOAT\\b|LOW\\s*WATER\\s*RESCUE" },
+  { k: "rescue",  label: "Rescue (other)",             pat: "RESCUE" },
 ];
 const _uavRes = UAV_RULES.map(r => ({ k: r.k, re: new RegExp(r.pat, "i") }));
 function uavRuleOf(ty) { ty = String(ty || ""); for (const r of _uavRes) if (r.re.test(ty)) return r.k; return ""; }
