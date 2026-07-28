@@ -26,7 +26,7 @@
   .hb{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;text-align:center;flex:1 1 110px}
   .hb b{display:block;font-size:24px;font-weight:500}
   .hb span{font-size:9.5px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase}
-  .hb.pass b{color:var(--green)} .hb.fail b{color:var(--red)} .hb.na b{color:var(--dim)} .hb.info b{color:var(--teal)}
+  .hb.pass b{color:var(--green)} .hb.fail b{color:var(--red)} .hb.warn b{color:var(--amber)} .hb.na b{color:var(--dim)} .hb.info b{color:var(--teal)}
   .bar{display:flex;align-items:center;gap:9px;margin:4px 0}
   .bar .l{flex:0 0 76px;color:var(--dim);font-size:11.5px;text-align:right}
   .bar .t{flex:1;background:rgba(255,255,255,.05);border-radius:5px;height:15px;overflow:hidden}
@@ -105,21 +105,22 @@
 
   <div class="card">
     <h2>Water Supply — ISO Standard</h2>
-    <p class="hint">Structures within 1,000 ft of a hydrant (ISO credit distance), clipped to the OFFICIAL ESD boundaries (county KMZ, 2026-07-24). Bexar CAD hydrants &times; county parcels with structures. Live per-call TENDER OPS flags on the board run off this same standard. Zones that proved to belong to neighboring districts were removed.</p>
+    <p class="hint">Structures within 1,000 ft of a hydrant (ISO credit distance), clipped to the OFFICIAL ESD boundaries (county KMZ, 2026-07-24). Department hydrant db (SAWS master 2026-01-30 + A911 private plugs) &times; BCAD parcels with living area (pulled 2026-07-27). Live per-call TENDER OPS flags on the board run off this same standard. The 2022 CAD study showed 90%/53% — most of that gap was stale hydrant data, not missing mains.</p>
     <div class="hero">
-      <div class="hb pass"><b>&asymp;90%</b><span>ESD 2 covered (54,636 structures)</span></div>
-      <div class="hb fail"><b>53%</b><span>ESD 6 covered (5,292 structures)</span></div>
-      <div class="hb info"><b>&asymp;8.2k</b><span>in-district structures off-hydrant</span></div>
+      <div class="hb pass"><b>99%</b><span>ESD 2 covered (57,692 structures)</span></div>
+      <div class="hb warn"><b>86%</b><span>ESD 6 covered (6,129 structures)</span></div>
+      <div class="hb info"><b>&asymp;1.3k</b><span>in-district structures off-hydrant</span></div>
     </div>
     <table>
       <tr><th>Gap zone (in-district)</th><th>Homes</th><th>Median to hydrant</th></tr>
-      <tr><td>IXL Dr / Bar J</td><td class="num">1,167</td><td class="bad">1,146 ft</td></tr>
-      <tr><td>Mechler / Jungman Rd (SW)</td><td class="num">870</td><td class="bad">7,409 ft</td></tr>
-      <tr><td>Grosenbacher Rd corridor</td><td class="num">864</td><td class="bad">872–1,764 ft</td></tr>
-      <tr><td>Rosa / Mesquite / Cartwright Trl</td><td class="num">616</td><td class="bad">959 ft</td></tr>
-      <tr><td>Oak Village / Rolling Oaks belt</td><td class="num">1,083</td><td class="bad">1,058–3,147 ft</td></tr>
-      <tr><td>Gass Rd / Morgan Meadows</td><td class="num">226</td><td class="bad">2,279 ft</td></tr>
-      <tr><td>ESD 6 — scattered across the 13-tract patchwork</td><td class="num">2,478</td><td class="bad">47% of all ESD 6 structures</td></tr>
+      <tr><td>ESD 6 — Alanwood Dr / Campbellton Rd</td><td class="num">335</td><td class="bad">1,709 ft</td></tr>
+      <tr><td>Oak Village Dr / Laurel Ridge belt</td><td class="num">250</td><td class="bad">1,768 ft</td></tr>
+      <tr><td>ESD 6 — Peaceful Ln / Redfern Dr</td><td class="num">155</td><td class="bad">1,369 ft</td></tr>
+      <tr><td>ESD 6 — Red Gate Dr / Loma Verde</td><td class="num">96</td><td class="bad">1,345 ft</td></tr>
+      <tr><td>Pioneer Ridge / Pioneer Estates</td><td class="num">63</td><td class="bad">1,374 ft</td></tr>
+      <tr><td>Rosa Trl / Mesquite Trl</td><td class="num">41</td><td class="bad">1,179 ft</td></tr>
+      <tr><td>IXL Dr / Bar C</td><td class="num">22</td><td class="bad">1,175 ft</td></tr>
+      <tr><td>Gass Rd / Morgan Meadows</td><td class="num">20</td><td class="bad">1,597 ft</td></tr>
     </table>
   </div>
 
@@ -127,7 +128,7 @@
     <h2>Growth Exposure</h2>
     <p class="hint">New structures by appraisal year built (county parcels; 2025 lags the roll). Sustained build-out means call volume, water demand, and staffing pressure keep compounding.</p>
     <div id="growth"></div>
-    <div class="note"><b>Planning signals:</b> the west district adds <b>&asymp;5,500–7,000 structures/yr</b> — Alamo Ranch build-out continues pushing volume onto S123/S124's first-due. The 161/162 area <b>tripled its build rate since 2019</b> (&asymp;1,500/yr) while only <b>53% of ESD 6 structures have hydrant water</b> — new rooftops are landing faster than mains. Cartwright/Gass gap zones double as monitored flood crossings: water-supply <i>and</i> access risk stack in the same pockets.</div>
+    <div class="note"><b>Planning signals:</b> the west district adds <b>&asymp;5,500–7,000 structures/yr</b> — Alamo Ranch build-out continues pushing volume onto S123/S124's first-due. The 161/162 area <b>tripled its build rate since 2019</b> (&asymp;1,500/yr) and <b>14% of ESD 6 structures still lack hydrant water</b> (2026 dept hydrant db) — the Alanwood/Campbellton and Peaceful/Redfern pockets are where rooftops outrun mains. Cartwright/Gass gap zones double as monitored flood crossings: water-supply <i>and</i> access risk stack in the same pockets.</div>
   </div>
 
   <div class="card">
@@ -135,7 +136,7 @@
     <div id="debrief" class="hint" style="font-size:12.5px;color:var(--text)">Loading&hellip;</div>
   </div>
 
-  <div class="sub" style="margin-top:16px">BC2FD internal &middot; data: Active911 relay archive, Bexar CAD hydrants, BCAD parcels &middot; standards: NFPA 1710, ISO FSRS</div>
+  <div class="sub" style="margin-top:16px">BC2FD internal &middot; data: Active911 relay archive, dept hydrant db (SAWS master 2026-01-30), BCAD parcels &middot; standards: NFPA 1710, ISO FSRS</div>
 </div></div>
 
 <script>
@@ -252,7 +253,7 @@
     var mut=all.byCls.mutual||0; if(mut) b.push('🤝 '+mut+' mutual-aid run'+(mut===1?'':'s')+' archived — track the give/get balance for renewal talks.');
     var sfts=Object.keys(all.bySft); if(sfts.length>1){ var busy=sfts.sort(function(x,y){return all.bySft[y]-all.bySft[x];})[0];
       b.push('👥 '+busy+' Shift is carrying the most runs ('+all.bySft[busy]+') — luck of the tours early on; a persistent spread is a workload-equity conversation.'); }
-    b.push('💧 ESD 6 water gap is structural: 47% of its structures lack hydrant coverage (official-border clip) while growth runs ≈1,500 structures/yr — tender program + developer main extensions are the levers.');
+    b.push('💧 ESD 6 water gap (2026 dept hydrant db): 14% of structures lack hydrant coverage — concentrated in the Alanwood/Campbellton, Peaceful/Redfern and Red Gate/Loma Verde pockets — while growth runs ≈1,500 structures/yr; tender program + developer main extensions are the levers.');
     b.push('📈 West growth ≈5,500–7,000 structures/yr concentrates on S123/S124 first-due — station-load rebalancing is a when, not an if.');
     $('debrief').innerHTML=b.map(function(x){return '<div style="margin:6px 0">'+x+'</div>';}).join('');
   }
