@@ -651,6 +651,11 @@
   }
   try { window.matchMedia("(max-width: 640px)").addEventListener("change", renderBand); } catch (e) {}
 
+  /* adaptive cadence: 6 s while a call is on the band — an attaching rig should go green in
+     seconds, not at the bottom of a 15 s tick — 15 s idle so overnight costs stay where they were.
+     Self-scheduling timeout, not setInterval, so the rate follows the band's state each cycle. */
+  let dispTimer = null;
+  function scheduleDispatch() { clearTimeout(dispTimer); dispTimer = setTimeout(loadDispatch, lastTop.length ? 6000 : 15000); }
   function loadDispatch() {
     fetch(WORKER + "/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: PIN }) })
       .then(r => { if (r.status === 401) { showGate("PIN expired — sign in again"); throw 0; } return r.json(); })
@@ -680,8 +685,10 @@
         if (newest && newest.id !== focusId) { focusId = newest.id;
           try { map.setView([newest.lat, newest.lng], 15.5); } catch (e) {} }
       })
+      .then(() => scheduleDispatch())
       .catch(() => {
         if (++dispatchFails >= 2) $("feedDown").style.display = "block";   /* never a silent stale board */
+        scheduleDispatch();
       });
   }
 
@@ -733,7 +740,10 @@
   function boot() {
     if (booted) return; booted = true;
     initMap();
-    loadDispatch(); setInterval(loadDispatch, 15000);
+    loadDispatch();                                   /* self-schedules: 6 s with live calls, 15 s idle */
+    document.addEventListener("visibilitychange", () => {   /* phone screen wakes -> current board NOW, not at the next tick */
+      if (document.visibilityState === "visible" && !document.hidden) loadDispatch();
+    });
     loadState(); setInterval(loadState, 15000);
     loadWx(); setInterval(loadWx, 10 * 60 * 1000);
     cxPins(); setInterval(cxPins, 5 * 60 * 1000);
