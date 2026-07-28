@@ -1490,12 +1490,16 @@
           }).catch(function(){ heatLoaded=false; });
       }
     })();
-    /* ── HYDRANTS — Bexar County's SAWS asset export (Apr 2022; ~200 more in-district than the old
-       Feb 2022 CADHydrants snapshot, coverage verified in the unincorporated district). Teal dots
-       past HYD_Z, bigger for 10"+ FEEDERDIAM mains; SAWS' own SERVSTAT reds join the officer-flagged
-       ones. Same enhancement failure mode as addresses: source down -> dots simply absent. ── */
-    var HYD_URL="https://services1.arcgis.com/8onVmslF2KXErTHT/arcgis/rest/services/FireHydrant/FeatureServer/0/query";
-    var hydLayer=L.layerGroup().addTo(map), HYD_Z=16.2, hydCache={}, hydKeys=[], hydSeq=0, hydPainted="";
+    /* ── HYDRANTS — the department's own db (hydrants.json): SAWS master list 2026-01-30 +
+       Active911 private hydrants, via the PR Div Chief. Loaded once, filtered locally per view —
+       no external GIS on the hot path, four years fresher than any public layer. Teal dots past
+       HYD_Z, bigger for 10"+ mains; officer-flagged OOS reds match on the baked-in addresses.
+       Same enhancement failure mode as addresses: file unreachable -> dots simply absent. ── */
+    window.HYDB=window.HYDB||null;
+    fetch("hydrants.json").then(function(r){ return r.ok?r.json():null; }).then(function(j){
+      if(j&&Array.isArray(j.h)){ window.HYDB=j; hydPainted=""; try{ hydUpdate(); }catch(e){} }
+    }).catch(function(){});
+    var hydLayer=L.layerGroup().addTo(map), HYD_Z=16.2, hydPainted="";
     /* Officer-supplied hydrant pins (backgrounds keyed out), teardrop tip anchored, addr pane under
        the call pins. Standard mains = teal; 10"+ mains = the BLUE pin, a size up — main size is our
        proxy for NFPA 291 Class AA (>=1,500 GPM) high-volume hydrants, which NFPA marks light blue. */
@@ -1512,33 +1516,23 @@
         if(o && o.length>=4 && a.indexOf(o)>=0) return true; }
       return false;
     }
-    function hydPaint(feats,key){
-      if(key&&key===hydPainted) return; hydPainted=key||"";
-      hydLayer.clearLayers();
-      feats.slice(0,400).forEach(function(f){
-        var g=f.geometry; if(!g||g.x==null||g.y==null) return;
-        var at=f.attributes||{};
-        var icon = ((at.SERVSTAT&&at.SERVSTAT!=="IN SVC")||hydIsOOS(at.ADDRQUAL)) ? hydIconOOS : ((+at.FEEDERDIAM||0)>=10 ? hydIconBig : hydIcon);   /* officer flags match the address text inside ADDRQUAL */
-        L.marker([g.y,g.x],{icon:icon,pane:"addrPane",interactive:false,keyboard:false}).addTo(hydLayer);
-      });
-    }
     try{ onBoardState(function(ok,st){                              /* officer OOS list changes repaint the pins */
       var next=((st&&st.oosHydrants)||[]).map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
       if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)){ window.OOS_HYD=next; hydPainted=""; try{ hydUpdate(); }catch(e){} }
     }); }catch(e){}
     function hydUpdate(){
-      if(map.getZoom()<HYD_Z){ hydLayer.clearLayers(); hydPainted=""; return; }
+      if(map.getZoom()<HYD_Z || !window.HYDB){ hydLayer.clearLayers(); hydPainted=""; return; }
       var b=map.getBounds().pad(0.12);
-      var bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(function(x){return x.toFixed(4);}).join(",");
-      if(hydCache[bbox]){ hydPaint(hydCache[bbox],bbox); return; }
-      var seq=++hydSeq;
-      fetch(HYD_URL+"?geometry="+bbox+"&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=FEEDERDIAM,SERVSTAT,ADDRQUAL&returnGeometry=true&resultRecordCount=800&f=json")
-        .then(function(r){ return r.ok?r.json():null; }).then(function(j){
-          if(seq!==hydSeq||!j||!Array.isArray(j.features)) return;
-          hydCache[bbox]=j.features; hydKeys.push(bbox);
-          if(hydKeys.length>40) delete hydCache[hydKeys.shift()];
-          if(map.getZoom()>=HYD_Z) hydPaint(j.features,bbox);
-        }).catch(function(){});
+      var key=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(function(x){return x.toFixed(4);}).join(",");
+      if(key===hydPainted) return; hydPainted=key;
+      hydLayer.clearLayers();
+      var w=b.getWest(), s=b.getSouth(), e=b.getEast(), n=b.getNorth(), shown=0, H=window.HYDB.h;
+      for(var i=0;i<H.length;i++){ var h=H[i];       /* [id, main_in, lat, lng, addr|0, private] */
+        if(h[3]<w||h[3]>e||h[2]<s||h[2]>n) continue;
+        if(++shown>400) break;
+        var icon = hydIsOOS(h[4]||"") ? hydIconOOS : ((h[1]||0)>=10 ? hydIconBig : hydIcon);
+        L.marker([h[2],h[3]],{icon:icon,pane:"addrPane",interactive:false,keyboard:false}).addTo(hydLayer);
+      }
     }
     /* ── LOW-WATER CROSSING PINS — the HALT/BexarFlood watched crossings on the MAP (the Program
        Manager's marker art). The flood tile stays the fail-loud LIST; these pins make closures
@@ -2766,36 +2760,26 @@
       if(!ts) return true;                             /* no timestamp: keep (fail-visible) */
       var m=(Date.now()-new Date(ts).getTime())/60000;
       return !isFinite(m)||m<=ADVISORY_MIN; }); }
-    /* ── TENDER OPS FLAG — live water-supply check per call. A FIRE-class call with no hydrant within
-       1,000 ft (the ISO credit distance) gets a red TENDER OPS chip on its row; an ALARM-class call in
-       the same gap gets an amber TENDER IF FIRE advisory (it may turn into one). Checked at call time
-       against BOTH hydrant DBs (two point-radius counts, cached per incident): the Bexar Co SAWS
-       export counts only IN-SVC plugs but misses private systems (Coolcrest, Windcrest); the legacy
-       CAD layer carries those. A plug in EITHER db = water — same union rule as tender-zones.json,
-       so the chip and the wash can never disagree on purpose. Any failed/unknown check shows NO chip
-       and retries next poll: an advisory aid on top of crew preplans — wrong silence beats wrong alarm. ── */
-    var tenderCache={}, tenderPending={}, lastCallsArgs=null;
-    var TENDER_DBS=[
-      "https://services1.arcgis.com/8onVmslF2KXErTHT/arcgis/rest/services/FireHydrant/FeatureServer/0/query?where=SERVSTAT%3D%27IN%20SVC%27",
-      "https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query?where=1%3D1"
-    ];
+    /* ── TENDER OPS FLAG — live water-supply check per call, against the LOCAL hydrant db
+       (hydrants.json: SAWS master 2026-01-30 + A911 private plugs). A FIRE-class call with no
+       hydrant within 1,000 ft (the ISO credit distance) gets a red TENDER OPS chip on its row;
+       an ALARM-class call in the same gap gets an amber TENDER IF FIRE advisory. Synchronous
+       scan (48k rows, sub-ms), cached per incident; db not loaded yet -> no chip, retried next
+       poll: an advisory aid on top of crew preplans — wrong silence beats wrong alarm. ── */
+    var tenderCache={}, lastCallsArgs=null;
+    var TD_KY=110574, TD_KX=96900;                 /* m/deg at 29.4N — fine for a 305 m radius test */
     function tenderKey(c){ return c.cad_code||("id:"+(c&&c.id)); }
     function tenderCheck(c){
       var k=tenderKey(c);
-      if((k in tenderCache) || tenderPending[k]) return;
+      if(k in tenderCache) return;
       var cls=classify(c.type);
       if((cls!=="k-fire" && cls!=="k-alarm") || c.lat==null || c.lng==null){ tenderCache[k]=null; return; }
-      tenderPending[k]=1;
-      Promise.all(TENDER_DBS.map(function(base){
-        return fetch(base+"&geometry="+c.lng+","+c.lat+
-              "&geometryType=esriGeometryPoint&inSR=4326&distance=305&units=esriSRUnit_Meter&spatialRel=esriSpatialRelIntersects&returnCountOnly=true&f=json")
-          .then(function(r){ return r.ok?r.json():null; });
-      })).then(function(js){ delete tenderPending[k];
-          if(js.some(function(j){ return !j || j.count==null; })) return;   /* either db unknown -> no chip; retried next poll */
-          tenderCache[k] = js.some(function(j){ return j.count>0; }) ? null : (cls==="k-fire" ? "need" : "if");
-          if(tenderCache[k] && lastCallsArgs){ try{ render(lastCallsArgs[0], lastCallsArgs[1]); }catch(e){} }   /* flag found -> repaint now, not in 12s */
-        })
-        .catch(function(){ delete tenderPending[k]; });
+      if(!window.HYDB) return;                     /* db still loading — retried next poll */
+      var H=window.HYDB.h, near=false;
+      for(var i=0;i<H.length;i++){ var h=H[i];
+        var dy=(h[2]-c.lat)*TD_KY, dx=(h[3]-c.lng)*TD_KX;
+        if(dy*dy+dx*dx<=305*305){ near=true; break; } }
+      tenderCache[k] = near ? null : (cls==="k-fire" ? "need" : "if");
     }
     function render(state, calls){
       var body=document.getElementById("callsBody"), pg=document.getElementById("callsPage");

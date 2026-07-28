@@ -294,52 +294,43 @@
     refitSouth = !refitSouth;
   });
 
-  /* ── HYDRANTS — Bexar County's SAWS asset export (Apr 2022), not the board's CAD snapshot
-     (Feb 2022): ~200 more hydrants in-district, FEEDERDIAM for the big-main icon, SERVSTAT so
-     SAWS-dead plugs go red alongside the officer-flagged ones, and per-hydrant detail on tap.
-     Officer OOS matching keys on ADDRQUAL, which embeds the same address text control.html
-     flags carry. Zoom-gated like the board. ── */
-  const HYD_URL = "https://services1.arcgis.com/8onVmslF2KXErTHT/arcgis/rest/services/FireHydrant/FeatureServer/0/query";
-  const HYD_Z = 16.2, hydCache = {}, hydKeys = [];
-  let hydSeq = 0, hydPainted = "", oosHyd = [];
+  /* ── HYDRANTS — the department's own db (hydrants.json): SAWS master list 2026-01-30 +
+     Active911 private hydrants, via the PR Div Chief. Loaded once, filtered locally per view —
+     no external GIS on the hot path, and four years fresher than any public layer. Addresses
+     joined from the 2022 county export where the plug existed then (officer OOS flags match on
+     them); private plugs carry their A911 notes (flow tests, warnings). Zoom-gated like the board. ── */
+  let HYDB = null;
+  fetch("hydrants.json").then(r => r.ok ? r.json() : null).then(j => {
+    if (j && Array.isArray(j.h)) { HYDB = j; hydPainted = ""; try { hydUpdate(); } catch (e) {} }
+  }).catch(() => {});   /* absent db -> no dots, no tender chips; dispatch banner is the loud one */
+  const HYD_Z = 16.2;
+  let hydPainted = "", oosHyd = [];
   const hIc = (f, s) => L.icon({ iconUrl: f + ".png", iconRetinaUrl: f + "@2x.png", iconSize: [s, s], iconAnchor: [s / 2, s] });
   const hydIcon = hIc("hydrant-marker", 20), hydIconBig = hIc("hydrant-marker-hv", 26), hydIconOOS = hIc("hydrant-marker-oos", 26);
   const hydNorm = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   const hydIsOOS = (a) => { a = hydNorm(a); return !!a && oosHyd.some(o => o && o.length >= 4 && a.indexOf(o) >= 0); };
-  function hydPaint(feats, key) {
-    if (key && key === hydPainted) return; hydPainted = key || "";
-    hydLayer.clearLayers();
-    feats.slice(0, 400).forEach(f => {
-      const g = f.geometry; if (!g || g.x == null || g.y == null) return;
-      const at = f.attributes || {};
-      const sawsOOS = at.SERVSTAT && at.SERVSTAT !== "IN SVC";
-      const icon = (sawsOOS || hydIsOOS(at.ADDRQUAL)) ? hydIconOOS : ((+at.FEEDERDIAM || 0) >= 10 ? hydIconBig : hydIcon);
-      const addr = String(at.ADDRQUAL || "").split("/")[0].trim();   /* "7811 TWO ROCK OAK / BETWEEN ..." -> street address only */
-      let inst = ""; try { if (at.INSTDATE) inst = new Date(at.INSTDATE).getUTCFullYear() || ""; } catch (e) {}
-      L.marker([g.y, g.x], { icon, keyboard: false, zIndexOffset: -500 })
-        .bindPopup('<div class="hyd-pop"><b>HYD ' + esc(at.UNITID || "?") + '</b>' +
-          (sawsOOS ? ' <span class="hp-oos">' + esc(at.SERVSTAT) + '</span>' : '') +
-          (addr ? '<br>' + esc(addr) : '') +
-          '<br><span class="hp-sz">' + ((+at.FEEDERDIAM || 0) ? (+at.FEEDERDIAM) + '&Prime; main' : 'main size unknown') + '</span>' +
-          (inst ? ' &middot; inst ' + inst : '') + (at.OWN ? ' &middot; ' + esc(at.OWN) : '') +
-          '</div>', { maxWidth: 260 })
-        .addTo(hydLayer);
-    });
-  }
   function hydUpdate() {
     if (!map) return;
-    if (map.getZoom() < HYD_Z) { hydLayer.clearLayers(); hydPainted = ""; return; }
+    if (map.getZoom() < HYD_Z || !HYDB) { hydLayer.clearLayers(); hydPainted = ""; return; }
     const b = map.getBounds().pad(0.12);
-    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(x => x.toFixed(4)).join(",");
-    if (hydCache[bbox]) { hydPaint(hydCache[bbox], bbox); return; }
-    const seq = ++hydSeq;
-    fetch(HYD_URL + "?geometry=" + bbox + "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=UNITID,FEEDERDIAM,SERVSTAT,OWN,INSTDATE,ADDRQUAL&returnGeometry=true&resultRecordCount=800&f=json")
-      .then(r => r.ok ? r.json() : null).then(j => {
-        if (seq !== hydSeq || !j || !Array.isArray(j.features)) return;
-        hydCache[bbox] = j.features; hydKeys.push(bbox);
-        if (hydKeys.length > 40) delete hydCache[hydKeys.shift()];
-        if (map.getZoom() >= HYD_Z) hydPaint(j.features, bbox);
-      }).catch(() => {});
+    const key = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(x => x.toFixed(4)).join(",");
+    if (key === hydPainted) return; hydPainted = key;
+    hydLayer.clearLayers();
+    const w = b.getWest(), s = b.getSouth(), e = b.getEast(), n = b.getNorth();
+    let shown = 0;
+    for (const h of HYDB.h) {                      /* [id, main_in, lat, lng, addr|0, private] */
+      if (h[3] < w || h[3] > e || h[2] < s || h[2] > n) continue;
+      if (++shown > 400) break;
+      const addr = h[4] || "";
+      const icon = hydIsOOS(addr) ? hydIconOOS : ((h[1] || 0) >= 10 ? hydIconBig : hydIcon);
+      L.marker([h[2], h[3]], { icon, keyboard: false, zIndexOffset: -500 })
+        .bindPopup('<div class="hyd-pop"><b>HYD ' + esc(h[0]) + '</b>' +
+          (h[5] ? ' <span class="hp-oos">PRIVATE</span>' : '') +
+          (addr ? '<br>' + esc(addr) : '') +
+          '<br><span class="hp-sz">' + ((h[1] || 0) ? h[1] + '&Prime; main' : 'main size unknown') + '</span>' +
+          '</div>', { maxWidth: 260 })
+        .addTo(hydLayer);
+    }
   }
 
   /* ── ADDRESS LABELS — the CAD map's "every address", same source + rules as the wall: Bexar
@@ -572,16 +563,21 @@
     if (/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "#58A6FF";
     if (/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZ|OVERDOSE|DIABET|ASSAULT|OB\b|HEADACHE|ALLERG|HEART/.test(t)) return "#FFC107";
     return "#8B949E"; }
-  /* ── TENDER chip — the wall's live water-supply check, in the cab: a fire-class call with no
-     plug within 1,000 ft in EITHER hydrant db gets the red TENDER OPS chip; an alarm-class call
-     in the same gap gets the amber TENDER IF FIRE advisory. SAWS export counts IN-SVC plugs only;
-     the legacy CAD layer contributes the private systems it misses — union rule, matching
-     tender-zones.json. Unknown/failed check -> no chip, retried next poll. ── */
-  const TENDER_DBS = [
-    "https://services1.arcgis.com/8onVmslF2KXErTHT/arcgis/rest/services/FireHydrant/FeatureServer/0/query?where=SERVSTAT%3D%27IN%20SVC%27",
-    "https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Hydrants/FeatureServer/0/query?where=1%3D1"
-  ];
-  const tenderCache = {}, tenderPending = {};
+  /* ── TENDER chip — the wall's live water-supply check, in the cab, now against the LOCAL
+     hydrant db: a fire-class call with no plug within 1,000 ft gets the red TENDER OPS chip;
+     an alarm-class call in the same gap gets the amber TENDER IF FIRE advisory. Synchronous
+     scan of hydrants.json (48k rows, sub-ms) — db not loaded yet -> no chip, retried next poll. ── */
+  const TD_KY = 110574, TD_KX = 96900;             /* m/deg at 29.4N — fine for a 305 m radius test */
+  function hydWithin(lat, lng, m) {
+    if (!HYDB) return null;
+    const lim = m * m;
+    for (const h of HYDB.h) {
+      const dy = (h[2] - lat) * TD_KY, dx = (h[3] - lng) * TD_KX;
+      if (dy * dy + dx * dx <= lim) return true;
+    }
+    return false;
+  }
+  const tenderCache = {};
   const tenderKey = (c) => c.cad_code || ("id:" + (c && c.id));
   function tenderClass(t) { t = String(t || "").toUpperCase();   /* wall's classify order: ALARM, then MVC (excluded), then FIRE */
     if (/ALARM/.test(t)) return "alarm";
@@ -590,20 +586,12 @@
     return ""; }
   function tenderCheck(c) {
     const k = tenderKey(c);
-    if ((k in tenderCache) || tenderPending[k]) return;
+    if (k in tenderCache) return;
     const cls = tenderClass(c.type);
     if (!cls || c.lat == null || c.lng == null) { tenderCache[k] = null; return; }
-    tenderPending[k] = 1;
-    Promise.all(TENDER_DBS.map(base =>
-      fetch(base + "&geometry=" + c.lng + "," + c.lat +
-            "&geometryType=esriGeometryPoint&inSR=4326&distance=305&units=esriSRUnit_Meter&spatialRel=esriSpatialRelIntersects&returnCountOnly=true&f=json")
-        .then(r => r.ok ? r.json() : null)))
-      .then(js => { delete tenderPending[k];
-        if (js.some(j => !j || j.count == null)) return;   /* either db unknown -> no chip; retried next poll */
-        tenderCache[k] = js.some(j => j.count > 0) ? null : (cls === "fire" ? "need" : "if");
-        if (tenderCache[k]) renderBand();                  /* flag found -> repaint now, not in 15s */
-      })
-      .catch(() => { delete tenderPending[k]; });
+    const near = hydWithin(c.lat, c.lng, 305);
+    if (near == null) return;                      /* db still loading — retried next poll */
+    tenderCache[k] = near ? null : (cls === "fire" ? "need" : "if");
   }
   function gmapsUrl(c) {
     if (c.lat != null && c.lng != null) return "https://www.google.com/maps/dir/?api=1&destination=" + c.lat + "," + c.lng;

@@ -581,16 +581,12 @@
       chk(jget('https://mapservices.weather.noaa.gov/raster/rest/services/obs/mrms_qpe/ImageServer/identify?geometry=-98.70,29.52&geometryType=esriGeometryPoint&returnCatalogItems=true&f=json').then(function(r){ return row('Rain radar data (MRMS)',!!(r.j&&(r.j.value!==undefined||r.j.catalogItems)),'ok',r.ms); }));
       chk(jget('https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer?f=json').then(function(r){ return row('Rain outlook (WPC)',!!(r.j&&r.j.layers),'ok',r.ms); }));
       chk(jget('https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0?f=json').then(function(r){ return row('County parcels (addresses)',!!(r.j&&r.j.fields),'ok',r.ms); }));
-      /* hydrant DB row also surfaces the SOURCE's own last-edit date — a reachable-but-stale
-         database is a quieter failure than a dead one, and the date is what catches it */
-      chk((function(){ var HB='https://services1.arcgis.com/8onVmslF2KXErTHT/arcgis/rest/services/FireHydrant/FeatureServer/0';
-        return Promise.all([
-          jget(HB+'?f=json'),
-          jget(HB+'/query?geometry=-98.72,29.39,-98.68,29.42&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&returnCountOnly=true&f=json')
-        ]).then(function(rr){
-          var cnt=rr[1].j&&rr[1].j.count, ed=rr[0].j&&rr[0].j.editingInfo&&rr[0].j.editingInfo.dataLastEditDate;
-          var d=ed?new Date(ed).toISOString().slice(0,10):'?';
-          return row('Hydrant DB (Bexar Co SAWS)',!!(cnt>0),(cnt||0)+' in test box · data '+d,Math.max(rr[0].ms,rr[1].ms)); }); })());
+      /* hydrant DB is now the department's own hydrants.json (SAWS master via PR Div Chief) —
+         the row proves the file serves AND surfaces its master-list date, so a stale db shows
+         its age at a glance right here */
+      chk(jget('hydrants.json').then(function(r){
+        var n=r.j&&r.j.n, v=(r.j&&r.j.v)||'?';
+        return row('Hydrant DB (dept master)',!!(n>0),(n||0)+' plugs · master '+v,r.ms); }));
       chk(img('https://a.basemaps.cartocdn.com/dark_all/12/949/1685.png').then(function(r){ return row('Map tiles — dark (CARTO)',r.ok,r.ok?'ok':'unreachable',r.ms); }));
       chk(img('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/12/1685/949').then(function(r){ return row('Map tiles — satellite (Esri)',r.ok,r.ok?'ok':'unreachable',r.ms); }));
       chk(img('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/8/59/105.png').then(function(r){ return row('Storm radar tiles',r.ok,r.ok?'ok':'unreachable',r.ms); }));
