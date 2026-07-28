@@ -269,7 +269,11 @@ function stationsOf(units) {
 /* Mirrors the crew's Active911 hunt list verbatim (2026-07-28): structure/struc, brush, haz,
    missing, wildland, explosion, assist-LE, smoke investigation, rescue. UAV124/UAV121 are unit
    attaches, tracked by uavAttached below, not type rules. ORDER MATTERS — first match wins:
-   water rescue must precede the general rescue catch-all or it loses its own bucket. */
+   water rescue must precede the general rescue catch-all or it loses its own bucket.
+   ASSIST-LE is further split by CALL NOTES at read time (see the /uav scan): notes with search
+   markers (LSW / last seen / silver alert...) = missing person; notes without them = assault or
+   suicidal standby, not a UAV mission. The note flag (ms) is stamped at ingestion — the raw
+   narrative is never stored. */
 const UAV_RULES = [
   { k: "missing", label: "Missing Person / Assist LE", pat: "MISSING|LOST\\s+PERSON|\\bSEARCH\\b|ASSIST.*(LAW|POLICE|SHERIFF|CONSTAB|OFFICER|\\bLE\\b)" },
   { k: "smoke",   label: "Smoke Investigation",        pat: "SMOKE" },
@@ -858,7 +862,7 @@ export default {
             aggApply(aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), out: sOut, aid: sAid, units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
             await env.PINS.put(akey, JSON.stringify({
               t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
-              u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "" }));
+              u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "", ms: c.msf }));
           }
           for (const m in aggs) await env.PINS.put("agg:" + m, JSON.stringify(aggs[m]));
           await env.PINS.put("archmeta:seeded", new Date().toISOString());
@@ -1012,6 +1016,12 @@ export default {
             const uavs = uavAttached(c.u), flew = uavs.length > 0;
             const tk = String(c.ty || "").trim().toUpperCase() || "(BLANK)";
             let rule = uavRuleOf(c.ty);
+            /* note-aware ASSIST-LE split (dept ground truth): most assist-LE tones are assault /
+               suicidal standbys — only the ones whose CALL NOTES read like a search ("LSW",
+               "last seen wearing", a description) are UAV missions. ms is the note-derived flag
+               stamped at ingestion: 0 = notes seen, no search markers -> not ours. Rows from
+               before the flag existed (ms absent) keep the old behavior — the tap covers those. */
+            if (rule === "missing" && /ASSIST/i.test(c.ty || "") && c.ms === 0) rule = "";
             if (rule && (noKeys.has(kk.name.slice(5)) || noTypes.has(tk))) rule = "";   /* marked or learned-out: not ours (a flown one still counts as opportunity) */
             const tc = tyCounts[tk] = tyCounts[tk] || { n: 0, r: rule, f: 0 };
             tc.n++; if (flew) tc.f++;
@@ -1356,6 +1366,13 @@ export default {
             lat:     geoNum(a.latitude),
             lng:     geoNum(a.longitude),
             cross:   String(a.cross_street || "").trim(),
+            /* note-derived missing-person signal (dept ground truth: ASSIST-LE tones are mostly
+               assault/suicidal standbys; a real search shows in the NOTES — "LSW", "last seen
+               wearing", a description). Only this derived FLAG is stored, never the narrative:
+               call notes carry PII that has no business in permanent KV. absent = no notes seen. */
+            msf: (() => { const d = String(a.details || "").trim();
+              if (!d) return undefined;
+              return /LSW|LAST\s+SEEN|MISSING|SILVER\s*ALERT|DEMENTIA|ALZHEIM|WANDER|\bSEARCH\b|\bLOST\b/i.test(d) ? 1 : 0; })(),
           });
         }
         return { ok: true, calls };
@@ -1395,7 +1412,7 @@ export default {
             const g = byKey.get(k), seenU = {};
             g.units.forEach(u => { seenU[String(u).toUpperCase()] = 1; });
             for (const u of (c.units || [])) { const uk = String(u).toUpperCase(); if (u && !seenU[uk]) { seenU[uk] = 1; g.units.push(u); } }
-            for (const f of ["cad_code", "address", "channel", "started", "type"]) if (!g[f] && c[f]) g[f] = c[f];   /* fill blanks from another feed's view */
+            for (const f of ["cad_code", "address", "channel", "started", "type", "msf"]) if (!g[f] && c[f]) g[f] = c[f];   /* fill blanks from another feed's view; msf: a 1 from either feed wins, 0 never overwrites */
           }
         }
         let calls = order.map(k => byKey.get(k));
@@ -1513,7 +1530,7 @@ export default {
                 if (cls !== "gen") {
                   await env.PINS.put("arch:" + (c.cad_code || c.id), JSON.stringify({
                     t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
-                    u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "" }));
+                    u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "", ms: c.msf }));
                   const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
                   let out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */
                   let aid = out ? aidDistrictOf(esdAll, c.lng, c.lat) : "";
