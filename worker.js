@@ -938,6 +938,35 @@ export default {
        same rl:<ip> failed-attempt counter as every other route. Classification happens at READ
        time from the permanent arch: rows, so editing UAV_RULES re-scores all history. 15-min KV
        cache; ?fresh=1 bypasses it. ── */
+    /* ── POST /uavmark {pin, k, undo?} — the officer's "not for us" tap. Firehawk PINs only,
+       same fail-closed gate as /uav. Stores a permanent per-incident mark (uavno:<archkey>);
+       LEARN_N marks on the same call TYPE become a standing exclusion, surfaced in /uav's
+       notForUs block so the learning is visible and reversible (undo:true deletes the mark).
+       Busts the /uav cache so the tap shows on the page's next load. ── */
+    if (req.method === "POST" && url.pathname === "/uavmark") {
+      const rlKey = "rl:" + ip;
+      const fails = parseInt((await env.PINS.get(rlKey)) || "0", 10);
+      if (fails >= 8) return json({ ok: false, error: "rate-limited" }, 429);
+      let body; try { body = await req.json(); } catch { body = {}; }
+      const fhv = await fhVerify(env, String(body.pin || ""));
+      if (fhv === "down") return json({ ok: false, error: "auth link down — add the FHAUTH service binding" }, 503);
+      if (fhv !== true) {
+        try { await env.PINS.put(rlKey, String(fails + 1), { expirationTtl: 300 }); } catch (e) {}
+        return json({ ok: false, error: "unauthorized" }, 401);
+      }
+      const k = String(body.k || "").trim();
+      if (!k || k.length > 80 || /[^\w:.-]/.test(k)) return json({ ok: false, error: "bad key" }, 400);
+      const av = await env.PINS.get("arch:" + k);
+      if (!av) return json({ ok: false, error: "unknown incident" }, 404);
+      if (body.undo) { try { await env.PINS.delete("uavno:" + k); } catch (e) {} }
+      else {
+        let ty = ""; try { ty = String((JSON.parse(av) || {}).ty || ""); } catch (e) {}
+        await env.PINS.put("uavno:" + k, JSON.stringify({ ty, t: new Date().toISOString() }));   /* permanent, like the arch: row it judges */
+      }
+      try { await env.PINS.delete("uavcache:v1"); } catch (e) {}
+      return json({ ok: true, k, marked: !body.undo }, 200);
+    }
+
     if (req.method === "GET" && url.pathname === "/uav") {
       const rlKey = "rl:" + ip;
       const fails = parseInt((await env.PINS.get(rlKey)) || "0", 10);
@@ -954,6 +983,23 @@ export default {
         if (cv) return new Response(cv, { status: 200, headers: { "Content-Type": "application/json", ...cors } });
       }
       try {
+        /* "not for us" feedback (POST /uavmark): per-incident officer marks. LEARN_N marks on the
+           same call TYPE teach a standing type exclusion — the wide A911 hunt filters are a net,
+           the marks are the crew telling the system which catches weren't real. */
+        const noKeys = new Set(), noTyCount = {};
+        let ncur;
+        do {
+          const nl = await env.PINS.list({ prefix: "uavno:", cursor: ncur, limit: 1000 });
+          for (const kk of nl.keys) {
+            noKeys.add(kk.name.slice(6));
+            const v = await env.PINS.get(kk.name);
+            try { const t = String((JSON.parse(v) || {}).ty || "").trim().toUpperCase();
+                  if (t) noTyCount[t] = (noTyCount[t] || 0) + 1; } catch (e) {}
+          }
+          ncur = nl.list_complete ? null : nl.cursor;
+        } while (ncur);
+        const LEARN_N = 3;
+        const noTypes = new Set(Object.entries(noTyCount).filter(([t, n]) => n >= LEARN_N).map(([t]) => t));
         /* one pass over the permanent archive — classify, split flown/missed, collect map points */
         const months = {}, missed = [], byHour = new Array(24).fill(0), pts = [], tyCounts = {};
         let qFl = 0, qMiss = 0, qOpp = 0;
@@ -963,8 +1009,10 @@ export default {
           for (const kk of lst.keys) {
             const v = await env.PINS.get(kk.name); if (!v) continue;
             let c; try { c = JSON.parse(v); } catch { continue; }
-            const rule = uavRuleOf(c.ty), uavs = uavAttached(c.u), flew = uavs.length > 0;
+            const uavs = uavAttached(c.u), flew = uavs.length > 0;
             const tk = String(c.ty || "").trim().toUpperCase() || "(BLANK)";
+            let rule = uavRuleOf(c.ty);
+            if (rule && (noKeys.has(kk.name.slice(5)) || noTypes.has(tk))) rule = "";   /* marked or learned-out: not ours (a flown one still counts as opportunity) */
             const tc = tyCounts[tk] = tyCounts[tk] || { n: 0, r: rule, f: 0 };
             tc.n++; if (flew) tc.f++;
             if (!rule && !flew) continue;                        /* neither mission-appropriate nor flown */
@@ -974,7 +1022,7 @@ export default {
               m.app++; m.byRule[rule] = (m.byRule[rule] || 0) + 1;
               if (mh.hour >= 0 && mh.hour < 24) byHour[mh.hour]++;
               if (flew) { m.fl++; qFl++; }
-              else { qMiss++; missed.push({ t: c.t, ty: c.ty || "", ad: c.ad || "", r: rule, la: c.la ?? null, ln: c.ln ?? null }); }
+              else { qMiss++; missed.push({ k: kk.name.slice(5), t: c.t, ty: c.ty || "", ad: c.ad || "", r: rule, la: c.la ?? null, ln: c.ln ?? null }); }   /* k = the handle /uavmark takes back */
             } else { m.opp++; qOpp++; }                          /* UAV flew a call outside the rules — flight of opportunity */
             if (c.la != null && c.ln != null && pts.length < 600)
               pts.push([+(+c.la).toFixed(4), +(+c.ln).toFixed(4), flew ? 1 : 0, rule]);
@@ -1017,6 +1065,8 @@ export default {
           rules: UAV_RULES.map(r => ({ k: r.k, label: r.label, pat: r.pat })),
           quad: { fl: qFl, miss: qMiss, opp: qOpp },
           months, missed, byHour, pts, types, flights,
+          notForUs: { marks: noKeys.size, learnN: LEARN_N,
+                      types: Object.entries(noTyCount).sort((a, b) => b[1] - a[1]).map(([t, n]) => [t, n, noTypes.has(t) ? 1 : 0]) },
           sched: { loaded: monsNeeded.filter(mn => schedByMon[mn]), msStaffed, msOff, msUnk } };
         const body = JSON.stringify(out);
         try { await env.PINS.put("uavcache:v1", body, { expirationTtl: 900 }); } catch (e) {}
