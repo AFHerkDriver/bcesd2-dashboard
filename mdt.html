@@ -593,7 +593,10 @@
   const isApp = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
   /* call-type palette — SAME colors as the wall's Runs by Type keypad, so the two screens speak
      one visual language. Order matters: ALARM/FIRE before MED so "ALARM - FIRE" classes purple. */
+  /* general alerts / dispatcher broadcasts — one shared test: colors green, drops nav, ages out at 5 min */
+  const GEN_RE = /GENERAL|BURNING|BURN BAN|HYDRANT|CAD OUTAGE|DISREGARD/i;
   function callColor(t) { t = String(t || "").toUpperCase();
+    if (GEN_RE.test(t)) return "#3FB950";              /* broadcast, not a run — green, before any run class can claim it */
     if (/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "#FF8C42";
     if (/ALARM/.test(t)) return "#A371F7";
     if (/FIRE|STRUCT|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "#F85149";
@@ -677,8 +680,9 @@
               const inner = (c.channel ? "<b>" + esc(c.channel) + "</b>" : "") + us.map(u => '<span class="utag' + (isApp(u) ? " app" : "") + '">' + esc(u) + "</span>").join("");   /* GREEN = a real rig attached (assigned or self-assigned) — trucks are rolling; gray box code = toned, no rig yet */
               return inner ? '<div class="uline">' + inner + "</div>" : "";
             })() +
+            (GEN_RE.test(String(c.type || "")) ? "" :   /* a broadcast has no scene — nothing to navigate to */
             '<a class="navbtn" href="' + gmapsUrl(c) + '" target="_blank" rel="noopener"><span class="gbadge"><svg viewBox="0 0 48 48" width="13" height="13"><path fill="currentColor" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="currentColor" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="currentColor" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="currentColor" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg></span><span class="btxt">GOOGLE MAPS</span></a> ' +
-            '<a class="navbtn apple" href="' + amapsUrl(c) + '" target="_blank" rel="noopener"><span class="alogo">&#63743;</span><span class="btxt">APPLE MAPS</span></a>' +
+            '<a class="navbtn apple" href="' + amapsUrl(c) + '" target="_blank" rel="noopener"><span class="alogo">&#63743;</span><span class="btxt">APPLE MAPS</span></a>') +
           "</div>";
   }
 
@@ -703,7 +707,7 @@
         dispatchFails = 0; $("feedDown").style.display = "none";
         /* general alerts / dispatcher broadcasts age out at 5 min — they are a heads-up, not a run,
            and the cab screen should not carry them as long as a working call (real calls keep 15) */
-        const isGen = (c) => /GENERAL|BURNING|BURN BAN|HYDRANT|CAD OUTAGE|DISREGARD/i.test(String(c.type || ""));
+        const isGen = (c) => GEN_RE.test(String(c.type || ""));
         const live = (j.calls || []).filter(c => ageMin(c) <= (isGen(c) ? 5 : 15) && String(c.address || "").trim());
         /* call band: newest two */
         live.sort((a, b) => String(b.started).localeCompare(String(a.started)));
