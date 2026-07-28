@@ -250,9 +250,14 @@
   .astro.moon .v{font-size:clamp(12px,1.25vmin,20px)}
   .astro.moon.full .v{color:var(--amber)}
   .wx-moonflag{flex:0 0 auto;text-align:center;background:rgba(255,193,7,.15);border:1px solid var(--amber);
-    color:var(--amber);border-radius:8px;padding:clamp(4px,.45vmin,9px);margin-top:clamp(5px,.6vmin,11px);
-    font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;font-size:clamp(13px,1.3vmin,22px)}
+    color:var(--amber);border-radius:8px;padding:clamp(2px,.3vmin,6px);margin-top:clamp(3px,.4vmin,7px);line-height:1.15;
+    font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;font-size:clamp(12px,1.2vmin,20px)}
   .wx-moonflag[hidden]{display:none}
+  /* full-moon night: the banner borrows height from the hourly strip — on tighter screens (iPad)
+     the cells must COMPRESS (smaller icon, tighter gaps) instead of clipping the feels-like row
+     mid-glyph. :has() is iOS 15.4+; browsers without it just keep the slimmer banner above. */
+  .wx-hours:has(+ .wx-moonflag:not([hidden])) .hcol{gap:clamp(1px,.2vmin,4px);padding:clamp(2px,.25vmin,5px) clamp(2px,.3vmin,6px)}
+  .wx-hours:has(+ .wx-moonflag:not([hidden])) .hcol .wic{width:clamp(16px,1.5vmin,26px);height:clamp(16px,1.5vmin,26px);margin:0}
   /* WPC Excessive Rainfall Outlook — bottom of the weather tile (MODERATE+ only) */
   .ero{flex:0 0 auto;border-radius:9px;margin-top:clamp(4px,.5vmin,9px);
     padding:clamp(5px,.6vmin,10px) clamp(9px,1.1vmin,15px)}
