@@ -1498,9 +1498,10 @@
        Same enhancement failure mode as addresses: file unreachable -> dots simply absent. ── */
     window.HYDB=window.HYDB||null;
     fetch("hydrants.json").then(function(r){ return r.ok?r.json():null; }).then(function(j){
-      if(j&&Array.isArray(j.h)){ window.HYDB=j; hydPainted=""; try{ hydUpdate(); }catch(e){} }
+      if(j&&Array.isArray(j.h)){ window.HYDB=j; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} }
     }).catch(function(){});
     var hydLayer=L.layerGroup().addTo(map), HYD_Z=16.2, hydPainted="";
+    var oosLayer=L.layerGroup().addTo(map);   /* flagged-OOS reds — NOT zoom-gated; a dead plug must read from district view */
     /* Officer-supplied hydrant pins (backgrounds keyed out), teardrop tip anchored, addr pane under
        the call pins. Standard mains = teal; 10"+ mains = the BLUE pin, a size up — main size is our
        proxy for NFPA 291 Class AA (>=1,500 GPM) high-volume hydrants, which NFPA marks light blue. */
@@ -1509,7 +1510,13 @@
     /* Officer-flagged OUT-OF-SERVICE hydrants (control.html list, matched by address) render the red
        slashed pin a size up — a plug you can't count on must out-shout the ones you can. */
     var hydIconOOS=L.icon({iconUrl:"hydrant-marker-oos.png",iconRetinaUrl:"hydrant-marker-oos@2x.png",iconSize:[26,26],iconAnchor:[13,26]});
-    function hydNorm(s){ return String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
+    /* suffix synonyms canonicalize BEFORE stripping — an officer's "Applewhite Road" must match
+       the db's "APPLEWHITE RD"; both sides of every comparison pass through here */
+    function hydNorm(s){ return String(s||"").toUpperCase()
+      .replace(/\b(ROAD|DRIVE|STREET|LANE|TRAIL|PARKWAY|BOULEVARD|AVENUE|HIGHWAY|CIRCLE|COURT|PLACE|COVE|BEND|CROSSING|EXPRESSWAY)\b/g,function(m){
+        return {ROAD:"RD",DRIVE:"DR",STREET:"ST",LANE:"LN",TRAIL:"TRL",PARKWAY:"PKWY",BOULEVARD:"BLVD",AVENUE:"AVE",
+                HIGHWAY:"HWY",CIRCLE:"CIR",COURT:"CT",PLACE:"PL",COVE:"CV",BEND:"BND",CROSSING:"XING",EXPRESSWAY:"EXPY"}[m]; })
+      .replace(/[^A-Z0-9]/g,""); }
     window.OOS_HYD=window.OOS_HYD||[];
     function hydIsOOS(addr){
       var a=hydNorm(addr); if(!a) return false;
@@ -1519,7 +1526,7 @@
     }
     try{ onBoardState(function(ok,st){                              /* officer OOS list changes repaint the pins */
       var next=((st&&st.oosHydrants)||[]).map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
-      if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)){ window.OOS_HYD=next; hydPainted=""; try{ hydUpdate(); }catch(e){} }
+      if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)){ window.OOS_HYD=next; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} }
     }); }catch(e){}
     function hydUpdate(){
       if(map.getZoom()<HYD_Z || !window.HYDB){ hydLayer.clearLayers(); hydPainted=""; return; }
@@ -1530,9 +1537,21 @@
       var w=b.getWest(), s=b.getSouth(), e=b.getEast(), n=b.getNorth(), shown=0, H=window.HYDB.h;
       for(var i=0;i<H.length;i++){ var h=H[i];       /* [id, main_in, lat, lng, addr|0, private] */
         if(h[3]<w||h[3]>e||h[2]<s||h[2]>n) continue;
+        if(h[4]&&hydIsOOS(h[4])) continue;           /* flagged reds live in oosLayer — always on, never doubled */
         if(++shown>400) break;
-        var icon = hydIsOOS(h[4]||"") ? hydIconOOS : ((h[1]||0)>=10 ? hydIconBig : hydIcon);
+        var icon = (h[1]||0)>=10 ? hydIconBig : hydIcon;
         L.marker([h[2],h[3]],{icon:icon,pane:"addrPane",interactive:false,keyboard:false}).addTo(hydLayer);
+      }
+    }
+    /* flagged-OOS hydrants render at EVERY zoom — the point of the flag is that crews see the
+       dead plug without knowing where to look */
+    function oosRepaint(){
+      oosLayer.clearLayers();
+      if(!window.HYDB||!window.OOS_HYD.length) return;
+      var H=window.HYDB.h;
+      for(var i=0;i<H.length;i++){ var h=H[i];
+        if(!h[4]||!hydIsOOS(h[4])) continue;
+        L.marker([h[2],h[3]],{icon:hydIconOOS,interactive:false,keyboard:false}).addTo(oosLayer);
       }
     }
     /* ── LOW-WATER CROSSING PINS — the HALT/BexarFlood watched crossings on the MAP (the Program

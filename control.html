@@ -103,6 +103,8 @@
   .diag-out .dr.bad{color:#FF3B30} .diag-out .dr.bad .dv{color:#FF3B30;font-weight:700}
   .diag-sum{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700}
   .diag-sum.allok{color:#34C759} .diag-sum.down{color:#FF3B30}
+  .oosck{font-size:11px;font-family:'DM Mono',monospace;white-space:nowrap;color:var(--dim);align-self:center}
+  .oosck.ok{color:#34C759} .oosck.bad{color:#FF3B30;font-weight:700}
   /* Chute Times (admin gee-whiz) */
   .chute-body{font-family:'DM Mono',monospace;font-size:13px}
   .chute-hero{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 12px}
@@ -385,7 +387,7 @@
     <!-- OOS Hydrants — officer-flagged; the board turns matching CAD hydrants into red slashed pins -->
     <div class="card fold clps" id="cardOOS">
       <h2>OOS Hydrants <span class="fold-sum" id="oosFoldSum"></span></h2>
-      <div class="hint">Enter the hydrant&rsquo;s street address as SAWS lists it (e.g. <b>11219 CHARISMATIC</b>) &mdash; the map matches it against the CAD hydrant layer and shows the red slashed pin at close zoom. Remove the entry when the hydrant is repaired.</div>
+      <div class="hint">Enter the hydrant&rsquo;s street address (e.g. <b>11219 CHARISMATIC</b>) &mdash; the <b>&#10003;</b> confirms it matched a plug in the department hydrant db, and both maps show the red slashed pin at ANY zoom. Suffix spelling (Road vs RD) doesn&rsquo;t matter. Remove the entry when the hydrant is repaired.</div>
       <div id="oosList"></div>
       <button class="add" id="addOOS">+ Flag a hydrant OOS</button>
     </div>
@@ -1204,15 +1206,41 @@ function macAutoPrefill(){
   }).catch(function(){});
 }
 window.macAutoPrefill=macAutoPrefill;
+/* ── OOS flag validation — the exact matcher the boards run (suffix-synonym normalize +
+   substring), against the same hydrants.json. The ✓/✗ answers "did my flag actually take?"
+   at typing time instead of leaving the officer to trust an invisible match. ── */
+var HYDN=null, HYDN_REQ=false;
+function hydNormC(s){ return String(s||'').toUpperCase()
+  .replace(/\b(ROAD|DRIVE|STREET|LANE|TRAIL|PARKWAY|BOULEVARD|AVENUE|HIGHWAY|CIRCLE|COURT|PLACE|COVE|BEND|CROSSING|EXPRESSWAY)\b/g,function(m){
+    return {ROAD:'RD',DRIVE:'DR',STREET:'ST',LANE:'LN',TRAIL:'TRL',PARKWAY:'PKWY',BOULEVARD:'BLVD',AVENUE:'AVE',HIGHWAY:'HWY',CIRCLE:'CIR',COURT:'CT',PLACE:'PL',COVE:'CV',BEND:'BND',CROSSING:'XING',EXPRESSWAY:'EXPY'}[m]; })
+  .replace(/[^A-Z0-9]/g,''); }
+function loadHydDb(){ if(HYDN||HYDN_REQ) return; HYDN_REQ=true;
+  fetch('hydrants.json').then(function(r){ return r.ok?r.json():null; }).then(function(j){
+    if(j&&Array.isArray(j.h)){ HYDN=[]; j.h.forEach(function(h){ if(h[4]) HYDN.push([hydNormC(h[4]),h[0]]); });
+      try{ renderOOS(); }catch(e){} }
+  }).catch(function(){}); }
+function setOOSBadge(i){
+  var el=document.querySelector('[data-oosck="'+i+'"]'); if(!el) return;
+  var f=hydNormC(state.oosHydrants[i]||'');
+  if(!f||f.length<4){ el.className='oosck'; el.textContent=''; return; }
+  if(!HYDN){ el.className='oosck'; el.textContent='…'; return; }
+  var n=0,id='';
+  for(var k=0;k<HYDN.length;k++){ if(HYDN[k][0].indexOf(f)>=0){ n++; if(!id) id=HYDN[k][1]; } }
+  if(n){ el.className='oosck ok'; el.textContent='✓ '+(n===1?('HYD '+id):(n+' plugs')); }
+  else { el.className='oosck bad'; el.textContent='✗ no match'; }
+}
 function renderOOS(){
   var box=$('oosList'); if(!box) return; box.innerHTML='';
   if(!Array.isArray(state.oosHydrants)) state.oosHydrants=[];
+  loadHydDb();
   state.oosHydrants.forEach(function(a,i){
     var row=document.createElement('div'); row.className='list-row';
     row.innerHTML='<input type="text" data-oos="'+i+'" value="'+esc(a||'')+'" placeholder="Hydrant address (e.g. 11219 CHARISMATIC)" style="flex:1 1 220px;min-width:0">'+
+      '<span class="oosck" data-oosck="'+i+'"></span>'+
       '<button class="wdel oosdel" data-oosdel="'+i+'">✕</button>';
     box.appendChild(row);
   });
+  state.oosHydrants.forEach(function(a,i){ setOOSBadge(i); });
   var s=$('oosFoldSum'); if(s){ var n=state.oosHydrants.length;
     s.textContent=n?('· '+n+' OOS'):'· none'; s.className='fold-sum'+(n?' bad':''); }
 }
@@ -1245,7 +1273,7 @@ document.addEventListener('input', function(e){
   var t=e.target, wi=t.getAttribute&&t.getAttribute('data-wi'), wf=t.getAttribute&&t.getAttribute('data-wf');
   if(wi!=null&&wf){ state.writeins[+wi][wf]=t.value; }
   var oi=t.getAttribute&&t.getAttribute('data-oos');
-  if(oi!=null){ state.oosHydrants[+oi]=t.value; }
+  if(oi!=null){ state.oosHydrants[+oi]=t.value; setOOSBadge(+oi); }
 });
 document.addEventListener('change', function(e){
   var t=e.target, ux=t.getAttribute&&t.getAttribute('data-ux');

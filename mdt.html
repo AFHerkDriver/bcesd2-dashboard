@@ -207,7 +207,7 @@
   /* ── MAP — cab composition of the board's stack: sun-follow imagery, stations, borders,
      hydrants (incl. officer OOS reds), crossing pins, radar in storms. No burn-in orbit, no
      wall-tier logic — this is its own tier. ── */
-  let map, callLayer, hydLayer, cxLayer, addrLayer, tourLayer, radarOn = false;
+  let map, callLayer, hydLayer, oosLayer, cxLayer, addrLayer, tourLayer, radarOn = false;
   const TL = (u, o) => { o = o || {}; o.updateWhenIdle = true; o.updateWhenZooming = false; o.keepBuffer = 4; return L.tileLayer(u, o); };
   function sunUp() { const lat = 29.465, lng = -98.73, now = new Date(), rad = Math.PI / 180, deg = 180 / Math.PI;
     const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
@@ -272,6 +272,7 @@
     }).catch(() => {});
     callLayer = L.layerGroup().addTo(map);
     hydLayer = L.layerGroup().addTo(map);
+    oosLayer = L.layerGroup().addTo(map);   /* flagged-OOS reds — NOT zoom-gated; a dead plug must be visible from district view */
     cxLayer = L.layerGroup().addTo(map);
     /* address labels live UNDER the call circles: MDT call pins are vectors in the z-400 overlay
        pane (unlike the wall's z-600 divIcon pins), so this pane must sit below 400, above radar */
@@ -302,13 +303,20 @@
      them); private plugs carry their A911 notes (flow tests, warnings). Zoom-gated like the board. ── */
   let HYDB = null;
   fetch("hydrants.json").then(r => r.ok ? r.json() : null).then(j => {
-    if (j && Array.isArray(j.h)) { HYDB = j; hydPainted = ""; try { hydUpdate(); } catch (e) {} }
+    if (j && Array.isArray(j.h)) { HYDB = j; hydPainted = ""; try { hydUpdate(); oosRepaint(); } catch (e) {} }
   }).catch(() => {});   /* absent db -> no dots, no tender chips; dispatch banner is the loud one */
   const HYD_Z = 16.2;
   let hydPainted = "", oosHyd = [];
   const hIc = (f, s) => L.icon({ iconUrl: f + ".png", iconRetinaUrl: f + "@2x.png", iconSize: [s, s], iconAnchor: [s / 2, s] });
   const hydIcon = hIc("hydrant-marker", 20), hydIconBig = hIc("hydrant-marker-hv", 26), hydIconOOS = hIc("hydrant-marker-oos", 26);
-  const hydNorm = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  /* suffix synonyms canonicalize BEFORE stripping — an officer's "Applewhite Road" must match the
+     db's "APPLEWHITE RD"; both sides of every comparison pass through here */
+  const hydNorm = (s) => String(s || "").toUpperCase()
+    .replace(/\b(ROAD|DRIVE|STREET|LANE|TRAIL|PARKWAY|BOULEVARD|AVENUE|HIGHWAY|CIRCLE|COURT|PLACE|COVE|BEND|CROSSING|EXPRESSWAY)\b/g,
+      (m) => ({ ROAD: "RD", DRIVE: "DR", STREET: "ST", LANE: "LN", TRAIL: "TRL", PARKWAY: "PKWY", BOULEVARD: "BLVD",
+                AVENUE: "AVE", HIGHWAY: "HWY", CIRCLE: "CIR", COURT: "CT", PLACE: "PL", COVE: "CV", BEND: "BND",
+                CROSSING: "XING", EXPRESSWAY: "EXPY" }[m]))
+    .replace(/[^A-Z0-9]/g, "");
   const hydIsOOS = (a) => { a = hydNorm(a); return !!a && oosHyd.some(o => o && o.length >= 4 && a.indexOf(o) >= 0); };
   function hydUpdate() {
     if (!map) return;
@@ -321,9 +329,10 @@
     let shown = 0;
     for (const h of HYDB.h) {                      /* [id, main_in, lat, lng, addr|0, private] */
       if (h[3] < w || h[3] > e || h[2] < s || h[2] > n) continue;
+      if (h[4] && hydIsOOS(h[4])) continue;        /* flagged reds live in oosLayer — always on, never doubled */
       if (++shown > 400) break;
       const addr = h[4] || "";
-      const icon = hydIsOOS(addr) ? hydIconOOS : ((h[1] || 0) >= 10 ? hydIconBig : hydIcon);
+      const icon = (h[1] || 0) >= 10 ? hydIconBig : hydIcon;
       L.marker([h[2], h[3]], { icon, keyboard: false, zIndexOffset: -500 })
         .bindPopup('<div class="hyd-pop"><b>HYD ' + esc(h[0]) + '</b>' +
           (h[5] ? ' <span class="hp-oos">PRIVATE</span>' : '') +
@@ -331,6 +340,21 @@
           '<br><span class="hp-sz">' + ((h[1] || 0) ? h[1] + '&Prime; main' : 'main size unknown') + '</span>' +
           '</div>', { maxWidth: 260 })
         .addTo(hydLayer);
+    }
+  }
+  /* flagged-OOS hydrants render at EVERY zoom — the entire point of an officer flagging a dead
+     plug is that crews see it without having to know where to look */
+  function oosRepaint() {
+    if (!oosLayer) return;
+    oosLayer.clearLayers();
+    if (!HYDB || !oosHyd.length) return;
+    for (const h of HYDB.h) {
+      if (!h[4] || !hydIsOOS(h[4])) continue;
+      L.marker([h[2], h[3]], { icon: hydIconOOS, keyboard: false })
+        .bindPopup('<div class="hyd-pop"><b>HYD ' + esc(h[0]) + '</b> <span class="hp-oos">OUT OF SERVICE</span>' +
+          '<br>' + esc(h[4]) +
+          '<br><span class="hp-sz">' + ((h[1] || 0) ? h[1] + '&Prime; main' : 'main size unknown') + '</span></div>', { maxWidth: 260 })
+        .addTo(oosLayer);
     }
   }
 
@@ -542,7 +566,7 @@
       else { chip.className = "chip bad";
         chip.innerHTML = divs.length + " ON DIVERSION<span class='sub'>" + divs.slice(0, 4).map(d => esc(d.name) + " — " + esc(d.status)).join(" · ") + "</span>"; }
       const next = (st.oosHydrants || []).map(x => hydNorm(x && x.addr != null ? x.addr : x)).filter(Boolean);
-      if (JSON.stringify(next) !== JSON.stringify(oosHyd)) { oosHyd = next; hydPainted = ""; hydUpdate(); }
+      if (JSON.stringify(next) !== JSON.stringify(oosHyd)) { oosHyd = next; hydPainted = ""; hydUpdate(); oosRepaint(); }
     }).catch(() => {
       if (++stateFails >= 2) { const chip = $("hospChip"); chip.className = "chip bad"; chip.textContent = "DIVERSION STATUS UNKNOWN — verify via MEDCOM"; }
     });
