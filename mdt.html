@@ -55,6 +55,7 @@
   .ccard.slim { display: flex; gap: 10px; align-items: baseline; padding: 8px 12px; }
   .ccard.slim .sty { font-family: 'Bebas Neue', sans-serif; font-size: 17px; letter-spacing: 1px; white-space: nowrap; }
   .ccard.slim .sad { font-size: 13px; color: #E6EDF3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .ccard.slim .stime { font-size: 11px; color: #8B949E; white-space: nowrap; margin-left: auto; }
   .ccard .navbtn { margin-top: 8px; display: inline-flex; align-items: center; gap: 7px; background: #1C2230;
                    color: #3FB950; border: 1px solid #3FB950; text-decoration: none;
                    height: 38px; vertical-align: top; line-height: 1;   /* fixed height + top align: the Apple glyph's font metrics can't skew the pair */
@@ -610,16 +611,28 @@
   function buildCard(c, slim) {
     const col = callColor(c.type);
     const attrs = ' data-id="' + esc(c.id) + '"' + (c.lat != null && c.lng != null ? ' data-ll="' + c.lat + "," + c.lng + '"' : "");
+    /* dispatch stamp: logged = worker first-seen (trustworthy), started = A911's own. Central time
+       always — the tour boundary rule applies to clocks too; a phone in another zone must not lie. */
+    const ct = Date.parse(c.logged || c.started || "");
+    let when = "", age = "";
+    if (!isNaN(ct)) {
+      try { when = new Date(ct).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: CT_ZONE }); } catch (e) {}
+      const m = Math.round((Date.now() - ct) / 60000);
+      age = m < 1 ? "now" : m + " min";
+    }
     if (slim) return '<div class="ccard slim"' + attrs + ' style="border-color:' + col + '">' +
       '<span class="sty" style="color:' + col + '">' + esc(c.type) + "</span>" +
-      '<span class="sad">' + esc(c.address) + "</span></div>";
+      '<span class="sad">' + esc(c.address) + "</span>" +
+      (when ? '<span class="stime">' + when + "</span>" : "") + "</div>";
     const td = tenderCache[tenderKey(c)];
     return '<div class="ccard"' + attrs + ' style="border-color:' + col + '">' +
             '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
             '<div class="ad">' + esc(c.address) + '</div>' +
             (td === "need" ? '<div><span class="tdops">TENDER OPS</span></div>'
            : td === "if" ? '<div><span class="tdops if">TENDER IF FIRE</span></div>' : '') +
-            (c.cross ? '<div class="meta"><span>X: ' + esc(c.cross) + "</span></div>" : "") +
+            ((when || c.cross) ? '<div class="meta">' +
+              (when ? '<span><b>' + when + '</b> &middot; ' + age + '</span>' : "") +
+              (c.cross ? '<span>X: ' + esc(c.cross) + "</span>" : "") + "</div>" : "") +
             (() => {                                       /* channel + assigned units get their OWN line, units as visible tags */
               const us = (c.units || []).filter(isApp).length ? (c.units || []).filter(isApp) : (c.units || []);
               const inner = (c.channel ? "<b>" + esc(c.channel) + "</b>" : "") + us.map(u => '<span class="utag' + (isApp(u) ? " app" : "") + '">' + esc(u) + "</span>").join("");   /* GREEN = a real rig attached (assigned or self-assigned) — trucks are rolling; gray box code = toned, no rig yet */
