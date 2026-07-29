@@ -243,7 +243,7 @@
   /* ── MAP — cab composition of the board's stack: sun-follow imagery, stations, borders,
      hydrants (incl. officer OOS reds), crossing pins, radar in storms. No burn-in orbit, no
      wall-tier logic — this is its own tier. ── */
-  let map, callLayer, freshLayer, hydLayer, oosLayer, cxLayer, addrLayer, tourLayer, radarOn = false;
+  let map, callLayer, freshLayer, hydLayer, oosLayer, cxLayer, addrLayer, tourLayer, radarOn = false, bases = null;
   const TL = (u, o) => { o = o || {}; o.updateWhenIdle = true; o.updateWhenZooming = false; o.keepBuffer = 4; return L.tileLayer(u, o); };
   function sunUp() { const lat = 29.465, lng = -98.73, now = new Date(), rad = Math.PI / 180, deg = 180 / Math.PI;
     const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
@@ -266,6 +266,8 @@
       TL("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }),
       TL("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 19 })]);
     map = L.map("map", { center: [29.44, -98.72], zoom: 12, layers: [sunUp() ? satellite : dark], zoomControl: false });
+    bases = { satellite, dark, positron };            /* the focus choreography swaps bases at night */
+    map.on("dragstart", focusCancel);                 /* cab adaptation: a finger on the map owns the view — cancel any auto-focus hold */
     map.attributionControl.setPrefix(false);
     map.createPane("radarPane"); map.getPane("radarPane").style.zIndex = 350;
     /* layer choices — same set as the wall: bases, Wind Flow particles, radar (manual on top of
@@ -318,9 +320,11 @@
     map.on("moveend zoomend", hydUpdate);
     map.on("moveend zoomend", () => { if (addrDeb) clearTimeout(addrDeb); addrDeb = setTimeout(addrUpdate, 400); });
     districtView();
-    /* day/night swap every 5 min */
+    /* day/night swap every 5 min — never mid call-zoom (preFocusBase guard, same as the wall);
+       baseRestore hands back and the next tick corrects */
     let day = sunUp();
-    setInterval(() => { const d = sunUp(); if (d !== day) { day = d;
+    setInterval(() => { if (preFocusBase) return;
+      const d = sunUp(); if (d !== day) { day = d;
       [satellite, dark].forEach(l => { try { map.removeLayer(l); } catch (e) {} });
       map.addLayer(d ? satellite : dark); } }, 5 * 60 * 1000);
   }
@@ -328,6 +332,7 @@
      (161/162), and so on — the label always names where the NEXT tap goes */
   let refitSouth = false;
   $("refit").addEventListener("click", () => {
+    focusCancel();                                   /* a deliberate reframe outranks any auto-focus hold */
     if (refitSouth) { southView(); $("refit").innerHTML = "&#8982; District 2"; }
     else { districtView(); $("refit").innerHTML = "&#8982; District 6"; }
     refitSouth = !refitSouth;
@@ -613,8 +618,53 @@
 
   /* ── DISPATCH — the reason this screen exists. Poll every 15 s; two consecutive failures =
      the loud red banner. New calls auto-focus the map once; District button reframes. ── */
-  let dispatchFails = 0, knownIds = {}, focusId = null;
+  let dispatchFails = 0, knownIds = {};
   const freshUntil = {};                             /* call id -> pulse expiry; the pin rebuild reads it each poll */
+  /* ── NEW-CALL AUTOFOCUS — the wall's governed choreography, verbatim: a call drops -> pin it,
+     flash it, swing to near-rooftop imagery (satellite swap at night, restored after); a second
+     call joins the frame (fitBounds capped at FOCUS_ZOOM); each call pulses 60 s and the view
+     collapses onto whatever still pulses, then back to the district frame. MIN_GAP floors fresh
+     focuses; BURST_N inside BURST_WIN stops the lurching on a busy tour (pins and flashes
+     continue). Cab adaptation: a finger on the map or the District button cancels the hold. ── */
+  let focusT = null, lastFocus = 0, recentF = [], focusPts = [], preFocusBase = null;
+  const FOCUS_ZOOM = 15.2, CALL_ZOOM = 16, HOLD = 60000, MIN_GAP = 25000, BURST_N = 3, BURST_WIN = 240000;
+  function baseSat() {
+    if (!bases || preFocusBase) return;
+    const cur = map.hasLayer(bases.satellite) ? bases.satellite : map.hasLayer(bases.dark) ? bases.dark : map.hasLayer(bases.positron) ? bases.positron : null;
+    if (!cur || cur === bases.satellite) return;
+    preFocusBase = cur; try { map.removeLayer(cur); } catch (e) {} try { map.addLayer(bases.satellite); } catch (e) {}
+  }
+  function baseRestore() {
+    if (!bases || !preFocusBase) return;
+    try { map.removeLayer(bases.satellite); } catch (e) {} try { map.addLayer(preFocusBase); } catch (e) {}
+    preFocusBase = null;
+  }
+  function focusCancel() {
+    if (focusT) { clearTimeout(focusT); focusT = null; }
+    focusPts = []; baseRestore();
+  }
+  function reframe() {
+    const now = Date.now();
+    focusPts = focusPts.filter(p => p.exp > now);
+    if (focusT) { clearTimeout(focusT); focusT = null; }
+    if (!focusPts.length) { baseRestore(); districtView(); return; }
+    try {
+      if (focusPts.length === 1) { map.setView(focusPts[0].ll, CALL_ZOOM, { animate: false }); baseSat(); }   /* one call: rooftop imagery */
+      else { baseRestore(); map.fitBounds(L.latLngBounds(focusPts.map(p => p.ll)).pad(0.35), { animate: false, maxZoom: FOCUS_ZOOM }); }
+    } catch (e) {}
+    const next = focusPts.reduce((m, p) => Math.min(m, p.exp), Infinity) - now;
+    focusT = setTimeout(reframe, Math.max(250, next));
+  }
+  function focusCall(c) {
+    const now = Date.now();
+    recentF = recentF.filter(t => now - t < BURST_WIN); recentF.push(now);
+    if (recentF.length >= BURST_N) return;           /* busy tour: pin + flash, hold the view */
+    const active = focusPts.some(p => p.exp > now);
+    if (!active && now - lastFocus < MIN_GAP) return;   /* joining a live frame always re-frames; fresh focuses are gapped */
+    lastFocus = now;
+    focusPts.push({ ll: [c.lat, c.lng], exp: now + HOLD });
+    reframe();
+  }
   function sonarDrop(c, col) {
     if (!freshLayer) return;
     const mk = L.marker([c.lat, c.lng], { interactive: false, keyboard: false,
@@ -747,26 +797,24 @@
         lastTop.forEach(tenderCheck);   /* async; a found flag repaints the band itself */
         renderBand();
 
-        /* map pins + one-time focus per new call; a fresh call pulses and pings for ~60 s */
+        /* map pins — the DASHBOARD's call-drop treatment verbatim: fresh call gets the radius-8
+           flashing pin + sonar + governed focus; settled calls the radius-7 solid pin. */
         callLayer.clearLayers();
-        let newest = null;
         const nowMs = Date.now();
         live.forEach(c => {
           if (c.lat == null || c.lng == null) return;
           const col = callColor(c.type);
-          if (!knownIds[c.id]) { knownIds[c.id] = 1; newest = c;
+          if (!knownIds[c.id]) { knownIds[c.id] = 1;
             freshUntil[c.id] = nowMs + 60000;
             sonarDrop(c, col);
+            focusCall(c);
           }
-          /* the DASHBOARD's call-pin, verbatim: radius-7 circle, dark outline, near-solid type
-             fill — one pin language across the wall and the cab. Fresh calls flash on top of it. */
-          L.circleMarker([c.lat, c.lng], { radius: 7, color: "#0D1117", weight: 2, opacity: .9,
-              fillColor: col, fillOpacity: .92,
-              className: "call-pin" + ((freshUntil[c.id] || 0) > nowMs ? " pin-new" : "") })
+          const fresh = (freshUntil[c.id] || 0) > nowMs;
+          L.circleMarker([c.lat, c.lng], { radius: fresh ? 8 : 7, color: "#0D1117", weight: 2, opacity: .9,
+              fillColor: col, fillOpacity: fresh ? .95 : .92,
+              className: "call-pin" + (fresh ? " pin-new" : "") })
             .bindTooltip(esc(c.type), { direction: "top", offset: [0, -8] }).addTo(callLayer);
         });
-        if (newest && newest.id !== focusId) { focusId = newest.id;
-          try { map.setView([newest.lat, newest.lng], 15.5); } catch (e) {} }
       })
       .then(() => scheduleDispatch())
       .catch(() => {
