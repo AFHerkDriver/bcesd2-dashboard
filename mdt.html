@@ -201,7 +201,7 @@
 <div id="callBandWrap">
   <div id="callBand"></div>
   <div id="rail">
-    <div class="chip" id="hospChip">hospitals &hellip;</div>
+    <div class="chip" id="hospChip" style="display:none">hospitals &hellip;</div>
     <div class="chip" id="wxChip" style="display:none"></div>
   </div>
 </div>
@@ -597,15 +597,17 @@
       const dj = doc && doc.fields && doc.fields.stateJson && doc.fields.stateJson.stringValue;
       const st = dj ? JSON.parse(dj) : null;
       const chip = $("hospChip");
-      if (!st) { chip.className = "chip bad"; chip.textContent = "DIVERSION STATUS UNKNOWN — verify via MEDCOM"; return; }
+      if (!st) { chip.style.display = ""; chip.className = "chip bad"; chip.textContent = "DIVERSION STATUS UNKNOWN — verify via MEDCOM"; return; }
       const divs = st.diversions || [];
-      if (!divs.length) { chip.className = "chip ok"; chip.textContent = "ALL FACILITIES OPEN"; }
-      else { chip.className = "chip bad";
+      /* all facilities open = say NOTHING — the cab screen stays clear. The chip only exists for
+         diversions and for the fail-loud unknown state (silence must never mean "feed dead"). */
+      if (!divs.length) { chip.style.display = "none"; }
+      else { chip.style.display = ""; chip.className = "chip bad";
         chip.innerHTML = divs.length + " ON DIVERSION<span class='sub'>" + divs.slice(0, 4).map(d => esc(d.name) + " — " + esc(d.status)).join(" · ") + "</span>"; }
       const next = (st.oosHydrants || []).map(x => hydNorm(x && x.addr != null ? x.addr : x)).filter(Boolean);
       if (JSON.stringify(next) !== JSON.stringify(oosHyd)) { oosHyd = next; hydPainted = ""; hydUpdate(); oosRepaint(); }
     }).catch(() => {
-      if (++stateFails >= 2) { const chip = $("hospChip"); chip.className = "chip bad"; chip.textContent = "DIVERSION STATUS UNKNOWN — verify via MEDCOM"; }
+      if (++stateFails >= 2) { const chip = $("hospChip"); chip.style.display = ""; chip.className = "chip bad"; chip.textContent = "DIVERSION STATUS UNKNOWN — verify via MEDCOM"; }
     });
   }
 
