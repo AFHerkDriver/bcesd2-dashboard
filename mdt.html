@@ -713,17 +713,19 @@
     const k = tenderKey(c);
     if (k in tenderCache) return;
     const cls = tenderClass(c.type);
-    if (!cls || c.lat == null || c.lng == null) { tenderCache[k] = null; return; }
+    if (!cls || c.lat == null || c.lng == null || c.gs) { tenderCache[k] = null; return; }   /* suspect coords can't answer a water-supply question */
     const near = hydWithin(c.lat, c.lng, 305);
     if (near == null) return;                      /* db still loading — retried next poll */
     tenderCache[k] = near ? null : (cls === "fire" ? "need" : "if");
   }
+  /* gs (geo-suspect) calls navigate by ADDRESS TEXT, never A911's flipped coordinates — Google
+     and Apple geocode "US Hwy 281 S" correctly; the bad pin must not route a crew 30 km north */
   function gmapsUrl(c) {
-    if (c.lat != null && c.lng != null) return "https://www.google.com/maps/dir/?api=1&destination=" + c.lat + "," + c.lng;
+    if (!c.gs && c.lat != null && c.lng != null) return "https://www.google.com/maps/dir/?api=1&destination=" + c.lat + "," + c.lng;
     return "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(String(c.address || "") + ", Bexar County, TX");
   }
   function amapsUrl(c) {
-    if (c.lat != null && c.lng != null) return "https://maps.apple.com/?daddr=" + c.lat + "," + c.lng + "&dirflg=d";
+    if (!c.gs && c.lat != null && c.lng != null) return "https://maps.apple.com/?daddr=" + c.lat + "," + c.lng + "&dirflg=d";
     return "https://maps.apple.com/?daddr=" + encodeURIComponent(String(c.address || "") + ", Bexar County, TX") + "&dirflg=d";
   }
   function ageMin(c) { const t = Date.parse(c.logged || c.started || ""); return isNaN(t) ? 999 : (Date.now() - t) / 60000; }
@@ -734,7 +736,7 @@
   const phoneMode = () => { try { return window.matchMedia("(max-width: 640px)").matches; } catch (e) { return false; } };
   function buildCard(c, slim) {
     const col = callColor(c.type);
-    const attrs = ' data-id="' + esc(c.id) + '"' + (c.lat != null && c.lng != null ? ' data-ll="' + c.lat + "," + c.lng + '"' : "");
+    const attrs = ' data-id="' + esc(c.id) + '"' + (!c.gs && c.lat != null && c.lng != null ? ' data-ll="' + c.lat + "," + c.lng + '"' : "");   /* no tap-to-focus on a suspect geocode */
     /* dispatch stamp: logged = worker first-seen (trustworthy), started = A911's own. Central time
        always — the tour boundary rule applies to clocks too; a phone in another zone must not lie. */
     const ct = Date.parse(c.logged || c.started || "");
@@ -754,9 +756,10 @@
             '<div class="ad">' + esc(c.address) + '</div>' +
             (td === "need" ? '<div><span class="tdops">TENDER OPS</span></div>'
            : td === "if" ? '<div><span class="tdops if">TENDER IF FIRE</span></div>' : '') +
-            ((when || c.cross) ? '<div class="meta">' +
+            ((when || c.cross || c.gs) ? '<div class="meta">' +
               (when ? '<span><b>' + when + '</b> &middot; ' + age + '</span>' : "") +
-              (c.cross ? '<span>X: ' + esc(c.cross) + "</span>" : "") + "</div>" : "") +
+              (c.cross ? '<span>X: ' + esc(c.cross) + "</span>" : "") +
+              (c.gs ? '<span style="color:#FFC107">&#9888; MAP PIN UNVERIFIED &mdash; nav uses the address</span>' : "") + "</div>" : "") +
             (() => {                                       /* channel + assigned units get their OWN line, units as visible tags */
               const us = (c.units || []).filter(isApp).length ? (c.units || []).filter(isApp) : (c.units || []);
               const inner = (c.channel ? "<b>" + esc(c.channel) + "</b>" : "") + us.map(u => '<span class="utag' + (isApp(u) ? " app" : "") + '">' + esc(u) + "</span>").join("");   /* GREEN = a real rig attached (assigned or self-assigned) — trucks are rolling; gray box code = toned, no rig yet */
@@ -805,11 +808,19 @@
           if (c.lat == null || c.lng == null) return;
           const col = callColor(c.type);
           if (!knownIds[c.id]) { knownIds[c.id] = 1;
-            freshUntil[c.id] = nowMs + 60000;
-            sonarDrop(c, col);
-            focusCall(c);
+            if (!c.gs) {                              /* never pulse, ping, or zoom toward a suspect geocode */
+              freshUntil[c.id] = nowMs + 60000;
+              sonarDrop(c, col);
+              focusCall(c);
+            }
           }
           const fresh = (freshUntil[c.id] || 0) > nowMs;
+          if (c.gs) {                                  /* flipped-geocode pin: hollow + dashed, labeled — visible but never trusted */
+            L.circleMarker([c.lat, c.lng], { radius: 8, color: col, weight: 2, opacity: .8, dashArray: "3 4",
+                fillColor: col, fillOpacity: .12, className: "call-pin" })
+              .bindTooltip(esc(c.type) + " &middot; LOCATION UNVERIFIED — geocode suspect", { direction: "top", offset: [0, -8] }).addTo(callLayer);
+            return;
+          }
           L.circleMarker([c.lat, c.lng], { radius: fresh ? 8 : 7, color: "#0D1117", weight: 2, opacity: .9,
               fillColor: col, fillOpacity: fresh ? .95 : .92,
               className: "call-pin" + (fresh ? " pin-new" : "") })

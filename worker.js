@@ -1559,6 +1559,18 @@ export default {
         }
         /* remove the stale log rows for absorbed duplicate ids so the tally isn't padded by copies */
         for (const id of absorbed) { try { await env.PINS.delete("call:" + id); } catch (e) { /* best-effort */ } }
+        /* GEO-SUSPECT stamp (gs:1) — the metrics path has long known A911 flips highway N/S
+           addresses (addrInfersOurs); the LIVE feed now carries the same knowledge so the boards
+           can refuse to zoom a crew toward the wrong corridor or hand bad coords to navigation:
+           - a south-corridor ADDRESS pinned well north of that corridor = the observed 281 flip
+             (the S-281 / S-1604 ground tops out ~29.32; flips land at the N interchange 30 km up)
+           - otherwise: pin far outside ours AND unattributable to any real neighbor (LOC?) —
+             the observed geocode-error signature (>1 km from any ESD). */
+        for (const c of calls) {
+          if (c.lat == null || c.lng == null) continue;
+          if (addrInfersOurs(c.address) && c.lat > 29.36) { c.gs = 1; continue; }
+          if (esdAll && !inOurs(esdAll, c.lng, c.lat) && aidDistrictOf(esdAll, c.lng, c.lat) === "LOC?") c.gs = 1;
+        }
         return json({ ok: true, feed: feedSource, calls }, 200);
       } catch (e) {
         return json({ ok: false, error: "relay error" }, 502);

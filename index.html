@@ -2798,7 +2798,7 @@
       var k=tenderKey(c);
       if(k in tenderCache) return;
       var cls=classify(c.type);
-      if((cls!=="k-fire" && cls!=="k-alarm") || c.lat==null || c.lng==null){ tenderCache[k]=null; return; }
+      if((cls!=="k-fire" && cls!=="k-alarm") || c.lat==null || c.lng==null || c.gs){ tenderCache[k]=null; return; }   /* suspect coords can't answer a water-supply question */
       if(!window.HYDB) return;                     /* db still loading — retried next poll */
       var H=window.HYDB.h, near=false;
       for(var i=0;i<H.length;i++){ var h=H[i];
@@ -3222,6 +3222,7 @@
       var c=fresh[0], k=classify(c.type);
       if(k==="k-gen") return;                     /* burn-ban / general alerts are advisories, not runs */
       if(c.lat==null || c.lng==null) return;      /* no coordinate, nothing to focus */
+      if(c.gs) return;                            /* worker flagged the geocode suspect (flipped 281 N/S etc.) — never swing the wall to a wrong rooftop */
       var meta=RT_META[k]||RT_META[""];
       try{
         if(window.BC2FD_FOCUS_CALL) window.BC2FD_FOCUS_CALL({
