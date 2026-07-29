@@ -176,7 +176,7 @@ const AID_SNAP_M = 600;
    conservative: "N Loop 1604 E"-style addresses do NOT match. */
 function addrInfersOurs(ad) {
   ad = String(ad || "");
-  return /US\s*HWY\s*281\s*S\b/i.test(ad) || /\bS\s+LOOP\s*1604\b/i.test(ad) || /\bLOOP\s*1604\s*S\b/i.test(ad);
+  return /US\s*(HWY|HIGHWAY)\s*281\s*S\b/i.test(ad) || /\bS\s+LOOP\s*1604\b/i.test(ad) || /\bLOOP\s*1604\s*S\b/i.test(ad);   /* county spells it HIGHWAY, A911 sometimes HWY — match both */
 }
 function aidDistrictOf(esd, lng, lat) {
   if (!esd || lng == null || lat == null) return "LOC?";
