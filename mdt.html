@@ -36,6 +36,22 @@
   #map { position: fixed; inset: 0; background: #0D1117; }
   .leaflet-container { background: #0D1117; font-family: 'DM Mono', monospace; }
   .call-pin{filter:drop-shadow(0 0 3px rgba(0,0,0,.85))}   /* keeps a pin legible over bright satellite imagery — same halo as the wall */
+  /* fresh call: pulse + sonar double-ripple — the wall's treatment, in the cab. FINITE iteration
+     counts (~60 s, matching the one-time map focus) so nothing ripples all shift if a cleanup
+     timer is missed. Rings take the call-type color via --sonar, set inline. */
+  @keyframes pinflash{0%{opacity:1}25%{opacity:.4}60%,100%{opacity:1}}
+  .call-pin.pin-new{animation:pinflash 1s ease-out 60}
+  .pin-sonar-wrap{background:transparent;border:0}
+  .pin-sonar{position:relative;width:0;height:0;pointer-events:none}
+  .pin-sonar span{position:absolute;left:0;top:0;width:18px;height:18px;margin:-9px 0 0 -9px;
+    border-radius:50%;border:2px solid var(--sonar,#FFFFFF);opacity:0;
+    box-shadow:0 0 4px rgba(0,0,0,.85);animation:pinsonar 2s ease-out 30}
+  .pin-sonar span:nth-child(2){animation-delay:1s}
+  @keyframes pinsonar{0%{transform:scale(.45);opacity:.9}70%{opacity:.22}100%{transform:scale(4.4);opacity:0}}
+  @media (prefers-reduced-motion:reduce){
+    .call-pin.pin-new{animation:none}
+    .pin-sonar span{animation:none;display:none}
+  }
   /* hydrant detail popup — dark chrome to match the page */
   .leaflet-popup-content-wrapper{background:rgba(13,17,23,.96);color:#E6EDF3;border:1px solid #30363D;
     border-radius:10px;font-family:'DM Mono',monospace;box-shadow:0 2px 10px rgba(0,0,0,.5)}
@@ -222,7 +238,7 @@
   /* ── MAP — cab composition of the board's stack: sun-follow imagery, stations, borders,
      hydrants (incl. officer OOS reds), crossing pins, radar in storms. No burn-in orbit, no
      wall-tier logic — this is its own tier. ── */
-  let map, callLayer, hydLayer, oosLayer, cxLayer, addrLayer, tourLayer, radarOn = false;
+  let map, callLayer, freshLayer, hydLayer, oosLayer, cxLayer, addrLayer, tourLayer, radarOn = false;
   const TL = (u, o) => { o = o || {}; o.updateWhenIdle = true; o.updateWhenZooming = false; o.keepBuffer = 4; return L.tileLayer(u, o); };
   function sunUp() { const lat = 29.465, lng = -98.73, now = new Date(), rad = Math.PI / 180, deg = 180 / Math.PI;
     const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
@@ -286,6 +302,7 @@
         L.polygon(ring.map(p => [p[1], p[0]]), { color: "#FF6B35", weight: 1.5, fill: false, opacity: .55 }).addTo(map)));
     }).catch(() => {});
     callLayer = L.layerGroup().addTo(map);
+    freshLayer = L.layerGroup().addTo(map);   /* sonar rings — own layer so the per-poll pin rebuild can't restart or orphan them */
     hydLayer = L.layerGroup().addTo(map);
     oosLayer = L.layerGroup().addTo(map);   /* flagged-OOS reds — NOT zoom-gated; a dead plug must be visible from district view */
     cxLayer = L.layerGroup().addTo(map);
@@ -590,6 +607,14 @@
   /* ── DISPATCH — the reason this screen exists. Poll every 15 s; two consecutive failures =
      the loud red banner. New calls auto-focus the map once; District button reframes. ── */
   let dispatchFails = 0, knownIds = {}, focusId = null;
+  const freshUntil = {};                             /* call id -> pulse expiry; the pin rebuild reads it each poll */
+  function sonarDrop(c, col) {
+    if (!freshLayer) return;
+    const mk = L.marker([c.lat, c.lng], { interactive: false, keyboard: false,
+      icon: L.divIcon({ className: "pin-sonar-wrap", iconSize: [0, 0],
+        html: '<div class="pin-sonar" style="--sonar:' + col + '"><span></span><span></span></div>' }) }).addTo(freshLayer);
+    setTimeout(() => { try { freshLayer.removeLayer(mk); } catch (e) {} }, 62000);   /* rings stop themselves at 30 cycles; this removes the DOM */
+  }
   const isApp = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
   /* call-type palette — SAME colors as the wall's Runs by Type keypad, so the two screens speak
      one visual language. Order matters: ALARM/FIRE before MED so "ALARM - FIRE" classes purple. */
@@ -715,15 +740,20 @@
         lastTop.forEach(tenderCheck);   /* async; a found flag repaints the band itself */
         renderBand();
 
-        /* map pins + one-time focus per new call */
+        /* map pins + one-time focus per new call; a fresh call pulses and pings for ~60 s */
         callLayer.clearLayers();
         let newest = null;
+        const nowMs = Date.now();
         live.forEach(c => {
           if (c.lat == null || c.lng == null) return;
           const col = callColor(c.type);
-          L.circleMarker([c.lat, c.lng], { radius: 10, weight: 3, color: col, fillColor: col, fillOpacity: .35 })
+          if (!knownIds[c.id]) { knownIds[c.id] = 1; newest = c;
+            freshUntil[c.id] = nowMs + 60000;
+            sonarDrop(c, col);
+          }
+          L.circleMarker([c.lat, c.lng], { radius: 10, weight: 3, color: col, fillColor: col, fillOpacity: .35,
+              className: "call-pin" + ((freshUntil[c.id] || 0) > nowMs ? " pin-new" : "") })
             .bindTooltip(esc(c.type)).addTo(callLayer);
-          if (!knownIds[c.id]) { knownIds[c.id] = 1; newest = c; }
         });
         if (newest && newest.id !== focusId) { focusId = newest.id;
           try { map.setView([newest.lat, newest.lng], 15.5); } catch (e) {} }
