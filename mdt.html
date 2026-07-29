@@ -41,6 +41,8 @@
      timer is missed. Rings take the call-type color via --sonar, set inline. */
   @keyframes pinflash{0%{opacity:1}25%{opacity:.4}60%,100%{opacity:1}}
   .call-pin.pin-new{animation:pinflash 1s ease-out 60}
+  .call-pin-wrap{background:none;border:0}
+  .call-pin-wrap.pin-new{animation:pinflash 1s ease-out 60}
   .pin-sonar-wrap{background:transparent;border:0}
   .pin-sonar{position:relative;width:0;height:0;pointer-events:none}
   .pin-sonar span{position:absolute;left:0;top:0;width:18px;height:18px;margin:-9px 0 0 -9px;
@@ -758,8 +760,16 @@
             freshUntil[c.id] = nowMs + 60000;
             sonarDrop(c, col);
           }
-          L.circleMarker([c.lat, c.lng], { radius: 10, weight: 3, color: col, fillColor: col, fillOpacity: .35,
-              className: "call-pin" + ((freshUntil[c.id] || 0) > nowMs ? " pin-new" : "") })
+          /* teardrop PIN, not a circle: the active call is a destination — it should read like one.
+             Type-colored SVG, dark outline, tip anchored on the address; tour-history dots stay
+             circles so finished runs never compete with the run you're on. */
+          L.marker([c.lat, c.lng], { keyboard: false,
+              icon: L.divIcon({
+                className: "call-pin-wrap" + ((freshUntil[c.id] || 0) > nowMs ? " pin-new" : ""),
+                iconSize: [30, 40], iconAnchor: [15, 38], tooltipAnchor: [0, -30],
+                html: '<svg class="call-pin" width="30" height="40" viewBox="0 0 30 40">' +
+                  '<path d="M15 1C7.3 1 1 7.2 1 14.8 1 25 15 39 15 39s14-14 14-24.2C29 7.2 22.7 1 15 1z" fill="' + col + '" stroke="#0D1117" stroke-width="2"/>' +
+                  '<circle cx="15" cy="14.8" r="5.2" fill="#0D1117"/></svg>' }) })
             .bindTooltip(esc(c.type)).addTo(callLayer);
         });
         if (newest && newest.id !== focusId) { focusId = newest.id;
