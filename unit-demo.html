@@ -26,10 +26,11 @@
   .u64 .ubadge { width: 64px; }   /* demo size — production runs 34-44px */
   .u44 .ubadge { width: 44px; }
   .u34 .ubadge { width: 34px; }
-  .gl { position: absolute; top: 7%; height: 22%; width: 40%; border-radius: 50%;
-        filter: blur(3px); mix-blend-mode: screen; opacity: 0; pointer-events: none; }
-  .gl.l { left: 8%;  background: radial-gradient(ellipse at center, rgba(120,175,255,.95), rgba(120,175,255,0) 72%); }
-  .gl.r { right: 8%; background: radial-gradient(ellipse at center, rgba(255,95,80,.95),  rgba(255,95,80,0) 72%); }
+  .gl { position: absolute; top: 6%; height: 25%; width: 42%; border-radius: 50%;
+        filter: blur(2px); mix-blend-mode: screen; opacity: 0; pointer-events: none; }
+  /* white-hot core inside each color — the pop comes from the core, the color from the halo */
+  .gl.l { left: 7%;  background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(120,175,255,1) 26%, rgba(120,175,255,0) 78%); }
+  .gl.r { right: 7%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(255,95,80,1)  26%, rgba(255,95,80,0)  78%); }
   /* wig-wag: hard alternation, ~86 flashes/min */
   @keyframes wig { 0%, 46% { opacity: 1; } 50%, 100% { opacity: 0; } }
   .resp .gl.l { animation: wig .7s linear infinite; }
@@ -37,8 +38,16 @@
   /* ── COMMAND rigs (BC / AC / DC): greens live at the lightbar ENDS ──
      Responding wig-wags the INNER red/blue only — the greens stay dark.
      On scene, mains go dark and the greens pulse: green = command established. */
-  .gl.inl { left: 26%; width: 22%; background: radial-gradient(ellipse at center, rgba(120,175,255,.95), rgba(120,175,255,0) 72%); }
-  .gl.inr { right: 24%; width: 22%; background: radial-gradient(ellipse at center, rgba(255,95,80,.95), rgba(255,95,80,0) 72%); }
+  .gl.inl { left: 26%; width: 24%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(120,175,255,1) 26%, rgba(120,175,255,0) 78%); }
+  .gl.inr { right: 22%; width: 24%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(255,95,80,1) 26%, rgba(255,95,80,0) 78%); }
+  /* ENGINE — the full-width bar earns a 4-light criss-cross: outer reds and inner blues in
+     opposite phase, so something is always lit on both halves */
+  .gl.e1 { left: 2%;  width: 25%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(255,80,66,1) 26%, rgba(255,80,66,0) 78%); }
+  .gl.e2 { left: 25%; width: 21%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(110,170,255,1) 26%, rgba(110,170,255,0) 78%); }
+  .gl.e3 { right: 25%; width: 21%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(110,170,255,1) 26%, rgba(110,170,255,0) 78%); }
+  .gl.e4 { right: 2%; width: 25%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(255,80,66,1) 26%, rgba(255,80,66,0) 78%); }
+  .resp .gl.e1, .resp .gl.e3 { animation: wig .7s linear infinite; }
+  .resp .gl.e2, .resp .gl.e4 { animation: wig .7s linear infinite -.35s; }
   .resp .gl.inl { animation: wig .7s linear infinite; }
   .resp .gl.inr { animation: wig .7s linear infinite -.35s; }
   .gl.cl { left: 3%;  width: 26%; height: 26%; top: 5%; filter: blur(2px);
@@ -88,6 +97,11 @@
       <div class="ucap">121</div></div>
   </div>
   <div class="card">
+    <span class="state">ENG121 RESPONDING &mdash; 4-light criss-cross</span><br>
+    <div class="unit u64"><span class="ubadge resp"><img src="unit-eng.png" alt="Engine badge"><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span>
+      <div class="ucap">121</div></div>
+  </div>
+  <div class="card">
     <span class="state">BC121 RESPONDING &mdash; red/blue wig-wag, greens dark</span><br>
     <div class="unit u64"><span class="ubadge resp"><img src="unit-bc.png" alt="BC badge"><span class="gl inl"></span><span class="gl inr"></span></span>
       <div class="ucap">121</div></div>
@@ -106,6 +120,9 @@
       <div class="ucap">121</div></div>
     &nbsp;&nbsp;
     <div class="unit u34"><span class="ubadge cmd"><img src="unit-bc.png" alt="BC badge"><span class="gl cl"></span><span class="gl cr"></span></span>
+      <div class="ucap">121</div></div>
+    &nbsp;&nbsp;
+    <div class="unit u34"><span class="ubadge resp"><img src="unit-eng.png" alt="Engine badge"><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span>
       <div class="ucap">121</div></div>
   </div>
 </div>
