@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BC2FD — Unit Marker Demo (Samsara preview)</title>
+<link rel="icon" href="favicon-32.png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0D1117; color: #E6EDF3; font-family: 'DM Mono', monospace; min-height: 100vh; padding: 20px; }
+  h1 { font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 2px; }
+  h1 b { color: #FF6B35; font-weight: 400; }
+  .sub { font-size: 11px; color: #8B949E; margin-bottom: 18px; }
+  .stage { position: relative; border-radius: 12px; border: 1px solid #30363D; overflow: hidden;
+           background: url("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/15/13577/7398") center/cover;
+           min-height: 420px; display: flex; align-items: center; justify-content: space-around; flex-wrap: wrap; gap: 26px; padding: 30px 10px; }
+  .card { text-align: center; }
+  .state { font-size: 11px; color: #E6EDF3; background: rgba(13,17,23,.85); border: 1px solid #30363D;
+           border-radius: 8px; padding: 4px 10px; display: inline-block; margin-bottom: 14px; }
+
+  /* ── the production marker: static badge PNG + two glow overlays on the lightbar ── */
+  .unit { display: inline-block; text-align: center; }
+  .ubadge { position: relative; display: inline-block; }
+  .ubadge img { display: block; width: 100%; }
+  .u64 .ubadge { width: 64px; }   /* demo size — production runs 34-44px */
+  .u44 .ubadge { width: 44px; }
+  .u34 .ubadge { width: 34px; }
+  .gl { position: absolute; top: 7%; height: 22%; width: 40%; border-radius: 50%;
+        filter: blur(3px); mix-blend-mode: screen; opacity: 0; pointer-events: none; }
+  .gl.l { left: 8%;  background: radial-gradient(ellipse at center, rgba(120,175,255,.95), rgba(120,175,255,0) 72%); }
+  .gl.r { right: 8%; background: radial-gradient(ellipse at center, rgba(255,95,80,.95),  rgba(255,95,80,0) 72%); }
+  /* wig-wag: hard alternation, ~86 flashes/min */
+  @keyframes wig { 0%, 46% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  .resp .gl.l { animation: wig .7s linear infinite; }
+  .resp .gl.r { animation: wig .7s linear infinite -.35s; }
+  @media (prefers-reduced-motion: reduce) { .gl { animation: none !important; opacity: 0 !important; } }
+  /* stale GPS: dim beats everything — never animate data we don't trust */
+  .stale .ubadge { filter: grayscale(.75) brightness(.55); }
+  .ucap { font-size: 15px; font-weight: 500; color: #FFF; margin-top: 2px;
+          text-shadow: 0 0 3px #000, 0 0 3px #000, 0 1px 2px #000; }
+  .u34 .ucap { font-size: 12px; }
+  .u44 .ucap { font-size: 13px; }
+  .note { font-size: 11px; color: #8B949E; margin-top: 16px; line-height: 1.7; }
+  .note b { color: #E6EDF3; }
+</style>
+</head>
+<body>
+<h1>UNIT MARKER <b>DEMO</b></h1>
+<div class="sub">Samsara AVL preview &middot; the wig-wag is pure CSS on the static badge &mdash; no extra assets, GPU-composited &middot; not linked from any board</div>
+
+<div class="stage">
+  <div class="card">
+    <span class="state">RESPONDING &mdash; attached &amp; &gt;150 m out</span><br>
+    <div class="unit u64"><span class="ubadge resp"><img src="unit-uav.png" alt="UAV badge"><span class="gl l"></span><span class="gl r"></span></span>
+      <div class="ucap">121</div></div>
+  </div>
+  <div class="card">
+    <span class="state">AVAILABLE / ON SCENE &mdash; steady</span><br>
+    <div class="unit u64"><span class="ubadge"><img src="unit-uav.png" alt="UAV badge"></span>
+      <div class="ucap">121</div></div>
+  </div>
+  <div class="card">
+    <span class="state">STALE GPS &mdash; dimmed, never animated</span><br>
+    <div class="unit u64 stale"><span class="ubadge"><img src="unit-uav.png" alt="UAV badge"></span>
+      <div class="ucap">121</div></div>
+  </div>
+  <div class="card">
+    <span class="state">MAP SIZES &mdash; 44 px / 34 px</span><br>
+    <div class="unit u44"><span class="ubadge resp"><img src="unit-uav.png" alt="UAV badge"><span class="gl l"></span><span class="gl r"></span></span>
+      <div class="ucap">121</div></div>
+    &nbsp;&nbsp;
+    <div class="unit u34"><span class="ubadge resp"><img src="unit-uav.png" alt="UAV badge"><span class="gl l"></span><span class="gl r"></span></span>
+      <div class="ucap">121</div></div>
+  </div>
+</div>
+
+<div class="note">
+  <b>Lights ON</b> = attached to a live call + more than ~150 m from the scene. <b>Lights OFF</b> = arrival
+  (&lt;150 m and stopped ~30 s), call ends or DISREGARD, unit detached, no movement for 5 min while attached,
+  or the 30-minute backstop. <b>Stale GPS dims and overrides everything.</b> prefers-reduced-motion disables the animation.
+</div>
+</body>
+</html>
