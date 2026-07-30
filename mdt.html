@@ -130,6 +130,8 @@
   #dronePip video { width: 100%; border-radius: 10px; border: 2px solid #FF6B35; background: #000; display: block; }
   #dronePip .lbl { position: absolute; top: 6px; left: 8px; font-size: 11px; color: #FF6B35; font-weight: 500;
                    text-shadow: 0 0 4px #000, 0 0 4px #000; z-index: 5; }
+  #pipErr { position: absolute; top: 22px; left: 8px; right: 8px; font-size: 10.5px; color: #F85149; font-weight: 500;
+            text-shadow: 0 0 4px #000, 0 0 4px #000; z-index: 5; display: none; }
   #pipSize { position: absolute; top: 4px; right: 6px; z-index: 6; background: rgba(13,17,23,.85);
              border: 1px solid #FF6B35; color: #FF6B35; border-radius: 8px; padding: 8px 14px; font-size: 15px; }
 
@@ -211,7 +213,7 @@
     <div class="chip" id="wxChip" style="display:none"></div>
   </div>
 </div>
-<div id="dronePip"><span class="lbl" id="droneLbl"></span><button id="pipSize" title="Resize">&#10530;</button><video id="droneVid" muted autoplay playsinline controls></video></div>
+<div id="dronePip"><span class="lbl" id="droneLbl"></span><span id="pipErr"></span><button id="pipSize" title="Resize">&#10530;</button><video id="droneVid" muted autoplay playsinline controls></video></div>
 <div id="ctrls">
   <button id="refit" title="Frame the district">&#8982; District</button>
 </div>
@@ -842,6 +844,24 @@
 
   /* ── DRONE PiP — live DroneSense video over the map corner when a bird is up ── */
   let pipHls = null, pipUrl = "";
+  /* fail LOUD, tiny: a black box explains nothing. Every failure path names itself on the PiP —
+     the difference between "blocked by iOS, tap it" and "the stream itself is broken". */
+  const MEDIA_ERR = { 1: "aborted", 2: "network error", 3: "decode failed", 4: "format/src unsupported" };
+  function pipDiag(t) { const e = $("pipErr"); if (!e) return;
+    if (!t) { e.style.display = "none"; e.textContent = ""; return; }
+    e.style.display = "block"; e.textContent = t; }
+  (() => { const v = $("droneVid");
+    v.addEventListener("error", () => pipDiag("VIDEO " + (MEDIA_ERR[(v.error || {}).code] || "error") +
+      ((v.error && v.error.message) ? " — " + String(v.error.message).slice(0, 80) : "")));
+    v.addEventListener("playing", () => pipDiag(""));
+    v.addEventListener("stalled", () => pipDiag("stream stalled — buffering"));
+    v.addEventListener("waiting", () => pipDiag("buffering…"));
+  })();
+  const pipPlay = (v) => { v.muted = true;           /* iOS: the muted PROPERTY must be true at play() time — the attribute alone isn't always honored after a src swap */
+    v.play().then(() => pipDiag("")).catch(err => {
+      pipDiag(err && err.name === "NotAllowedError" ? "autoplay blocked (Low Power Mode?) — tap video to start"
+            : err && err.name === "NotSupportedError" ? "format not supported on this device"
+            : "play failed: " + (err && err.name || "unknown")); }); };
   function loadDrones() {
     fetch(WORKER + "/drones?pin=" + encodeURIComponent(PIN)).then(r => r.ok ? r.json() : null).then(j => {
       const d = j && j.ok && (j.drones || []).find(x => x.video_url);
@@ -860,18 +880,20 @@
         /* Safari/iOS plays HLS NATIVELY — the reliable path on Apple hardware; hls.js only where
            native HLS is absent, and with a fatal-error fallback to a direct src so a stalled MSE
            pipeline can never leave the cab staring at a black box. */
+        pipDiag("");
         if (isM3u8 && v.canPlayType && v.canPlayType("application/vnd.apple.mpegurl")) {
           v.src = pipUrl;
         } else if (isM3u8 && window.Hls && Hls.isSupported()) {
           pipHls = new Hls({ liveDurationInfinity: true });
           pipHls.on(Hls.Events.ERROR, (ev, data) => {
-            if (data && data.fatal) { try { pipHls.destroy(); } catch (e2) {} pipHls = null;
-              v.src = pipUrl; v.play().catch(() => {}); }
+            if (data && data.fatal) { pipDiag("hls " + (data.type || "error") + " — falling back");
+              try { pipHls.destroy(); } catch (e2) {} pipHls = null;
+              v.src = pipUrl; pipPlay(v); }
           });
           pipHls.loadSource(pipUrl); pipHls.attachMedia(v);
         } else v.src = pipUrl;
-        v.play().catch(() => {});
-      } else if (v.paused) v.play().catch(() => {});   /* iOS blocks muted autoplay in Low Power Mode — every 20 s poll retries */
+        pipPlay(v);
+      } else if (v.paused) pipPlay(v);                 /* iOS blocks muted autoplay in Low Power Mode — every 20 s poll retries */
     }).catch(() => {});
   }
 
@@ -888,7 +910,7 @@
 
   /* any tap on the PiP nudges a blocked video back to playing (harmless alongside the controls) */
   $("dronePip").addEventListener("click", () => {
-    const v = $("droneVid"); if (v && v.paused) v.play().catch(() => {});
+    const v = $("droneVid"); if (v && v.paused) pipPlay(v);
   });
 
   /* PiP size cycle: corner -> SPLIT SCREEN -> full -> corner. Split squeezes the map (and the
