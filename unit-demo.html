@@ -41,10 +41,21 @@
   .gl.inr { right: 24%; width: 22%; background: radial-gradient(ellipse at center, rgba(255,95,80,.95), rgba(255,95,80,0) 72%); }
   .resp .gl.inl { animation: wig .7s linear infinite; }
   .resp .gl.inr { animation: wig .7s linear infinite -.35s; }
-  .gl.cl { left: 5%;  width: 20%; background: radial-gradient(ellipse at center, rgba(90,255,130,.95), rgba(90,255,130,0) 72%); }
-  .gl.cr { right: 5%; width: 20%; background: radial-gradient(ellipse at center, rgba(90,255,130,.95), rgba(90,255,130,0) 72%); }
-  @keyframes cmdpulse { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
+  .gl.cl { left: 3%;  width: 26%; height: 26%; top: 5%; filter: blur(2px);
+           background: radial-gradient(ellipse at center, rgba(90,255,130,1), rgba(90,255,130,0) 78%); }
+  .gl.cr { right: 3%; width: 26%; height: 26%; top: 5%; filter: blur(2px);
+           background: radial-gradient(ellipse at center, rgba(90,255,130,1), rgba(90,255,130,0) 78%); }
+  @keyframes cmdpulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
   .cmd .gl.cl, .cmd .gl.cr { animation: cmdpulse 1.6s ease-in-out infinite; }
+  /* the corner LEDs are pixels at map size — the HALO is what carries "command established"
+     across the room: a breathing green ring around the whole badge, same 1.6 s rhythm */
+  .cmd::after { content: ""; position: absolute; inset: -2px; border-radius: 18%; pointer-events: none;
+                animation: cmdhalo 1.6s ease-in-out infinite; }
+  @keyframes cmdhalo {
+    0%, 100% { box-shadow: 0 0 2px 1px rgba(70,255,120,.3); }
+    50%      { box-shadow: 0 0 10px 4px rgba(70,255,120,.95), 0 0 24px 9px rgba(70,255,120,.45); }
+  }
+  @media (prefers-reduced-motion: reduce) { .cmd::after { animation: none; box-shadow: 0 0 6px 2px rgba(70,255,120,.7); } }
   @media (prefers-reduced-motion: reduce) { .gl { animation: none !important; opacity: 0 !important; } }
   /* stale GPS: dim beats everything — never animate data we don't trust */
   .stale .ubadge { filter: grayscale(.75) brightness(.55); }
@@ -92,6 +103,9 @@
       <div class="ucap">121</div></div>
     &nbsp;&nbsp;
     <div class="unit u34"><span class="ubadge resp"><img src="unit-uav.png" alt="UAV badge"><span class="gl l"></span><span class="gl r"></span></span>
+      <div class="ucap">121</div></div>
+    &nbsp;&nbsp;
+    <div class="unit u34"><span class="ubadge cmd"><img src="unit-bc.png" alt="BC badge"><span class="gl cl"></span><span class="gl cr"></span></span>
       <div class="ucap">121</div></div>
   </div>
 </div>
