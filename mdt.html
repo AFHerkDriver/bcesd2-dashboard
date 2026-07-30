@@ -128,6 +128,10 @@
                    background: rgba(13,17,23,.97); display: flex; align-items: center; justify-content: center; }
   #dronePip.full video { height: 100vh; width: 100vw; object-fit: contain; border: none; border-radius: 0; }
   #dronePip video { width: 100%; border-radius: 10px; border: 2px solid #FF6B35; background: #000; display: block; }
+  /* DroneSense hands out a hosted PLAYER PAGE, not a raw stream — those embed as an iframe
+     (the wall's method); the video element serves only genuine .m3u8/.mp4 URLs */
+  #dronePip iframe { width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; border: 2px solid #FF6B35; background: #000; display: none; }
+  #dronePip.split iframe, #dronePip.full iframe { width: 100%; height: 100%; border: none; border-radius: 0; }
   #dronePip .lbl { position: absolute; top: 6px; left: 8px; font-size: 11px; color: #FF6B35; font-weight: 500;
                    text-shadow: 0 0 4px #000, 0 0 4px #000; z-index: 5; }
   #pipErr { position: absolute; top: 22px; left: 8px; right: 8px; font-size: 10.5px; color: #F85149; font-weight: 500;
@@ -213,7 +217,7 @@
     <div class="chip" id="wxChip" style="display:none"></div>
   </div>
 </div>
-<div id="dronePip"><span class="lbl" id="droneLbl"></span><span id="pipErr"></span><button id="pipSize" title="Resize">&#10530;</button><video id="droneVid" muted autoplay playsinline controls></video></div>
+<div id="dronePip"><span class="lbl" id="droneLbl"></span><span id="pipErr"></span><button id="pipSize" title="Resize">&#10530;</button><video id="droneVid" muted autoplay playsinline controls></video><iframe id="droneFrame" scrolling="no" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>
 <div id="ctrls">
   <button id="refit" title="Frame the district">&#8982; District</button>
 </div>
@@ -866,34 +870,46 @@
     fetch(WORKER + "/drones?pin=" + encodeURIComponent(PIN)).then(r => r.ok ? r.json() : null).then(j => {
       const d = j && j.ok && (j.drones || []).find(x => x.video_url);
       const pip = $("dronePip"), v = $("droneVid");
+      const fr = $("droneFrame");
       if (!d) { pip.style.display = "none";
         if (pipSizeIdx) { pipSizeIdx = 0; pipApply(); }   /* feed ended mid-split/full: give the map its screen back */
         if (pipHls) { try { pipHls.destroy(); } catch (e) {} pipHls = null; }
-        if (pipUrl) { try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {} pipUrl = ""; }
+        if (pipUrl) { try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {}
+          try { fr.removeAttribute("src"); } catch (e) {} pipUrl = ""; }
         return; }
       pip.style.display = "block";
       $("droneLbl").textContent = (d.callSign || d.model || "UAS") + (d.mission ? " · " + d.mission : "");
+      const isMedia = /\.m3u8|\.mp4|\.webm/i.test(d.video_url);
       if (d.video_url !== pipUrl) {
         pipUrl = d.video_url;
         if (pipHls) { try { pipHls.destroy(); } catch (e) {} pipHls = null; }
-        const isM3u8 = /\.m3u8/i.test(pipUrl);
-        /* Safari/iOS plays HLS NATIVELY — the reliable path on Apple hardware; hls.js only where
-           native HLS is absent, and with a fatal-error fallback to a direct src so a stalled MSE
-           pipeline can never leave the cab staring at a black box. */
         pipDiag("");
-        if (isM3u8 && v.canPlayType && v.canPlayType("application/vnd.apple.mpegurl")) {
-          v.src = pipUrl;
-        } else if (isM3u8 && window.Hls && Hls.isSupported()) {
-          pipHls = new Hls({ liveDurationInfinity: true });
-          pipHls.on(Hls.Events.ERROR, (ev, data) => {
-            if (data && data.fatal) { pipDiag("hls " + (data.type || "error") + " — falling back");
-              try { pipHls.destroy(); } catch (e2) {} pipHls = null;
-              v.src = pipUrl; pipPlay(v); }
-          });
-          pipHls.loadSource(pipUrl); pipHls.attachMedia(v);
-        } else v.src = pipUrl;
-        pipPlay(v);
-      } else if (v.paused) pipPlay(v);                 /* iOS blocks muted autoplay in Low Power Mode — every 20 s poll retries */
+        if (!isMedia) {
+          /* DroneSense hosted player page — the WALL's method: iframe with autoplay params.
+             A <video> pointed at an HTML page is exactly the 'format/src unsupported' black box. */
+          try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {}
+          v.style.display = "none";
+          fr.src = pipUrl + (/dronesense\.com/i.test(pipUrl) ? (pipUrl.indexOf("?") >= 0 ? "&" : "?") + "autoplay=1&muted=1&mute=1" : "");
+          fr.style.display = "block";
+        } else {
+          try { fr.removeAttribute("src"); } catch (e) {} fr.style.display = "none";
+          v.style.display = "block";
+          /* Safari/iOS plays HLS NATIVELY — the reliable path on Apple hardware; hls.js only where
+             native HLS is absent, with a fatal-error fallback to a direct src. */
+          if (/\.m3u8/i.test(pipUrl) && v.canPlayType && v.canPlayType("application/vnd.apple.mpegurl")) {
+            v.src = pipUrl;
+          } else if (/\.m3u8/i.test(pipUrl) && window.Hls && Hls.isSupported()) {
+            pipHls = new Hls({ liveDurationInfinity: true });
+            pipHls.on(Hls.Events.ERROR, (ev, data) => {
+              if (data && data.fatal) { pipDiag("hls " + (data.type || "error") + " — falling back");
+                try { pipHls.destroy(); } catch (e2) {} pipHls = null;
+                v.src = pipUrl; pipPlay(v); }
+            });
+            pipHls.loadSource(pipUrl); pipHls.attachMedia(v);
+          } else v.src = pipUrl;
+          pipPlay(v);
+        }
+      } else if (isMedia && v.paused) pipPlay(v);      /* iOS blocks muted autoplay in Low Power Mode — every 20 s poll retries */
     }).catch(() => {});
   }
 
