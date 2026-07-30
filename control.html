@@ -300,7 +300,7 @@
     <div class="hint" style="text-align:center;margin:2px 0 10px">🕐 All dates &amp; times on this panel are <b>San Antonio time (Central)</b>, regardless of your device&rsquo;s clock or location.</div>
 
     <nav class="jump">
-      <a href="#cardAnn">📢 Announce</a><a href="#cardCal">📅 Events</a><a href="#cardUnits">🚒 Units</a><a href="#cardHosp">🏥 Hospitals</a><a href="#cardStrike">🔥 Strike</a><a href="#advCard">⚙️ Advanced</a>
+      <a href="#cardAnn">📢 Announce</a><a href="#cardCal">📅 Events</a><a href="#cardUnits">🚒 Units</a><a href="#cardHosp">🏥 Hospitals</a><a href="#cardStrike">🔥 Strike</a><a href="#nwsCard">🌩️ NWS</a><a href="#setCard">⚙️ Settings</a>
     </nav>
 
     <!-- District Metrics — officer-gated page (own PIN gate; permanent call archive + standards) -->
@@ -392,9 +392,9 @@
       <button class="add" id="addOOS">+ Flag a hydrant OOS</button>
     </div>
 
-    <!-- Advanced — rarely-touched overrides grouped and folded: Flood / Fire Weather / Display -->
-    <div class="card fold clps" id="advCard">
-      <h2>Advanced <span class="fold-sum">· flood · fire wx · display</span></h2>
+    <!-- NWS — the live-NWS-driven overrides, folded: Flood / Fire Weather -->
+    <div class="card fold clps" id="nwsCard">
+      <h2>NWS <span class="fold-sum">· flood · fire wx</span></h2>
     <div class="adv-sec">
       <h2>Flood Ops <span class="tag live">LIVE NWS</span></h2>
       <div class="hint">Low-water crossings + station rain accumulator. Auto shows the band on an NWS Flood / Flash-Flood Warning; force it on to watch conditions before a warning posts.</div>
@@ -416,9 +416,12 @@
         </div>
       </div>
     </div>
+    </div><!-- /nwsCard -->
 
+    <!-- Settings — board display behavior, folded: Pixel Shift / Drone Takeover -->
+    <div class="card fold clps" id="setCard">
+      <h2>Settings <span class="fold-sum">· pixel shift · drone takeover</span></h2>
     <div class="adv-sec">
-      <h2>Display</h2>
       <div class="hint">Pixel Shift nudges the whole wall board a few pixels on a slow cycle so no static element sits on the same pixels for hours &mdash; the standard burn-in guard for always-on TVs. Invisible across the room; only affects the big-screen wall view, not phones or tablets. Leave On unless you&rsquo;re troubleshooting.</div>
       <div class="field">
         <label>Pixel Shift (Burn-in Guard)</label>
@@ -434,7 +437,7 @@
         </div>
       </div>
     </div>
-    </div><!-- /advCard -->
+    </div><!-- /setCard -->
 
     <!-- Strike Teams — name / callsign / phone shown stacked in the NWS Alerts tile footer when staffed -->
     <div class="card fold clps" id="cardStrike">
