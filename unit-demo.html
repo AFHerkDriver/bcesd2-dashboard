@@ -130,7 +130,10 @@
 <div class="note">
   <b>Lights ON</b> = attached to a live call + more than ~150 m from the scene. <b>Lights OFF</b> = arrival
   (&lt;150 m and stopped ~30 s), call ends or DISREGARD, unit detached, no movement for 5 min while attached,
-  or the 30-minute backstop. <b>Command rigs (BC/AC/DC):</b> responding wig-wags red/blue only, greens dark;
+  or the 30-minute backstop. <b>Turnaround (future metrics):</b> attached + closing on scene, then distance
+  climbs ~400 m past its minimum and keeps climbing 45&ndash;60 s without ever arriving = cleared en route &mdash;
+  lights off, normal icon, and log the handoff timestamp for metrics (distance FLAT is staging, not a turnaround;
+  skip inference on geo-suspect calls). Returning after clearing = normal icon, no lights, no special state. <b>Command rigs (BC/AC/DC):</b> responding wig-wags red/blue only, greens dark;
   on arrival the mains go dark and the <b>greens pulse &mdash; green on the map = command established at that scene</b>,
   ending when the call closes or the rig leaves. <b>Stacking: command rigs always render on top</b> when
   units overlap at a scene &mdash; and command-established on top of other command rigs.
