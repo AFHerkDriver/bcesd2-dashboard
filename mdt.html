@@ -849,11 +849,22 @@
       if (d.video_url !== pipUrl) {
         pipUrl = d.video_url;
         if (pipHls) { try { pipHls.destroy(); } catch (e) {} pipHls = null; }
-        if (window.Hls && Hls.isSupported() && /\.m3u8/i.test(pipUrl)) {
-          pipHls = new Hls({ liveDurationInfinity: true }); pipHls.loadSource(pipUrl); pipHls.attachMedia(v);
+        const isM3u8 = /\.m3u8/i.test(pipUrl);
+        /* Safari/iOS plays HLS NATIVELY — the reliable path on Apple hardware; hls.js only where
+           native HLS is absent, and with a fatal-error fallback to a direct src so a stalled MSE
+           pipeline can never leave the cab staring at a black box. */
+        if (isM3u8 && v.canPlayType && v.canPlayType("application/vnd.apple.mpegurl")) {
+          v.src = pipUrl;
+        } else if (isM3u8 && window.Hls && Hls.isSupported()) {
+          pipHls = new Hls({ liveDurationInfinity: true });
+          pipHls.on(Hls.Events.ERROR, (ev, data) => {
+            if (data && data.fatal) { try { pipHls.destroy(); } catch (e2) {} pipHls = null;
+              v.src = pipUrl; v.play().catch(() => {}); }
+          });
+          pipHls.loadSource(pipUrl); pipHls.attachMedia(v);
         } else v.src = pipUrl;
         v.play().catch(() => {});
-      }
+      } else if (v.paused) v.play().catch(() => {});   /* iOS blocks muted autoplay in Low Power Mode — every 20 s poll retries */
     }).catch(() => {});
   }
 
@@ -866,6 +877,11 @@
     if (!card.dataset.ll || !map) return;
     const p = card.dataset.ll.split(",").map(Number);
     if (p.length === 2 && isFinite(p[0])) try { map.setView(p, 15.5); } catch (err) {}
+  });
+
+  /* any tap on the PiP nudges a blocked video back to playing (harmless alongside the controls) */
+  $("dronePip").addEventListener("click", () => {
+    const v = $("droneVid"); if (v && v.paused) v.play().catch(() => {});
   });
 
   /* PiP size cycle: corner -> half -> full -> corner */
