@@ -89,7 +89,9 @@
     color:var(--dim);background:none;display:inline-block;margin:4px 0 0 4px;font-family:'DM Mono',monospace;
     cursor:pointer;-webkit-appearance:none;appearance:none}
   .unit-row .rsv.on{border-color:var(--amber);color:#000;background:var(--amber);font-weight:700}
-  .unit-row .fam{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);color:var(--dim);display:inline-block;margin-top:4px}
+  .unit-row .fam{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);color:var(--dim);display:inline-block;margin-top:4px;
+    background:none;font-family:'DM Mono',monospace;-webkit-appearance:none;appearance:none}
+  .unit-row button.fam{cursor:pointer}
   .unit-row .fam.app{border-color:var(--red);color:var(--red)}
   .unit-row .fam.rb{border-color:var(--blue);color:var(--blue)}
   .unit-row .fam.amber{border-color:var(--amber);color:var(--amber)}
@@ -231,7 +233,8 @@ function typeOf(cs){
   for(var i=0;i<TYPES.length;i++) if(pfx===TYPES[i].p && (!best||TYPES[i].p.length>best.p.length)) best=TYPES[i];
   return best||{p:pfx,g:'Other',fam:'rb'};
 }
-function famLabel(t){ return t.cmd?'CMD &middot; GREEN ON SCENE':(t.fam==='app'?'APPARATUS BAR':t.fam==='amber'?'AMBER BAR':'PLAIN BAR'); }
+function barLabel(f){ return f==='app'?'APPARATUS BAR':f==='amber'?'AMBER BAR':'PLAIN BAR'; }
+function famLabel(t){ return t.cmd?'CMD &middot; GREEN ON SCENE':barLabel(t.fam); }
 function defVis(t){ return (t.fam==='app'&&!t.cmd)?'always':'oncall'; }
 
 var roster={v:1,units:[]};
@@ -255,7 +258,8 @@ function render(){
       html+='<div class="unit-row" data-i="'+u._i+'">'
         +'<div><input class="cs'+(u.cs.length>8?' sm':'')+'" value="'+esc(u.cs)+'" placeholder="&mdash;" maxlength="26" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
         +((u.mk||u.yr)?'<div class="mk">'+esc(((u.yr?u.yr+' ':'')+(u.mk||'')).trim())+'</div>':'')
-        +(u.cs?'<span class="fam '+(t.cmd?'cmd':t.fam)+'">'+famLabel(t)+'</span>':'')
+        +'<button class="fam '+(u.fam||'rb')+'" type="button" title="Tap to cycle lightbar style">'+barLabel(u.fam)+'</button>'
+        +(u.cmd?'<span class="fam cmd" style="margin-left:4px">CMD</span>':'')
         +'<button class="rsv'+(u.rsv?' on':'')+'">RESERVE</button></div>'
         +'<div class="mid">'
           +'<div class="seg" role="group">'
@@ -289,6 +293,12 @@ document.getElementById('roster').addEventListener('click',function(ev){
           setTimeout(function(){ delete row.dataset.armed; try{ ev.target.style.borderColor=''; ev.target.style.color=''; }catch(e){} },2500); }
     return;
   }
+  if(ev.target.tagName==='BUTTON'&&ev.target.classList.contains('fam')){
+    var order=['app','rb','amber'];
+    u.fam=order[(order.indexOf(u.fam||'rb')+1)%order.length];
+    u.fmo=1;                                   /* manual override — auto-detect keeps hands off now */
+    markDirty(); render(); return;
+  }
   if(ev.target.classList.contains('rsv')){
     if(u.rsv&&!u.cs){                      /* leaving reserve needs a callsign first */
       var inp=row.querySelector('input.cs');
@@ -314,7 +324,7 @@ document.getElementById('roster').addEventListener('change',function(ev){
     var cs=ev.target.value.toUpperCase().trim();
     if(cs===''&&u.rsv){ if(u.cs!==''){ u.cs=''; markDirty(); render(); } return; }   /* reserve rigs may go nameless */
     if(!csOk(cs)){ ev.target.classList.add('bad'); ev.target.value=u.cs; setTimeout(function(){ ev.target.classList.remove('bad'); },1200); return; }
-    if(cs!==u.cs){ u.cs=cs; var t=typeOf(cs); u.fam=t.fam; u.cmd=t.cmd?1:0; markDirty(); render(); }
+    if(cs!==u.cs){ u.cs=cs; var t=typeOf(cs); if(!u.fmo) u.fam=t.fam; u.cmd=t.cmd?1:0; markDirty(); render(); }
   }
 });
 /* keep callsign typing uppercase + clean as it happens */
@@ -367,8 +377,8 @@ document.getElementById('aAdd').addEventListener('click',function(){
 /* ── load / save ── */
 function normalize(){
   roster.units.forEach(function(u){
-    if(u.cs){ var t=typeOf(u.cs); u.fam=t.fam; u.cmd=t.cmd?1:0; }   /* nameless reserves keep their seeded family */
-    u.rsv=u.rsv?1:0; u.mk=String(u.mk||'').slice(0,48); u.yr=String(u.yr||'').slice(0,4); delete u._i;
+    if(u.cs){ var t=typeOf(u.cs); if(!u.fmo) u.fam=t.fam; u.cmd=t.cmd?1:0; }   /* nameless reserves + manual overrides keep their family */
+    u.fmo=u.fmo?1:0; u.rsv=u.rsv?1:0; u.mk=String(u.mk||'').slice(0,48); u.yr=String(u.yr||'').slice(0,4); delete u._i;
   });
 }
 /* Seed from the pre-mapped Fleet Master List (fleet-seed.json), as an unsaved draft —
