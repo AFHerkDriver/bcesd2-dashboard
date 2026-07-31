@@ -35,7 +35,7 @@
   .btn{font-family:'DM Mono',monospace;font-size:12px;letter-spacing:1px;border-radius:8px;
     padding:6px 12px;min-height:32px;border:1px solid var(--border);background:var(--panel);color:var(--text);
     cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;
-    -webkit-appearance:none;appearance:none}
+    white-space:nowrap;-webkit-appearance:none;appearance:none}
   .btn:hover{border-color:var(--accent)}
   .btn.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:500}
   button:active,.btn:active{transform:translateY(1px);filter:brightness(.85)}
@@ -129,7 +129,7 @@
     <h1>FLEET GPS <span style="color:var(--accent)">ROSTER</span></h1>
     <div class="sub">SAMSARA AVL &middot; REG &rarr; CALLSIGN &middot; VIEW MODE</div>
   </div>
-  <div class="actions"><button class="btn" id="reseed" type="button">&#8635; RESEED</button><a class="btn" href="control.html">&larr; CONTROL</a></div>
+  <div class="actions"><a class="btn" href="control.html">&larr; CONTROL</a></div>
 </div>
 
 <div class="wrap">
@@ -372,20 +372,6 @@ function seedIfEmpty(){
   if(roster.units.length) { render(); return; }
   applySeed();
 }
-/* RESEED — two-tap arm: discards the on-screen list AND the local draft, reloads the
-   packaged seed. Does not touch the published KV roster until you SAVE. */
-document.getElementById('reseed').addEventListener('click',function(){
-  var b=this;
-  if(!b.dataset.armed){
-    b.dataset.armed='1'; b.textContent='SURE? TAP AGAIN';
-    b.style.borderColor='var(--red)'; b.style.color='var(--red)';
-    setTimeout(function(){ delete b.dataset.armed; b.innerHTML='&#8635; RESEED'; b.style.borderColor=''; b.style.color=''; },3000);
-    return;
-  }
-  delete b.dataset.armed; b.innerHTML='&#8635; RESEED'; b.style.borderColor=''; b.style.color='';
-  try{ localStorage.removeItem(DRAFT); }catch(e){}
-  applySeed();
-});
 function load(){
   fetch(AUTH_URL+'/roster?pin='+encodeURIComponent(pin()))
     .then(function(r){ if(r.status===404) throw 'no-endpoint'; return r.json(); })
