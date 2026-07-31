@@ -381,6 +381,7 @@ function applySeed(){
         roster={v:1,units:s.units.map(function(u){ var t=typeOf(u.cs);
           return {reg:u.reg,cs:u.cs,st:u.st||'',vis:u.vis||defVis(t),
                   fam:u.cs?t.fam:(u.fam||'app'),cmd:t.cmd?1:0,mk:u.mk||'',yr:u.yr||'',rsv:u.rsv?1:0}; })};
+        roster.sv=s.sv||1;
         markDirty();
         document.getElementById('stat').textContent='seeded from '+(s.src||'fleet list')+' — review, then SAVE to publish';
       }
@@ -389,8 +390,33 @@ function applySeed(){
     .catch(function(){ render(); });
 }
 function seedIfEmpty(){
-  if(roster.units.length) { render(); return; }
+  if(roster.units.length) { mergeSeed(); return; }
   applySeed();
+}
+/* Seed updates merge forward: when the packaged seed's version (sv) is newer than what this
+   roster has absorbed, units with unseen regs append as unsaved additions. Units you deleted
+   stay deleted — a merge only runs once per seed version. */
+function mergeSeed(){
+  fetch('fleet-seed.json',{cache:'no-store'})
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(s){
+      if(!s||!Array.isArray(s.units)){ render(); return; }
+      var sv=s.sv||1;
+      if(sv<=(roster.sv||1)){ render(); return; }
+      var have={}; roster.units.forEach(function(u){ have[u.reg]=1; });
+      var added=0;
+      s.units.forEach(function(u){
+        if(have[u.reg]) return;
+        var t=typeOf(u.cs);
+        roster.units.push({reg:u.reg,cs:u.cs,st:u.st||'',vis:u.vis||defVis(t),
+          fam:u.cs?t.fam:(u.fam||'app'),cmd:t.cmd?1:0,mk:u.mk||'',yr:u.yr||'',rsv:u.rsv?1:0});
+        added++;
+      });
+      roster.sv=sv;
+      render();
+      if(added){ markDirty(); document.getElementById('stat').textContent=added+' new unit'+(added>1?'s':'')+' from the fleet list — review, then SAVE'; }
+    })
+    .catch(function(){ render(); });
 }
 function load(){
   fetch(AUTH_URL+'/roster?pin='+encodeURIComponent(pin()))
@@ -400,8 +426,9 @@ function load(){
       roster=j.roster&&Array.isArray(j.roster.units)?j.roster:{v:1,units:[]};
       var d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT)||'null'); }catch(e){}
       if(d&&Array.isArray(d.units)&&JSON.stringify(d)!==JSON.stringify(roster)){
-        roster=d; markDirty(); render();
+        roster=d; markDirty();
         document.getElementById('stat').textContent='unsaved draft restored — hit SAVE to publish';
+        mergeSeed();
         return;
       }
       seedIfEmpty();
@@ -409,7 +436,7 @@ function load(){
     .catch(function(err){
       if(err==='no-endpoint') document.getElementById('wkNote').hidden=false;
       var d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT)||'null'); }catch(e){}
-      if(d&&Array.isArray(d.units)){ roster=d; render(); return; }
+      if(d&&Array.isArray(d.units)){ roster=d; mergeSeed(); return; }
       seedIfEmpty();
     });
 }

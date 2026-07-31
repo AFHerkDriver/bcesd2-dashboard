@@ -1668,7 +1668,7 @@ export default {
                        cmd: u.cmd ? 1 : 0, mk: String(u.mk || "").slice(0, 48),
                        yr: String(u.yr || "").replace(/\D/g, "").slice(0, 4), rsv });
         }
-        await env.PINS.put("avlroster", JSON.stringify({ v: 1, units }));
+        await env.PINS.put("avlroster", JSON.stringify({ v: 1, sv: parseInt(roster.sv, 10) || 1, units }));   /* sv = fleet-seed version this roster has absorbed */
         await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
                                action: "updated fleet GPS roster (" + units.length + " units)" });
         return json({ ok: true, n: units.length }, 200);
