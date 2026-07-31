@@ -92,8 +92,10 @@
   .ccard .utag.app { border-color: #3FB950; color: #3FB950; background: rgba(63,185,80,.12); font-weight: 500; }
   .ccard .aptc { color: #FFC107; font-weight: 700; font-size: 15px; }
   /* cleaned CAD notes — the radio log */
-  .ntlog { margin-top: 7px; max-height: 138px; overflow-y: auto; border-top: 1px solid rgba(48,54,61,.6);
-           padding-top: 5px; font-size: 12.5px; line-height: 1.5; }
+  .nthead { margin-top: 7px; border-top: 1px solid rgba(48,54,61,.6); padding-top: 5px; cursor: pointer;
+            font-size: 11px; letter-spacing: 1px; color: #8B949E; }
+  .nthead b { color: #E6EDF3; }
+  .ntlog { margin-top: 3px; max-height: 138px; overflow-y: auto; font-size: 12.5px; line-height: 1.5; }
   .ntrow { color: #E6EDF3; padding: 1px 0 1px 14px; text-indent: -14px; }
   .ntrow::before { content: "▸ "; color: #8B949E; }
   .ntrow.sys { color: #FFC107; }
@@ -771,6 +773,7 @@
      collapses to a slim colored bar (type + address); tapping the bar swaps which is expanded, so
      the map is never buried under two full cards on a pocket screen. Tablet/MDT show both full. */
   let lastTop = [], expandedId = null;
+  const ntCollapsed = {};                     /* call id -> notes folded (persists across re-renders) */
   const phoneMode = () => { try { return window.matchMedia("(max-width: 640px)").matches; } catch (e) { return false; } };
   function buildCard(c, slim) {
     const col = callColor(c.type);
@@ -804,12 +807,16 @@
               const inner = (c.channel ? "<b>" + esc(c.channel) + "</b>" : "") + us.map(u => '<span class="utag' + (isApp(u) ? " app" : "") + '">' + esc(u) + "</span>").join("");   /* GREEN = a real rig attached (assigned or self-assigned) — trucks are rolling; gray box code = toned, no rig yet */
               return inner ? '<div class="uline">' + inner + "</div>" : "";
             })() +
-            (() => {                                       /* CLEANED CAD NOTES — the readable radio log the A911 app never gives you */
+            (() => {                                       /* CLEANED CAD NOTES — collapsible: tap the NOTES bar to fold the log away and get the map back; the choice sticks per call across the 15s re-renders */
               const ns = Array.isArray(c.notes) ? c.notes : [];
               if (!ns.length && !c.caseNo && !c.leNo) return "";
+              const closed = !!ntCollapsed[c.id];
+              const head = '<div class="nthead" data-nt="' + esc(c.id) + '">' +
+                (closed ? "&#9656;" : "&#9662;") + ' NOTES <b>' + ns.length + "</b></div>";
+              if (closed) return head;
               const rows = ns.map(n => '<div class="ntrow' + (n.s ? " sys" : "") + '">' + esc(n.x) + "</div>").join("");
               const foot = [c.caseNo ? "CASE " + esc(c.caseNo) : "", c.leNo ? "LE " + esc(c.leNo) : ""].filter(Boolean).join(" · ");
-              return '<div class="ntlog">' + rows + (foot ? '<div class="ntfoot">' + foot + "</div>" : "") + "</div>";
+              return head + '<div class="ntlog">' + rows + (foot ? '<div class="ntfoot">' + foot + "</div>" : "") + "</div>";
             })() +
             (GEN_RE.test(String(c.type || "")) ? "" :   /* a broadcast has no scene — nothing to navigate to */
             '<a class="navbtn" href="' + gmapsUrl(c) + '" target="_blank" rel="noopener"><span class="gbadge"><svg viewBox="0 0 48 48" width="13" height="13"><path fill="currentColor" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="currentColor" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="currentColor" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="currentColor" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg></span><span class="btxt">GOOGLE MAPS</span></a> ' +
@@ -950,6 +957,8 @@
   /* tap a call card -> focus the map on that run (nav buttons keep their own click) */
   $("callBand").addEventListener("click", (e) => {
     if (e.target.closest(".navbtn")) return;
+    const nh = e.target.closest(".nthead");
+    if (nh) { const id = nh.getAttribute("data-nt"); ntCollapsed[id] = !ntCollapsed[id]; renderBand(); return; }   /* fold/unfold, never refocus */
     const card = e.target.closest(".ccard");
     if (!card) return;
     if (card.classList.contains("slim")) { expandedId = card.dataset.id; renderBand(); }   /* tap a slim bar -> it becomes the expanded card */
