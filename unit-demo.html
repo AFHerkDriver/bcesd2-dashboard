@@ -59,7 +59,7 @@
   /* the corner LEDs are pixels at map size — the HALO is what carries "command established"
      across the room: a breathing green ring around the whole badge, same 2.2 s breath as the
      on-scene halos so every scene glow shares one rhythm */
-  .cmd::after { content: ""; position: absolute; inset: -2px; border-radius: 18%; pointer-events: none;
+  .cmd::after { content: ""; position: absolute; inset: 1%; border-radius: 14%; pointer-events: none;
                 animation: cmdhalo 2.2s ease-in-out infinite; }
   @keyframes cmdhalo {
     0%, 100% { box-shadow: 0 0 2px 1px rgba(70,255,120,.3); }
@@ -68,7 +68,7 @@
   @media (prefers-reduced-motion: reduce) { .cmd::after { animation: none; box-shadow: 0 0 6px 2px rgba(70,255,120,.7); } }
   /* ── ON SCENE, non-command: the halo BREATHES BLUE, THEN RED — one slow lightbar cycle wrapped
      around the badge. Slower + dimmer than command green, so green still outranks it ── */
-  .scene::after { content: ""; position: absolute; inset: -2px; border-radius: 18%; pointer-events: none;
+  .scene::after { content: ""; position: absolute; inset: 1%; border-radius: 14%; pointer-events: none;
                   animation: scenehalo 4.4s ease-in-out infinite; }
   @keyframes scenehalo {
     0%, 100% { box-shadow: 0 0 3px 1px rgba(90,160,255,.3); }
