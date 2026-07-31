@@ -73,7 +73,12 @@
   .grp-h .n{font-family:'DM Mono',monospace;font-size:11px;color:var(--dim)}
   .unit-row{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:8px 0;
     display:grid;grid-template-columns:minmax(84px,auto) 1fr auto;gap:8px 14px;align-items:center}
-  .unit-row .cs{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;line-height:1}
+  /* callsign is editable in place — an input dressed as the big label */
+  .unit-row input.cs{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;line-height:1;
+    width:100%;min-height:0;padding:0;background:none;border:none;border-radius:0;color:var(--text);
+    border-bottom:1px dashed rgba(139,148,158,.35);-webkit-appearance:none;appearance:none}
+  .unit-row input.cs:focus{outline:none;border-bottom:1px solid var(--accent)}
+  .unit-row input.cs.bad{color:var(--red);border-bottom-color:var(--red)}
   .unit-row .reg{font-size:11px;color:var(--dim);letter-spacing:1px}
   .unit-row .fam{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);color:var(--dim);display:inline-block;margin-top:4px}
   .unit-row .fam.app{border-color:var(--red);color:var(--red)}
@@ -222,7 +227,7 @@ function render(){
     groups[g].forEach(function(u){
       var t=typeOf(u.cs);
       html+='<div class="unit-row" data-i="'+u._i+'">'
-        +'<div><div class="cs">'+esc(u.cs)+'</div><div class="reg">'+esc(u.reg)+'</div>'
+        +'<div><input class="cs" value="'+esc(u.cs)+'" maxlength="8" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
         +'<span class="fam '+(t.cmd?'cmd':t.fam)+'">'+famLabel(t)+'</span></div>'
         +'<div class="mid">'
           +'<div class="seg" role="group">'
@@ -265,7 +270,17 @@ document.getElementById('roster').addEventListener('click',function(ev){
 document.getElementById('roster').addEventListener('change',function(ev){
   var row=ev.target.closest('.unit-row'); if(!row) return;
   var u=roster.units[parseInt(row.getAttribute('data-i'),10)]; if(!u) return;
-  if(ev.target.tagName==='SELECT'){ u.st=ev.target.value; markDirty(); }
+  if(ev.target.tagName==='SELECT'){ u.st=ev.target.value; markDirty(); return; }
+  if(ev.target.classList.contains('cs')){
+    var cs=ev.target.value.toUpperCase().trim();
+    if(!/^[A-Z]{1,4}\d{2,4}$/.test(cs)){ ev.target.classList.add('bad'); ev.target.value=u.cs; setTimeout(function(){ ev.target.classList.remove('bad'); },1200); return; }
+    if(cs!==u.cs){ u.cs=cs; var t=typeOf(cs); u.fam=t.fam; u.cmd=t.cmd?1:0; markDirty(); render(); }
+  }
+});
+/* keep callsign typing uppercase + clean as it happens */
+document.getElementById('roster').addEventListener('input',function(ev){
+  if(ev.target.classList&&ev.target.classList.contains('cs'))
+    ev.target.value=ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
 });
 
 /* ── add form ── */
