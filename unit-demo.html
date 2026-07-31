@@ -156,14 +156,18 @@
   <b>Labels match CAD:</b> the designator you see on dispatch (E121, M121, AP124, BC121, UAV121&hellip;) is CSS
   text drawn on a blank plate &mdash; one badge asset per lightbar family, any unit string, auto-shrunk
   until it clears the plate margins so no designator ever touches the badge edge.
-  <b>Unit roster (owner page, future):</b> KV-backed table edited from control.html &mdash; dept reg
-  (###-## fleet number + year, what Samsara reports) &rarr; radio callsign (manual, once) + icon family
-  (auto from callsign prefix, overridable) + a 3-way visibility toggle per unit:
+  <b>Unit roster (owner page, future):</b> a dedicated GPS/vehicle admin page linked from the control
+  panel, KV-backed. Units grouped by type, listed by dept reg (###-## fleet number + year, what Samsara
+  reports); per unit: radio callsign (manual, once) + icon family (auto from callsign prefix,
+  overridable) + <b>home station</b> + a 3-way visibility toggle per unit:
   <b>ALWAYS</b> (mainline apparatus &mdash; plots whenever reporting) &middot; <b>ON-CALL</b> (support/staff
   rigs &mdash; plots only while actively attached to a call, vanishes when it clears) &middot; <b>OFF</b>
   (hidden everywhere). Defaults by family: apparatus = ALWAYS, everything else = ON-CALL; changes are KV
-  state, live on all boards instantly, no deploy. Feed vehicles not in the roster surface as
-  &ldquo;needs callsign&rdquo; and never plot untagged; rostered units that stop reporting get a no-GPS flag.
+  state, live on all boards instantly, no deploy. <b>Home-station hiding:</b> an ALWAYS unit disappears
+  only while sitting at its OWN station (~150 m geofence) and not attached to a call &mdash; E122 visiting
+  station 121 still plots, and any unit attached to a call plots even from its own bay. Feed vehicles
+  not in the roster surface as &ldquo;needs callsign&rdquo; and never plot untagged; rostered units that
+  stop reporting get a no-GPS flag.
   <b>Icon assignment:</b> plain BLUE/WHITE/RED bar = UAV, ADM, UTL, AC, DC (2-light wig-wag) &middot;
   AMBER bar = MX/Maintenance (never runs code &mdash; steady badge only, no wig-wag state) &middot; MULTICOLOR
   red-blue-white-blue-red bar = BC + all typical apparatus incl. MOF (BC, ENG, MOF, MED, TDR, LDR, SQD,
