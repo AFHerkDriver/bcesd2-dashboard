@@ -278,6 +278,7 @@ function render(){
 }
 function markDirty(){
   dirty=true;
+  roster.dts=Date.now();                      /* draft timestamp — lets load() age it against the server copy */
   document.getElementById('save').classList.add('dirty');
   document.getElementById('stat').textContent='unsaved changes';
   document.getElementById('stat').className='stat';
@@ -435,13 +436,21 @@ function load(){
     .then(function(j){
       if(!j.ok) throw 'denied';
       roster=j.roster&&Array.isArray(j.roster.units)?j.roster:{v:1,units:[]};
+      /* A local draft only outranks the server copy when the draft is provably NEWER
+         (it carries a dts stamp younger than the server's save stamp). A stale draft
+         from an old visit must never clobber a roster saved since — that bug once
+         reverted a whole page of callsign renames. Older/stampless drafts are dropped. */
       var d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT)||'null'); }catch(e){}
-      if(d&&Array.isArray(d.units)&&JSON.stringify(d)!==JSON.stringify(roster)){
+      var draftNewer = d && Array.isArray(d.units) &&
+                       (d.dts||0) > (roster.at||0) &&
+                       JSON.stringify(d) !== JSON.stringify(roster);
+      if(draftNewer){
         roster=d; markDirty();
         document.getElementById('stat').textContent='unsaved draft restored — hit SAVE to publish';
         mergeSeed();
         return;
       }
+      try{ localStorage.removeItem(DRAFT); }catch(e){}   /* stale or identical — the server copy wins */
       seedIfEmpty();
     })
     .catch(function(err){
