@@ -89,7 +89,7 @@
             font-family: Arial, 'Helvetica Neue', sans-serif; font-weight: 700; color: #FFF;
             letter-spacing: .02em; text-shadow: 0 1px 1px rgba(0,0,0,.65); }
   .u64 .ulabel { font-size: 19px; }
-  .u44 .ulabel { font-size: 13px; }
+  .u44 .ulabel { font-size: 11px; }
   .u34 .ulabel { font-size: 10px; }
   .u34 .ucap { font-size: 12px; }
   .u44 .ucap { font-size: 13px; }
@@ -138,12 +138,16 @@
       <div class="ucap">121</div></div>
   </div>
   <div class="card">
-    <span class="state">ONE BADGE, ANY UNIT &mdash; letters patched out, label is CSS text</span><br>
-    <div class="unit u64"><span class="ubadge cmd"><img src="unit-blank.png" alt="blank badge"><span class="ulabel">BC121</span><span class="gl cl"></span><span class="gl cr"></span></span></div>
+    <span class="state">ONE BADGE PER LIGHTBAR FAMILY &mdash; label is CSS text</span><br>
+    <div class="unit u64"><span class="ubadge cmd"><img src="unit-blank-cmd.png" alt="command blank"><span class="ulabel">BC121</span><span class="gl cl"></span><span class="gl cr"></span></span></div>
     &nbsp;&nbsp;
-    <div class="unit u44"><span class="ubadge"><img src="unit-blank.png" alt="blank badge"><span class="ulabel">BC121</span></span></div>
+    <div class="unit u44"><span class="ubadge resp"><img src="unit-blank-rb.png" alt="red/blue blank"><span class="ulabel">UAV121</span><span class="gl l"></span><span class="gl r"></span></span></div>
     &nbsp;&nbsp;
-    <div class="unit u34"><span class="ubadge"><img src="unit-blank.png" alt="blank badge"><span class="ulabel">BC121</span></span></div>
+    <div class="unit u44"><span class="ubadge"><img src="unit-blank-amber.png" alt="amber blank"><span class="ulabel">MX121</span></span></div>
+    &nbsp;&nbsp;
+    <div class="unit u44"><span class="ubadge resp"><img src="unit-blank-app.png" alt="apparatus blank"><span class="ulabel">ENG121</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div>
+    &nbsp;&nbsp;
+    <div class="unit u34"><span class="ubadge"><img src="unit-blank-cmd.png" alt="command blank"><span class="ulabel">BC121</span></span></div>
   </div>
   <div class="card">
     <span class="state">MAP SIZES &mdash; 44 px / 34 px</span><br>
@@ -179,6 +183,10 @@
   units overlap at a scene &mdash; and command-established on top of other command rigs.
   <b>Stale GPS dims and overrides everything.</b> prefers-reduced-motion disables the animation.
   <b>Placement:</b> dashboard = always on; MDT = optional layer in the layers control.
+  <b>Fleet lightbar families:</b> GREEN-end bar = AC/DC/BC (command logic above) &middot; plain RED/BLUE bar =
+  admin, UAV, MOF, Utility (2-light wig-wag; in practice you'll mostly see UAV and MOF) &middot; AMBER bar =
+  Maintenance (never runs code &mdash; steady badge only, no wig-wag state) &middot; MULTICOLOR
+  red-blue-white-blue-red bar = all typical apparatus (4-light criss-cross).
 </div>
 </body>
 </html>
