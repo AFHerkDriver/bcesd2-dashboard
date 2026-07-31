@@ -586,8 +586,9 @@
       padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));
       padding-bottom:max(10px,env(safe-area-inset-bottom))}
     header{flex-wrap:wrap;row-gap:8px}
+    .id{flex:1;text-align:center}   /* phone: title centers between shield and burn chip */
     .id h1{font-size:22px}
-    .clock{margin-left:auto}
+    .clock{flex:1;text-align:center}   /* phone: clock centers, ON DUTY holds the right edge */
     .clock .time{font-size:30px}
     .hchip{min-width:82px;max-width:150px;flex:0 1 auto;padding:4px 10px}   /* phone: chips keep natural size — the ON DUTY pill was stretching to fill the row */
     .hchip .lbl{font-size:7px}
@@ -1215,7 +1216,7 @@
        Demand (archive density, lazy-loaded on first enable). Both OFF by default — wall stays clean. */
     var windOverlay=L.layerGroup(), heatLayer=L.layerGroup(), tenderOverlay=L.layerGroup();
     L.control.layers({"Dark":dark,"Positron":positron,"Satellite":satellite},   /* both lists alphabetical — same as the MDT */
-      {"Call Demand":heatLayer,"Tender Zones":tenderOverlay,"Wind Flow":windOverlay},{collapsed:true,position:"topright"}).addTo(map);
+      {"Call Demand":heatLayer,"Tender Zones":tenderOverlay,"Wind Flow":windOverlay},{collapsed:true,position:"bottomright"}).addTo(map);
     /* Follow the sun LIVE: satellite from sunrise to sunset, dark at night. The initial pick above
        only ran at page load — and the wall hard-reloads at 04:07, so it loaded dark and stayed dark
        all day. A 5-min check swaps at dawn/dusk. An officer's manual pick from the layers control

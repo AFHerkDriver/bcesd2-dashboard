@@ -84,6 +84,19 @@ function geoNum(v) {
    apt / caseNo (our BC2 case number) / leNo (BCLE joint incident). Boilerplate that repeats on
    every call (case-number legalese, RESPOND ON <ch>, closed-incident chatter) is dropped or
    compacted — the goal is a clean radio-log, not a transcript. */
+/* Dispatcher case lottery: some type ALL CAPS, some all lowercase. Normalize BOTH to sentence
+   case for the card, preserving callsigns (E121, M123) and CAD/medical abbreviations. Mixed-case
+   notes are left exactly as typed — someone chose that casing on purpose. */
+function caseFix(x) {
+  const letters = x.replace(/[^A-Za-z]/g, "");
+  if (letters.length < 4) return x;
+  const KEEP = /^(LE|BCSO|BCLE|BCFA|EMS|FD|PD|SAPD|CPR|GSW|LSW|DOA|DOB|ETOH|MVC|ATV|RP|AED|ALS|BLS|OB|UTL|POV|HAZMAT|CPR|DNR|AC|BC|DC|UAS|UAV|TX|US)$|^[A-Za-z]{1,4}\d{2,4}$/;
+  const sentence = (s) => s.replace(/(^|[.!?]\s+)([a-z])/g, (m, p, c) => p + c.toUpperCase());
+  const rekey = (s) => s.replace(/\b[a-z0-9]+\b/g, (w) => { const W = w.toUpperCase(); return KEEP.test(W) ? W : w; });
+  if (letters === letters.toUpperCase()) return rekey(sentence(x.toLowerCase()));
+  if (letters === letters.toLowerCase()) return rekey(sentence(x));
+  return x;
+}
 function parseNotes(details) {
   const out = { notes: [], apt: "", caseNo: "", leNo: "" };
   let d = String(details || "");
@@ -101,6 +114,7 @@ function parseNotes(details) {
   const tail = parts.pop();                                                 /* text after the final [Shared] */
   let tailMode = false;
   const push = (x, s) => { x = x.replace(/\s+/g, " ").trim(); if (!x) return;
+    if (!s) x = caseFix(x);                                                    /* end the dispatcher case lottery */
     out.notes.push({ s: s ? 1 : 0, x: (tailMode && !s) ? x + "…" : x }); };   /* tail entries are A911-truncated — say so */
   /* system prefixes arrive comma-GLUED to the next real note (no [Shared] of their own) — verified
      live: "…#: BCSO-2026-0312557,CON AND BREATHING". Each handler peels its prefix, then re-runs
@@ -114,6 +128,7 @@ function parseNotes(details) {
     if (/^Automatic Case/i.test(e)) return;                                 /* truncated legalese — even cut mid-word */
     if ((m = e.match(/\[Notification\]\s*\[[^\]]*\]-?Problem changed from\s+(.+?)\s+to\s+(.+?)\s+by\b/i))) { push("TYPE CHANGED: " + m[1] + " → " + m[2], 1); return; }
     if (/^UNITS RESPOND ON\b/i.test(e)) return;                             /* channel already on the card */
+    if (/^Multiple Response Areas found/i.test(e)) return;                  /* CAD dispatch-console chatter (observed live 7/31) */
     push(e, 0);                                                             /* a real dispatcher/caller note */
   };
   parts.forEach(classify);
