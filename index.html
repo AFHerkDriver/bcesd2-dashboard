@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="favicon.ico" sizes="48x48">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<title>BC2FD Station Dashboard</title>
+<title>BC2FD - Station Dashboard</title>
 <!-- Link preview (iMessage / SMS / Slack). Scrapers do NOT resolve relative paths, so these
      must stay absolute; og:image is 1200x630 JPEG, the size every platform renders large. -->
 <meta property="og:type" content="website">
@@ -360,6 +360,15 @@
   .map-fs-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--panel);
     color:var(--text);font-size:17px;line-height:1;cursor:pointer;display:block}
   .map-fs-btn:hover{border-color:var(--dim)}
+  /* tappable hydrant popups — DARK, matching the board (Leaflet ships a white popup; restyle the
+     wrapper + tip so every popup on this map is on-theme) */
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--text);
+    box-shadow:0 3px 14px rgba(0,0,0,.55);border:1px solid var(--border)}
+  .leaflet-popup-content{font-family:'DM Mono',monospace;font-size:13px;line-height:1.5}
+  .leaflet-popup-close-button{color:var(--dim)}
+  .hyd-pop b{color:#58A6FF;font-weight:500}
+  .hyd-pop .hp-sz{color:var(--amber)}
+  .hyd-pop .hp-oos{color:var(--red);font-weight:600}
   /* ── PHASE 3 · DRONE TAKEOVER ─────────────────────────────────────────────────────────
      The tile becomes the whole wall through position:fixed, so nothing in the grid moves.
      That is not a style preference: the feeds are IFRAMES, and reparenting an iframe reloads
@@ -433,10 +442,12 @@
   }
   /* Runs pinned outside the 121-125 frame (161/162, station 120). The map must not imply it is
      showing everything — this is the difference between a tight frame and a quiet omission. */
-  .dm-off{position:absolute;left:8px;bottom:8px;z-index:500;pointer-events:none;
+  /* was the runs-outside-view counter; now the DISTRICT TOGGLE — same pill, same corner, now tappable */
+  .dm-off{position:absolute;left:8px;bottom:8px;z-index:500;pointer-events:auto;cursor:pointer;
     font-family:'DM Mono',monospace;font-size:clamp(9px,.95vmin,13px);letter-spacing:.6px;
     color:var(--text);background:rgba(13,17,23,.82);border:1px solid var(--border);
     border-radius:6px;padding:3px 7px}
+  .dm-off:hover{border-color:var(--dim)}
   .dm-off[hidden]{display:none}
   .drone-map .leaflet-container{width:100%;height:100%;background:#0D1117;font-family:'DM Mono',monospace}
   .drone-map .leaflet-tooltip{background:rgba(13,17,23,.82);border:1px solid var(--border);color:var(--text);font-size:11px;font-family:'DM Mono',monospace;padding:1px 5px}
@@ -578,7 +589,9 @@
     .id h1{font-size:22px}
     .clock{margin-left:auto}
     .clock .time{font-size:30px}
-    .hchip{min-width:96px;flex:1 1 auto}
+    .hchip{min-width:82px;max-width:150px;flex:0 1 auto;padding:4px 10px}   /* phone: chips keep natural size — the ON DUTY pill was stretching to fill the row */
+    .hchip .lbl{font-size:7px}
+    .hchip .val{font-size:17px}
     .quad{flex-direction:column;order:1}                     /* iPhone: push the tiles below the ticker */
     .banner{order:0}                                          /* iPhone: announcement ticker rides at the top (after header, above the tiles) so it isn't lost at the bottom */
     .lcol{flex:none;width:100%}
@@ -889,6 +902,10 @@
     gap:0 10px;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.55)}
   .rs-run:last-child{border-bottom:none}
   .rs-run.rs-go{cursor:pointer}                            /* has a coordinate: tap -> close sheet, peek the map 15s */
+  .rs-run.rs-nogeo{opacity:.62;cursor:default}             /* no trustworthy coordinate: visibly dimmed, labeled, not a dead tap */
+  .rs-np{font-style:normal;font-size:10px;color:var(--dim);letter-spacing:.5px}
+  .rs-run.rs-busy{background:rgba(255,193,7,.16)}          /* peek refused (drone ops own the map): amber flash + inline cue */
+  .rs-run.rs-busy .rs-n::after{content:" — map busy (drone ops)";color:var(--amber);font-size:11px}
   .rs-t .rs-ch{font-style:normal;color:var(--teal);font-size:.92em}   /* per-run chute under the timestamp */
   .rs-run.rs-go:hover{background:rgba(255,255,255,.045)}
   .rs-t{grid-area:t;color:var(--dim);font-size:clamp(10px,1.05vmin,14px);font-variant-numeric:tabular-nums;padding-top:1px}
@@ -1246,7 +1263,15 @@
       L.marker([s.lat,s.lng],{icon:ic,interactive:false,keyboard:false,zIndexOffset:-1000}).addTo(stationLayer);
       if(+s.n>120 && +s.n<130) idlePts.push([s.lat,s.lng]);   /* default view frames 121-125; 120 (far south) + 161/162 stay plotted, shown when a drone heads their way */
     });
-    function idleView(){ try{ map.fitBounds(idlePts,{padding:[14,14],maxZoom:15,animate:false}); }catch(e){} }   /* frame 121-125 tightly (animate:false — an animated fit gets cancelled while the map is still settling on load) */
+    /* ── DISTRICT TOGGLE (like the MDT ⌖ button) — flips the idle frame between District 2
+       (121-125) and District 6 (161/162). STICKY: every auto reframe (tally idle, drone exit,
+       focus return) honors the chosen district until toggled back, so the wall can be parked on
+       the south district. frameD6 is read by idleView, so the whole reframe machinery follows. */
+    var frameD6=false, S_PTS=[[29.21967,-98.45806],[29.17785,-98.42410]];
+    function idleView(){ try{
+      if(frameD6) map.fitBounds(S_PTS,{padding:[40,40],maxZoom:13,animate:false});          /* frame 161/162 */
+      else map.fitBounds(idlePts,{padding:[14,14],maxZoom:15,animate:false});               /* frame 121-125 tightly (animate:false — an animated fit gets cancelled while the map is still settling on load) */
+    }catch(e){} }
     idleView();
     /* ── DISTRICT CALL PINS ──────────────────────────────────────────────────────────────
        With nothing airborne this map is otherwise inert, so it carries this tour's runs:
@@ -1281,7 +1306,7 @@
       try{ window.BC2FD_MAP_RESIZE(); }catch(e){}
     }
     window.BC2FD_MAP_FULL=mapFull;
-    (function(){ var c=L.control({position:"topright"});
+    (function(){ var c=L.control({position:"topleft"});   /* ⛶ moved to the top-LEFT corner (officer call 2026-07-28) */
       c.onAdd=function(){ var b=L.DomUtil.create("button","map-fs-btn"); b.type="button";
         b.title="Expand map to full screen"; b.innerHTML="⛶";
         L.DomEvent.disableClickPropagation(b); L.DomEvent.disableScrollPropagation(b);
@@ -1290,11 +1315,33 @@
       c.addTo(map);
     })();
     document.addEventListener("keydown",function(e){ if(e.key==="Escape") mapFull(false); });
+    /* DISTRICT TOGGLE — lives in the retired runs-outside pill's corner (bottom-left), same text
+       style. Label names where the NEXT tap goes, matching the MDT button's convention. */
+    (function(){ var el=document.getElementById("dmOff"); if(!el) return;
+      el.hidden=false; el.textContent="District 6";
+      el.title="Frame District 6 (161/162)";
+      try{ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el); }catch(e){}
+      el.addEventListener("click",function(){
+        frameD6=!frameD6;
+        el.textContent=frameD6?"District 2":"District 6";
+        el.title=frameD6?"Frame District 2 (121-125)":"Frame District 6 (161/162)";
+        try{ if(focusT){ clearTimeout(focusT); focusT=null; } focusPts=[]; }catch(e){}   /* a deliberate district flip outranks any pending focus return */
+        idleView();
+      });
+    })();
     /* ── DISTRICT BORDERS — official ESD 2 + ESD 6 boundaries (county KMZ, in district-bounds.json)
        drawn as subtle dashed outlines for situational awareness: crews see at a glance whether a pin
        is ours or a neighbor's. Own pane above radar, below labels/pins; enhancement layer — if the
        file is missing the map simply has no outline. ── */
     map.createPane("boundPane"); map.getPane("boundPane").style.zIndex=360; map.getPane("boundPane").style.pointerEvents="none";
+    /* BEXAR COUNTY LINE — soft white dashed ring (TIGERweb, baked into bexar-county.json). White on
+       purpose: the ESD borders own the orange family and satellite road labels are yellow, so white
+       reads as "the county, not ours" on both bases. Enhancement layer: file missing = no line. */
+    fetch("bexar-county.json").then(function(r){ return r.ok?r.json():null; }).then(function(c){
+      if(!c||!Array.isArray(c.ring)) return;
+      L.polyline(c.ring.map(function(p){ return [p[1],p[0]]; }),
+        {pane:"boundPane",color:"#FFFFFF",weight:2,opacity:.45,dashArray:"7 7",interactive:false}).addTo(map);
+    }).catch(function(){});
     fetch("district-bounds.json").then(function(r){ return r.ok?r.json():null; }).then(function(b){
       if(!b) return;
       ["esd2","esd6"].forEach(function(k){
@@ -1505,6 +1552,15 @@
     fetch("hydrants.json").then(function(r){ return r.ok?r.json():null; }).then(function(j){
       if(j&&Array.isArray(j.h)){ window.HYDB=j; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} }
     }).catch(function(){});
+    /* hydrants get their OWN pane: addrPane is pointer-events:none (labels must never eat taps),
+       but hydrant pins are now TAPPABLE (MDT parity — tap a plug for id/main/address). z 455 keeps
+       them under the call pins (marker pane 600) and over the address labels (450). */
+    map.createPane("hydPane"); map.getPane("hydPane").style.zIndex=455;
+    function hEsc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    function hydPop(h,oos){ return '<div class="hyd-pop"><b>HYD '+hEsc(h[0])+'</b>'+
+      (oos?' <span class="hp-oos">OUT OF SERVICE</span>':(h[5]?' <span class="hp-oos">PRIVATE</span>':''))+
+      (h[4]?'<br>'+hEsc(h[4]):'')+
+      '<br><span class="hp-sz">'+((h[1]||0)?h[1]+'&Prime; main':'main size unknown')+'</span></div>'; }
     var hydLayer=L.layerGroup().addTo(map), HYD_Z=16.2, hydPainted="";
     var oosLayer=L.layerGroup().addTo(map);   /* flagged-OOS reds — NOT zoom-gated; a dead plug must read from district view */
     /* Officer-supplied hydrant pins (backgrounds keyed out), teardrop tip anchored, addr pane under
@@ -1545,7 +1601,9 @@
         if(h[4]&&hydIsOOS(h[4])) continue;           /* flagged reds live in oosLayer — always on, never doubled */
         if(++shown>400) break;
         var icon = (h[1]||0)>=10 ? hydIconBig : hydIcon;
-        L.marker([h[2],h[3]],{icon:icon,pane:"addrPane",interactive:false,keyboard:false}).addTo(hydLayer);
+        /* tappable (MDT parity): tap -> hydrant id, PRIVATE badge, address, main size */
+        L.marker([h[2],h[3]],{icon:icon,pane:"hydPane",keyboard:false})
+          .bindPopup(hydPop(h,false),{maxWidth:260}).addTo(hydLayer);
       }
     }
     /* flagged-OOS hydrants render at EVERY zoom — the point of the flag is that crews see the
@@ -1556,7 +1614,8 @@
       var H=window.HYDB.h;
       for(var i=0;i<H.length;i++){ var h=H[i];
         if(!h[4]||!hydIsOOS(h[4])) continue;
-        L.marker([h[2],h[3]],{icon:hydIconOOS,interactive:false,keyboard:false}).addTo(oosLayer);
+        L.marker([h[2],h[3]],{icon:hydIconOOS,keyboard:false})
+          .bindPopup(hydPop(h,true),{maxWidth:260}).addTo(oosLayer);
       }
     }
     /* ── LOW-WATER CROSSING PINS — the HALT/BexarFlood watched crossings on the MAP (the Program
@@ -1599,15 +1658,9 @@
        and 29.18) or station 120. Those runs are still pinned, just outside the viewport — so the map
        would quietly under-report without ever looking wrong. Rather than widen the frame and shrink
        the west side where nearly all the work happens, say what is off-screen. Pan to reach them. */
-    function offscreenNote(){
-      var el=document.getElementById("dmOff"); if(!el) return;
-      if(!pinsOn || !pinPts.length){ el.hidden=true; return; }
-      var n=0;
-      try{ var b=map.getBounds(); pinPts.forEach(function(p){ if(!b.contains(p)) n++; }); }catch(e){ el.hidden=true; return; }
-      if(n){ el.hidden=false; el.textContent=n+" run"+(n===1?"":"s")+" outside view ↓"; }
-      else el.hidden=true;
-    }
-    map.on("moveend zoomend",offscreenNote);
+    /* runs-outside-view counter RETIRED (officer call 2026-07-28) — its corner pill is now the
+       District toggle. Kept as a no-op so the many call sites stay harmless. */
+    function offscreenNote(){}
     window.BC2FD_CALL_PINS=function(list){
       try{
         pinLayer.clearLayers(); pinPts=[];
@@ -1741,9 +1794,13 @@
        bypasses MIN_GAP/burst — a deliberate tap is not a dispatch storm. No-op while a drone owns
        the map. The run's pin is already plotted by the tally, so nothing is added or removed. */
     window.BC2FD_MAP_PEEK=function(lat,lng){
-      if(lat==null||lng==null||!isFinite(lat)||!isFinite(lng)||!pinsOn) return;
-      focusPts.push({ll:[lat,lng],exp:Date.now()+15000});
+      if(lat==null||lng==null||!isFinite(lat)||!isFinite(lng)) return false;
+      if(!pinsOn) return false;                     /* drone owns the map — tell the caller so the sheet can SAY so instead of silently closing */
+      /* A deliberate officer tap OUTRANKS ambient new-call pulses: replace the focus set instead of
+         joining it, else the peek gets framed WITH a still-pulsing call and reads as "didn't zoom". */
+      focusPts=[{ll:[lat,lng],exp:Date.now()+15000}];
       reframe();
+      return true;
     };
     /* Point `m` metres from lat/lng along a compass bearing — used to draw the operator look-cone. */
     function dest(lat,lng,brgDeg,m){ var R=6378137,br=brgDeg*Math.PI/180,dr=m/R,la=lat*Math.PI/180,lo=lng*Math.PI/180;
@@ -2972,9 +3029,11 @@
                '<span class="rs-wn">'+work[u]+'</span></div>'; }).join("");
       var rows=runs.map(function(c){
         var ty=String(c.type||"").replace(/^(MED|FIRE|MVC|RESCUE|ALARM|ASSIST)\s*-\s*/i,"");
-        var geo=(c.lat!=null&&c.lng!=null)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'';   /* tappable: closes the sheet and peeks the map at this run */
+        /* tappable only with a TRUSTWORTHY coordinate: no-geo rows and geocode-suspect rows (gs —
+           flipped 281 N/S etc.) get a visible "no pin" label instead of a dead tap that looks broken */
+        var geo=(c.lat!=null&&c.lng!=null&&!c.gs)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'';
         var ch=(c.chute>=1)?('<br><i class="rs-ch" title="chute: dispatch to first apparatus'+(c.chuteUnit?(' ('+rtEsc(c.chuteUnit)+')'):'')+'">'+Math.floor(c.chute/60)+':'+('0'+(c.chute%60)).slice(-2)+'</i>'):'';
-        return '<div class="rs-run'+(geo?' rs-go':'')+'"'+geo+'><span class="rs-t">'+rtEsc(dow(c))+' '+rtEsc(hhmm(c))+ch+'</span>'+
+        return '<div class="rs-run'+(geo?' rs-go':' rs-nogeo')+'"'+geo+'><span class="rs-t">'+rtEsc(dow(c))+' '+rtEsc(hhmm(c))+ch+(geo?'':'<br><i class="rs-np">no pin</i>')+'</span>'+
                '<span class="rs-n">'+rtEsc(ty)+'</span>'+
                '<span class="rs-u">'+(function(){
                   var seen={}, out=[];
@@ -3010,9 +3069,16 @@
       var o=document.getElementById("rtSheet"); if(!o) return;
       o.addEventListener("click",function(e){
         var run=e.target.closest && e.target.closest(".rs-run[data-lat]");
-        if(run){ rtClose();   /* tap a run -> collapse the sheet and peek the map at its pin for 15s */
-          try{ if(window.BC2FD_MAP_PEEK) window.BC2FD_MAP_PEEK(parseFloat(run.getAttribute("data-lat")),parseFloat(run.getAttribute("data-lng"))); }catch(err){}
-          return; }
+        if(run){
+          /* Close the sheet ONLY when the peek actually took the map. When drone ops own the wall
+             the peek is refused — flash the row with a "map busy" cue and keep the sheet open,
+             instead of the old silent collapse that read as "zoom is broken". */
+          var ok=false;
+          try{ ok=!!(window.BC2FD_MAP_PEEK && window.BC2FD_MAP_PEEK(parseFloat(run.getAttribute("data-lat")),parseFloat(run.getAttribute("data-lng")))); }catch(err){}
+          if(ok){ rtClose(); return; }
+          run.classList.add("rs-busy");
+          setTimeout(function(){ try{ run.classList.remove("rs-busy"); }catch(e2){} },1600);
+          rtArm(); return; }
         if(e.target===o) rtClose(); else rtArm(); });
       o.addEventListener("scroll",rtArm,true);
       document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !o.hidden) rtClose(); });

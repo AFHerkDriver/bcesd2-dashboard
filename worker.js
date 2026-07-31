@@ -70,6 +70,59 @@ function geoNum(v) {
   return (n >= -180 && n <= 180) ? n : null;
 }
 
+/* ── CAD NOTES PARSER — Active911 crams the dispatcher's running notes into ONE comma-glued
+   `details` string ("always a fucking mess" — the Program Manager). Structure, verified against
+   live payloads 2026-07-31:
+     [optional re-page lines]  "00:00:42 new units: 122B,E122\n" (elapsed-stamped, units already
+                               unioned elsewhere — dropped here)
+     header                    "Channel: EMS5      Apt # if avail:  1103      " — runs STRAIGHT
+                               into the first note with no separator; the apt value is a short
+                               token followed by 2+ spaces (padding), else absent
+     entries                   each note ends "[Shared]" and entries are comma-joined
+     truncation                A911 caps details ~450 chars — the tail entry can be cut mid-word
+   Output: notes[] of {s:0|1, x} (s=1 system/status, 0 caller-scene note), plus extracted
+   apt / caseNo (our BC2 case number) / leNo (BCLE joint incident). Boilerplate that repeats on
+   every call (case-number legalese, RESPOND ON <ch>, closed-incident chatter) is dropped or
+   compacted — the goal is a clean radio-log, not a transcript. */
+function parseNotes(details) {
+  const out = { notes: [], apt: "", caseNo: "", leNo: "" };
+  let d = String(details || "");
+  if (!d) return out;
+  d = d.replace(/^(?:\d{2}:\d{2}:\d{2} new units:[^\n]*\n)+/g, "");        /* re-page lines: units live elsewhere */
+  /* header: pull channel (kept by chan() separately) + apt, leave the glued first note intact */
+  const h = d.match(/^Channel:\s*\S+(?:\s\S+)?\s{2,}Apt # if avail:\s*/);
+  if (h) {
+    d = d.slice(h[0].length);
+    const ap = d.match(/^([A-Za-z0-9-]{1,8})\s{2,}/);                       /* short token + padding = a real apt */
+    if (ap) { out.apt = ap[1]; d = d.slice(ap[0].length); }
+  }
+  /* entries end with [Shared] (comma-joined); the tail after the last tag may be a truncated entry */
+  const parts = d.split(/\[Shared\],?/);
+  const tail = parts.pop();                                                 /* text after the final [Shared] */
+  let tailMode = false;
+  const push = (x, s) => { x = x.replace(/\s+/g, " ").trim(); if (!x) return;
+    out.notes.push({ s: s ? 1 : 0, x: (tailMode && !s) ? x + "…" : x }); };   /* tail entries are A911-truncated — say so */
+  /* system prefixes arrive comma-GLUED to the next real note (no [Shared] of their own) — verified
+     live: "…#: BCSO-2026-0312557,CON AND BREATHING". Each handler peels its prefix, then re-runs
+     the remainder, so nothing human ever gets swallowed by boilerplate. */
+  const classify = (e) => {
+    e = String(e || "").trim(); if (!e) return;
+    let m;
+    if ((m = e.match(/^Multi-Agency BCLE Incident #:\s*([A-Z0-9-]+),?\s*([\s\S]*)$/i))) { out.leNo = m[1]; classify(m[2]); return; }
+    if ((m = e.match(/^\[(\w+)\] has closed their incident(?:\s*\[[A-Z0-9-]+\])?,?\s*([\s\S]*)$/i))) { push(m[1] + " closed their incident", 1); classify(m[2]); return; }
+    if ((m = e.match(/Automatic Case Number\(s\) issued for Incident #\[?([A-Z0-9-]+)/i))) { out.caseNo = m[1]; return; }
+    if (/^Automatic Case/i.test(e)) return;                                 /* truncated legalese — even cut mid-word */
+    if ((m = e.match(/\[Notification\]\s*\[[^\]]*\]-?Problem changed from\s+(.+?)\s+to\s+(.+?)\s+by\b/i))) { push("TYPE CHANGED: " + m[1] + " → " + m[2], 1); return; }
+    if (/^UNITS RESPOND ON\b/i.test(e)) return;                             /* channel already on the card */
+    push(e, 0);                                                             /* a real dispatcher/caller note */
+  };
+  parts.forEach(classify);
+  tailMode = true;
+  classify(tail);                                                           /* the post-[Shared] tail runs the SAME pipeline, flagged truncated */
+  tailMode = false;
+  return out;
+}
+
 /* Station derivation: "122A" (station assignment) -> 122; "UAV124"/"L123" (real unit) -> trailing 3 digits. */
 /* Real apparatus = letters then a 3-digit station (E123, M122, MOF121). Box/still codes (123A) are
    the dispatch response area, not a rig. Shared by station derivation and chute detection. */
@@ -1084,6 +1137,45 @@ export default {
       } catch (e) { return json({ ok: false, error: "uav rollup error" }, 502); }
     }
 
+    /* ── GET /rawcalls?pin=XXXX — ADMIN inspection window into the UNTRIMMED Active911 payloads.
+       The /dispatch relay deliberately keeps only the fields the board uses; this returns the
+       newest few alert objects EXACTLY as A911 sends them (list row + full detail), so we can see
+       what else the feed carries (details/notes structure, map codes, units metadata…) before
+       deciding what to surface. Read-only, nothing stored, tokens never echoed. ── */
+    if (req.method === "GET" && url.pathname === "/rawcalls") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json, "unauthorized");
+      if (gate.res) return gate.res;
+      if ((gate.who.tier || "") !== "admin") return json({ ok: false, error: "admin only" }, 403);
+      if (!env.A911_REFRESH_TOKEN) return json({ ok: false, error: "not configured" }, 501);
+      try {
+        let access = await env.PINS.get("a911:access");
+        if (!access) {
+          const tr = await fetch("https://console.active911.com/interface/dev/api_access.php", {
+            method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "refresh_token=" + encodeURIComponent(env.A911_REFRESH_TOKEN.trim()) });
+          if (!tr.ok) return json({ ok: false, error: "token exchange " + tr.status }, 502);
+          const tj = await tr.json();
+          access = tj && tj.access_token;
+          if (!access) return json({ ok: false, error: "no access token" }, 502);
+          await env.PINS.put("a911:access", access, { expirationTtl: 20 * 3600 });
+        }
+        const H = { "Authorization": "Bearer " + access, "Accept": "application/json" };
+        const API = "https://access.active911.com/interface/open_api/api";
+        const n = Math.min(parseInt(url.searchParams.get("n") || "3", 10) || 3, 6);
+        const win = Math.min(parseInt(url.searchParams.get("minutes") || "720", 10) || 720, 2880);
+        const lr = await fetch(API + "/alerts?alert_minutes=" + win, { headers: H });
+        if (!lr.ok) return json({ ok: false, error: "alerts " + lr.status }, 502);
+        const lj = await lr.json();
+        const list = (lj && lj.message && Array.isArray(lj.message.alerts)) ? lj.message.alerts : [];
+        const ids = list.map(a => a && a.id).filter(Boolean).sort((a, b) => Number(b) - Number(a)).slice(0, n);
+        const dets = await Promise.all(ids.map(id =>
+          fetch(API + "/alerts/" + id, { headers: H }).then(r => (r.ok ? r.json() : null)).catch(() => null)));
+        return json({ ok: true, window_minutes: win, list_count: list.length,
+          list_row_sample: list[0] || null,
+          alerts: dets.map(d => (d && d.message && d.message.alert) || null) }, 200);
+      } catch (e) { return json({ ok: false, error: "rawcalls error" }, 502); }
+    }
+
     if (req.method === "GET" && url.pathname === "/dupes") {
       const gate = await pinGate(env, ip, url.searchParams.get("pin"), json, "unauthorized — add ?pin=<station pin>");
       if (gate.res) return gate.res;
@@ -1373,6 +1465,10 @@ export default {
             msf: (() => { const d = String(a.details || "").trim();
               if (!d) return undefined;
               return /LSW|LAST\s+SEEN|MISSING|SILVER\s*ALERT|DEMENTIA|ALZHEIM|WANDER|\bSEARCH\b|\bLOST\b/i.test(d) ? 1 : 0; })(),
+            mapc:    String(a.map_code || "").trim(),               /* map book page (verified live: "645D3") */
+            /* CLEANED CAD NOTES — live response ONLY (stripped before the KV log write below):
+               same PII stance as msf. The MDT renders these as the readable radio log. */
+            ...parseNotes(a.details),
           });
         }
         return { ok: true, calls };
@@ -1445,6 +1541,11 @@ export default {
                 const uk = String(u).toUpperCase(); if (u && !seenU[uk]) { seenU[uk] = 1; merged.push(u); }
               }
               canon.units = merged;
+              /* a re-tone usually carries the LONGER notes log — the canonical adopts the richer one */
+              if (Array.isArray(c.notes) && (!Array.isArray(canon.notes) || c.notes.length > canon.notes.length)) {
+                canon.notes = c.notes;
+                if (c.apt) canon.apt = c.apt; if (c.caseNo) canon.caseNo = c.caseNo; if (c.leNo) canon.leNo = c.leNo;
+              }
               /* The dupe's LOG ROW is keyed by ITS cad_code when it has one — deleting only call:<id>
                  left cad-keyed dupe rows alive in the 48h log (today's doubles). Record both keys;
                  same-cad rows were already unioned upstream, so this can never delete the canonical. */
@@ -1517,6 +1618,7 @@ export default {
             c.units = merged;
             if (c.id || c.cad_code) {
               await env.PINS.put(k, JSON.stringify({ ...c, stations: stationsOf(c.units), logged: c.logged,
+                                 notes: undefined,   /* narrative stays LIVE-ONLY — same PII stance as msf */
                                  chute: chute != null ? chute : null, chuteUnit: chuteUnit || "" }),
                                  { expirationTtl: 48 * 3600 });
               if (c.cad_code && c.id && ("call:" + c.id) !== k) { try { await env.PINS.delete("call:" + c.id); } catch (e) {} }
@@ -1678,14 +1780,24 @@ export default {
                        vis: ["always", "oncall", "off"].includes(u.vis) ? u.vis : "oncall",
                        fam: ["app", "rb", "amber"].includes(u.fam) ? u.fam : "rb",
                        cmd: u.cmd ? 1 : 0, fmo: u.fmo ? 1 : 0, mk: String(u.mk || "").slice(0, 48),
-                       yr: String(u.yr || "").replace(/\D/g, "").slice(0, 4), rsv });
+                       yr: String(u.yr || "").replace(/\D/g, "").slice(0, 4), rsv,
+                       nt: String(u.nt || "").slice(0, 140) });   /* free-text notes — pump size, quirks, assignments */
         }
         const prev = await env.PINS.get("avlroster");
+        /* OPTIMISTIC CONCURRENCY — the missing half of the stale-draft defense. The client-side
+           dts/at check only runs at page LOAD; a tab left open for days happily posts last week's
+           roster over today's (observed live 2026-07-28 — an earlier save was silently reverted).
+           Every save must now prove it was based on the CURRENT server copy: the client echoes the
+           `at` stamp it loaded (baseAt); a mismatch = someone saved since = 409, nothing written. */
+        let prevAt = 0; try { prevAt = prev ? (JSON.parse(prev).at || 0) : 0; } catch (e) {}
+        if (prevAt && (parseInt(body.baseAt, 10) || 0) !== prevAt)
+          return json({ ok: false, error: "stale — a newer roster was saved after this page loaded", at: prevAt }, 409);
         if (prev) await env.PINS.put("avlroster:bak", prev);   /* every save banks the previous copy — one-step undo */
-        await env.PINS.put("avlroster", JSON.stringify({ v: 1, sv: parseInt(roster.sv, 10) || 1, at: Date.now(), units }));   /* sv = fleet-seed version absorbed; at = save stamp so stale drafts can't outrank this copy */
+        const at = Date.now();
+        await env.PINS.put("avlroster", JSON.stringify({ v: 1, sv: parseInt(roster.sv, 10) || 1, at, units }));   /* sv = fleet-seed version absorbed; at = save stamp so stale drafts can't outrank this copy */
         await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
                                action: "updated fleet GPS roster (" + units.length + " units)" });
-        return json({ ok: true, n: units.length }, 200);
+        return json({ ok: true, n: units.length, at }, 200);
       }
       return json({ ok: false, error: "method" }, 405);
     }

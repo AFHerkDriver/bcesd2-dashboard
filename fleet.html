@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="favicon.ico" sizes="48x48">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<title>BC2FD — Fleet GPS Roster</title>
+<title>BC2FD - Fleet GPS Roster</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -55,6 +55,28 @@
     background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;min-height:36px;
     -webkit-appearance:none;appearance:none}
   input:focus,select:focus{outline:none;border-color:var(--accent)}
+  /* NOTHING bright white: native widgets + iOS autofill forced dark */
+  :root{color-scheme:dark}
+  input,select,textarea{background:var(--panel2);color:var(--text)}
+  input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus{
+    -webkit-box-shadow:0 0 0 40px var(--panel2) inset;-webkit-text-fill-color:var(--text);caret-color:var(--text)}
+  /* home-station tap chips */
+  .mkrow{display:flex;align-items:center;gap:6px;margin-top:2px}
+  .mkrow .yr{font-size:11px;color:var(--dim);flex:0 0 auto}
+  input.mk-in{font-size:12px;color:var(--dim);background:none;border:none;border-bottom:1px dashed transparent;
+    border-radius:0;padding:1px 0;min-height:0;width:100%}
+  input.mk-in:focus{outline:none;border-bottom-color:var(--accent);color:var(--text)}
+  input.nt-in{font-size:11px;color:var(--amber);background:none;border:none;border-bottom:1px dashed transparent;
+    border-radius:0;padding:1px 0;min-height:0;width:100%;margin-top:2px}
+  input.nt-in::placeholder{color:#4d5566}
+  input.nt-in:focus{outline:none;border-bottom-color:var(--accent)}
+  .stn-chips{display:flex;gap:4px;flex-wrap:wrap}
+  .stn-c{font-family:'DM Mono',monospace;font-size:11px;padding:4px 7px;border:1px solid var(--border);
+    border-radius:6px;background:var(--panel2);color:var(--dim);cursor:pointer;line-height:1}
+  .stn-c.on{border-color:var(--accent);color:var(--accent);background:rgba(255,107,53,.14);font-weight:600}
+  .restore-link{display:block;margin:8px auto 0;background:none;border:none;color:var(--dim);
+    font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.5px;cursor:pointer;text-decoration:underline}
+  .restore-link.armed{color:var(--red)}
   .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   @media(min-width:700px){ .row{grid-template-columns:repeat(4,minmax(0,1fr))} }
   .row > *{min-width:0}
@@ -169,7 +191,7 @@
       <div class="field"><label>Year</label><input type="tel" id="aYr" placeholder="2025" maxlength="4" autocomplete="off"></div>
       <div class="field"><label>Make / Model</label><input type="text" id="aMk" placeholder="Pierce Engine" maxlength="48" autocomplete="off"></div>
       <div class="field"><label>Home Station</label>
-        <input type="text" id="aStn" placeholder="121 or 121/124" maxlength="12" autocomplete="off"></div>
+        <div class="stn-chips" id="aStnChips"></div></div>
       <div class="field"><label>Reserve</label>
         <div class="seg" id="aRsvSeg"><button data-v="no" class="on" type="button">&mdash;</button><button data-v="yes" type="button">RESERVE</button></div></div>
       <div class="field"><label>&nbsp;</label><button class="btn primary" id="aAdd" style="width:100%;min-height:36px">+ ADD</button></div>
@@ -182,6 +204,7 @@
   <div class="savebar">
     <button class="btn primary" id="save">SAVE ROSTER</button>
     <div class="stat" id="stat"></div>
+    <button class="restore-link" id="restoreBtn" type="button">restore previous save</button>
   </div>
 </div>
 
@@ -200,6 +223,11 @@
 var AUTH_URL='https://bc2fd-dash-auth.usafsentinel-45e.workers.dev';   /* same worker as control */
 var SKEY='bc2fd_ctl_auth';                                             /* shared session with control.html */
 var DRAFT='bc2fd_fleet_draft';
+/* home stations as tap-chips (multi-select -> slash list) — cleaner than typing, always valid */
+var STN_LIST=['120','121','122','123','124','125','161','162'];
+function stnChips(st){ var on=String(st||'').split('/').filter(Boolean);
+  return '<div class="stn-chips">'+STN_LIST.map(function(s){
+    return '<button type="button" class="stn-c'+(on.indexOf(s)>=0?' on':'')+'" data-s="'+s+'">'+s+'</button>'; }).join('')+'</div>'; }
 
 /* ── unit typing: callsign prefix → display group, icon family, command flag ──
    Families match the badge blanks on unit-demo.html: app = multicolor apparatus bar,
@@ -274,7 +302,7 @@ function render(){
       var t=typeOf(u.cs);
       html+='<div class="unit-row" data-i="'+u._i+'">'
         +'<div><input class="cs'+(u.cs.length>8?' sm':'')+'" value="'+esc(u.cs)+'" placeholder="&mdash;" maxlength="26" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
-        +((u.mk||u.yr)?'<div class="mk">'+esc(((u.yr?u.yr+' ':'')+(u.mk||'')).trim())+'</div>':'')
+        +'<div class="mkrow">'+(u.yr?'<span class="yr">'+esc(u.yr)+'</span>':'')+'<input class="mk-in" value="'+esc(u.mk||'')+'" placeholder="make / model" maxlength="48" autocomplete="off"></div>'+'<input class="nt-in" value="'+esc(u.nt||'')+'" placeholder="Notes" maxlength="140" autocomplete="off">'
         +'<button class="fam '+(u.fam||'rb')+'" type="button" title="Tap to cycle lightbar style">'+barLabel(u.fam)+'</button>'
         +(u.cmd?'<span class="fam cmd" style="margin-left:4px">CMD</span>':'')
         +'<button class="rsv'+(u.rsv?' on':'')+'">RESERVE</button></div>'
@@ -284,7 +312,7 @@ function render(){
             +'<button data-v="oncall" class="'+(u.vis==='oncall'?'on':'')+'">ON-CALL</button>'
             +'<button data-v="off"    class="'+(u.vis==='off'   ?'on':'')+'">OFF</button>'
           +'</div>'
-          +'<div class="stn"><label>Home stn</label><input class="stn-in" value="'+esc(u.st||'')+'" placeholder="&mdash;" maxlength="12" autocomplete="off"></div>'
+          +'<div class="stn"><label>Home stn</label>'+stnChips(u.st)+'</div>'
         +'</div>'
         +'<button class="del" title="Remove">✕</button>'
       +'</div>';
@@ -305,6 +333,10 @@ function markDirty(){
 document.getElementById('roster').addEventListener('click',function(ev){
   var row=ev.target.closest('.unit-row'); if(!row) return;
   var i=parseInt(row.getAttribute('data-i'),10); var u=roster.units[i]; if(!u) return;
+  var sc=ev.target.closest('.stn-c');
+  if(sc){ sc.classList.toggle('on');
+    u.st=Array.prototype.map.call(row.querySelectorAll('.stn-c.on'),function(b){return b.getAttribute('data-s');}).join('/');
+    markDirty(); return; }
   if(ev.target.classList.contains('del')){
     if(row.dataset.armed){ roster.units.splice(i,1); markDirty(); render(); }
     else{ row.dataset.armed='1'; ev.target.style.borderColor='var(--red)'; ev.target.style.color='var(--red)';
@@ -336,6 +368,16 @@ document.getElementById('roster').addEventListener('change',function(ev){
     var st=ev.target.value.trim();
     if(!stOk(st)){ ev.target.classList.add('bad'); ev.target.value=u.st||''; setTimeout(function(){ ev.target.classList.remove('bad'); },1200); return; }
     if(st!==(u.st||'')){ u.st=st; markDirty(); }
+    return;
+  }
+  if(ev.target.classList.contains('mk-in')){
+    var mk=ev.target.value.trim().slice(0,48);
+    if(mk!==(u.mk||'')){ u.mk=mk; markDirty(); }
+    return;
+  }
+  if(ev.target.classList.contains('nt-in')){
+    var nt=ev.target.value.trim().slice(0,140);
+    if(nt!==(u.nt||'')){ u.nt=nt; markDirty(); }
     return;
   }
   if(ev.target.classList.contains('cs')){
@@ -380,14 +422,13 @@ document.getElementById('aAdd').addEventListener('click',function(){
   if(roster.units.some(function(u){ return u.reg===reg; })){
     aReg.style.borderColor='var(--amber)'; setTimeout(function(){aReg.style.borderColor='';},1200); return;
   }
-  var aStnEl=document.getElementById('aStn'), stv=aStnEl.value.replace(/[^0-9\/]/g,'').trim();
-  if(!stOk(stv)){ aStnEl.focus(); aStnEl.style.borderColor='var(--red)'; setTimeout(function(){aStnEl.style.borderColor='';},1200); return; }
+  var stv=Array.prototype.map.call(document.querySelectorAll('#aStnChips .stn-c.on'),function(b){return b.getAttribute('data-s');}).join('/');
   var t=typeOf(cs);
   roster.units.push({reg:reg,cs:cs,st:stv,
     vis:aRsv?'off':defVis(t),fam:t.fam,cmd:t.cmd?1:0,
     mk:document.getElementById('aMk').value.trim().slice(0,48),
     yr:document.getElementById('aYr').value.replace(/\D/g,'').slice(0,4),rsv:aRsv?1:0});
-  aReg.value=''; aCs.value=''; document.getElementById('aMk').value=''; document.getElementById('aYr').value=''; document.getElementById('aStn').value='';
+  aReg.value=''; aCs.value=''; document.getElementById('aMk').value=''; document.getElementById('aYr').value=''; document.querySelectorAll('#aStnChips .stn-c.on').forEach(function(bb){ bb.classList.remove('on'); });
   document.getElementById('aPrev').innerHTML='&nbsp;';
   markDirty(); render();
 });
@@ -396,7 +437,7 @@ document.getElementById('aAdd').addEventListener('click',function(){
 function normalize(){
   roster.units.forEach(function(u){
     if(u.cs){ var t=typeOf(u.cs); if(!u.fmo) u.fam=t.fam; u.cmd=t.cmd?1:0; }   /* nameless reserves + manual overrides keep their family */
-    u.fmo=u.fmo?1:0; u.rsv=u.rsv?1:0; u.mk=String(u.mk||'').slice(0,48); u.yr=String(u.yr||'').slice(0,4); delete u._i;
+    u.fmo=u.fmo?1:0; u.rsv=u.rsv?1:0; u.mk=String(u.mk||'').slice(0,48); u.yr=String(u.yr||'').slice(0,4); u.nt=String(u.nt||'').slice(0,140); delete u._i;
   });
 }
 /* Seed from the pre-mapped Fleet Master List (fleet-seed.json), as an unsaved draft —
@@ -483,7 +524,7 @@ function load(){
     .catch(function(err){
       if(err==='no-endpoint') document.getElementById('wkNote').hidden=false;
       var d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT)||'null'); }catch(e){}
-      if(d&&Array.isArray(d.units)){ roster=d; mergeSeed(); return; }
+      if(d&&Array.isArray(d.units)&&(d.dts||0)>Date.now()-48*3600*1000){ roster=d; mergeSeed(); return; }   /* offline fallback only for a RECENT draft — an ancient one must not resurrect */
       seedIfEmpty();
     });
 }
@@ -492,19 +533,52 @@ document.getElementById('save').addEventListener('click',function(){
   var stat=document.getElementById('stat');
   stat.textContent='saving…'; stat.className='stat';
   fetch(AUTH_URL+'/roster',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({pin:pin(),roster:roster})})
-    .then(function(r){ if(r.status===404) throw 'no-endpoint'; return r.json(); })
+    body:JSON.stringify({pin:pin(),roster:roster,baseAt:roster.at||0})})   /* baseAt: prove this save is built on the current server copy */
+    .then(function(r){ if(r.status===404) throw 'no-endpoint'; if(r.status===409) throw 'stale'; return r.json(); })
     .then(function(j){
       if(!j.ok) throw (j.error||'save failed');
+      if(j.at) roster.at=j.at;                       /* our copy is now the current server copy */
       dirty=false; document.getElementById('save').classList.remove('dirty');
       try{ localStorage.removeItem(DRAFT); }catch(e){}
       stat.textContent='saved — '+j.n+' units live'; stat.className='stat ok';
     })
     .catch(function(err){
-      if(err==='no-endpoint'){ document.getElementById('wkNote').hidden=false; stat.textContent='kept as local draft (worker missing /roster)'; stat.className='stat bad'; }
+      if(err==='stale'){
+        try{ localStorage.removeItem(DRAFT); }catch(e){}
+        dirty=false; document.getElementById('save').classList.remove('dirty');
+        stat.textContent='a NEWER roster was saved elsewhere — reloading it now; re-apply your edits'; stat.className='stat bad';
+        setTimeout(load,900); }
+      else if(err==='no-endpoint'){ document.getElementById('wkNote').hidden=false; stat.textContent='kept as local draft (worker missing /roster)'; stat.className='stat bad'; }
       else{ stat.textContent=String(err); stat.className='stat bad'; }
     });
 });
+
+/* restore previous save — two-tap confirm; the worker banks a backup on every save */
+(function(){ var b=document.getElementById('restoreBtn'); if(!b) return;
+  var armed=false, tmr=null;
+  b.addEventListener('click',function(){
+    var stat=document.getElementById('stat');
+    if(!armed){ armed=true; b.classList.add('armed'); b.textContent='tap again to RESTORE the previous save';
+      tmr=setTimeout(function(){ armed=false; b.classList.remove('armed'); b.textContent='restore previous save'; },3500); return; }
+    clearTimeout(tmr); armed=false; b.classList.remove('armed'); b.textContent='restoring…';
+    fetch(AUTH_URL+'/roster',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pin:pin(),restore:true})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        b.textContent='restore previous save';
+        if(!j.ok){ stat.textContent=String(j.error||'restore failed'); stat.className='stat bad'; return; }
+        try{ localStorage.removeItem(DRAFT); }catch(e){}
+        stat.textContent='previous save restored — reloading'; stat.className='stat ok';
+        setTimeout(load,700);
+      })
+      .catch(function(){ b.textContent='restore previous save'; stat.textContent='restore failed — network'; stat.className='stat bad'; });
+  });
+})();
+/* add-form station chips */
+(function(){ var el=document.getElementById('aStnChips'); if(!el) return;
+  el.innerHTML=STN_LIST.map(function(s){ return '<button type="button" class="stn-c" data-s="'+s+'">'+s+'</button>'; }).join('');
+  el.addEventListener('click',function(ev){ var b=ev.target.closest('.stn-c'); if(b) b.classList.toggle('on'); });
+})();
 
 /* ── PIN gate: reuse the control-panel session; prompt only if absent/invalid ── */
 function gateFail(txt){
