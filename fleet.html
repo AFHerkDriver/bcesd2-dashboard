@@ -97,7 +97,8 @@
   .unit-row .mid{display:grid;gap:6px}
   .unit-row .mid .stn{display:flex;align-items:center;gap:8px}
   .unit-row .mid .stn label{font-size:10px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;flex:0 0 auto}
-  .unit-row .mid select{min-height:32px;font-size:14px;padding:5px 8px;width:auto;flex:1 1 auto}
+  .unit-row .mid input.stn-in{min-height:32px;font-size:14px;padding:5px 8px;width:auto;flex:1 1 auto}
+  .unit-row .mid input.stn-in.bad{border-color:var(--red);color:var(--red)}
   .unit-row .del{background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);
     font-family:'DM Mono',monospace;font-size:14px;width:34px;height:34px;cursor:pointer;align-self:start}
   .unit-row .del:hover{border-color:var(--red);color:var(--red)}
@@ -152,7 +153,7 @@
       <div class="field"><label>Year</label><input type="tel" id="aYr" placeholder="2025" maxlength="4" autocomplete="off"></div>
       <div class="field"><label>Make / Model</label><input type="text" id="aMk" placeholder="Pierce Engine" maxlength="48" autocomplete="off"></div>
       <div class="field"><label>Home Station</label>
-        <select id="aStn"><option value="">&mdash;</option><option>121</option><option>122</option><option>123</option><option>124</option><option>125</option><option>161</option><option>162</option><option>163</option></select></div>
+        <input type="text" id="aStn" placeholder="121 or 121/124" maxlength="12" inputmode="numeric" autocomplete="off"></div>
       <div class="field"><label>Reserve</label>
         <div class="seg" id="aRsvSeg"><button data-v="no" class="on" type="button">&mdash;</button><button data-v="yes" type="button">RESERVE</button></div></div>
       <div class="field"><label>&nbsp;</label><button class="btn primary" id="aAdd" style="width:100%;min-height:36px">+ ADD</button></div>
@@ -213,7 +214,10 @@ var TYPES=[
   {p:'MX',  g:'Maintenance',        fam:'amber'}
 ];
 var GROUP_ORDER=['Engines','Aerials','Medics','Command','Tenders','Brush & Attack','Squads & Rescue','UAV','MOF & Air','Utility & Admin','Maintenance','Other','Reserve'];
-var STATIONS=['','121','122','123','124','125','161','162','163'];
+/* home station accepts a slash list too (121/124): the rig hides when idle at ANY of them */
+function stOk(st){
+  return st===''||/^\d{2,4}(\/\d{2,4}){0,2}$/.test(st);
+}
 /* A shared rig may carry slash-separated callsigns ("MOF123/UAV121") — dispatch matches
    ANY of them and the badge wears the one the call was assigned; idle wears the FIRST.
    Type/family/grouping run off the first. */
@@ -259,10 +263,7 @@ function render(){
             +'<button data-v="oncall" class="'+(u.vis==='oncall'?'on':'')+'">ON-CALL</button>'
             +'<button data-v="off"    class="'+(u.vis==='off'   ?'on':'')+'">OFF</button>'
           +'</div>'
-          +'<div class="stn"><label>Home stn</label><select>'
-            +STATIONS.map(function(s){
-               return '<option value="'+s+'"'+(String(u.st||'')===s?' selected':'')+'>'+(s||'—')+'</option>'; }).join('')
-          +'</select></div>'
+          +'<div class="stn"><label>Home stn</label><input class="stn-in" value="'+esc(u.st||'')+'" placeholder="&mdash;" maxlength="12" inputmode="numeric" autocomplete="off"></div>'
         +'</div>'
         +'<button class="del" title="Remove">✕</button>'
       +'</div>';
@@ -303,7 +304,12 @@ document.getElementById('roster').addEventListener('click',function(ev){
 document.getElementById('roster').addEventListener('change',function(ev){
   var row=ev.target.closest('.unit-row'); if(!row) return;
   var u=roster.units[parseInt(row.getAttribute('data-i'),10)]; if(!u) return;
-  if(ev.target.tagName==='SELECT'){ u.st=ev.target.value; markDirty(); return; }
+  if(ev.target.classList.contains('stn-in')){
+    var st=ev.target.value.trim();
+    if(!stOk(st)){ ev.target.classList.add('bad'); ev.target.value=u.st||''; setTimeout(function(){ ev.target.classList.remove('bad'); },1200); return; }
+    if(st!==(u.st||'')){ u.st=st; markDirty(); }
+    return;
+  }
   if(ev.target.classList.contains('cs')){
     var cs=ev.target.value.toUpperCase().trim();
     if(cs===''&&u.rsv){ if(u.cs!==''){ u.cs=''; markDirty(); render(); } return; }   /* reserve rigs may go nameless */
@@ -315,6 +321,8 @@ document.getElementById('roster').addEventListener('change',function(ev){
 document.getElementById('roster').addEventListener('input',function(ev){
   if(ev.target.classList&&ev.target.classList.contains('cs'))
     ev.target.value=ev.target.value.toUpperCase().replace(/[^A-Z0-9\/]/g,'');
+  if(ev.target.classList&&ev.target.classList.contains('stn-in'))
+    ev.target.value=ev.target.value.replace(/[^0-9\/]/g,'');
 });
 
 /* ── add form ── */
@@ -344,8 +352,10 @@ document.getElementById('aAdd').addEventListener('click',function(){
   if(roster.units.some(function(u){ return u.reg===reg; })){
     aReg.style.borderColor='var(--amber)'; setTimeout(function(){aReg.style.borderColor='';},1200); return;
   }
+  var aStnEl=document.getElementById('aStn'), stv=aStnEl.value.replace(/[^0-9\/]/g,'').trim();
+  if(!stOk(stv)){ aStnEl.focus(); aStnEl.style.borderColor='var(--red)'; setTimeout(function(){aStnEl.style.borderColor='';},1200); return; }
   var t=typeOf(cs);
-  roster.units.push({reg:reg,cs:cs,st:document.getElementById('aStn').value,
+  roster.units.push({reg:reg,cs:cs,st:stv,
     vis:aRsv?'off':defVis(t),fam:t.fam,cmd:t.cmd?1:0,
     mk:document.getElementById('aMk').value.trim().slice(0,48),
     yr:document.getElementById('aYr').value.replace(/\D/g,'').slice(0,4),rsv:aRsv?1:0});

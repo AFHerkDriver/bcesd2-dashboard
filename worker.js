@@ -1660,7 +1660,9 @@ export default {
             return json({ ok: false, error: "bad callsign: " + cs }, 400);
           if (seen.has(reg)) return json({ ok: false, error: "duplicate reg: " + reg }, 400);
           seen.add(reg);
-          units.push({ reg, cs, st: String(u.st || "").slice(0, 8),
+          const st = String(u.st || "").trim();
+          if (!/^$|^\d{2,4}(\/\d{2,4}){0,2}$/.test(st)) return json({ ok: false, error: "bad station: " + st }, 400);   /* slash list ok: hides idle at ANY listed station */
+          units.push({ reg, cs, st,
                        vis: ["always", "oncall", "off"].includes(u.vis) ? u.vis : "oncall",
                        fam: ["app", "rb", "amber"].includes(u.fam) ? u.fam : "rb",
                        cmd: u.cmd ? 1 : 0, mk: String(u.mk || "").slice(0, 48),
