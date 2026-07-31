@@ -55,11 +55,12 @@
   .gl.cr { right: 3%; width: 26%; height: 26%; top: 5%; filter: blur(2px);
            background: radial-gradient(ellipse at center, rgba(90,255,130,1), rgba(90,255,130,0) 78%); }
   @keyframes cmdpulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
-  .cmd .gl.cl, .cmd .gl.cr { animation: cmdpulse 1.6s ease-in-out infinite; }
+  .cmd .gl.cl, .cmd .gl.cr { animation: cmdpulse 2.2s ease-in-out infinite; }
   /* the corner LEDs are pixels at map size — the HALO is what carries "command established"
-     across the room: a breathing green ring around the whole badge, same 1.6 s rhythm */
+     across the room: a breathing green ring around the whole badge, same 2.2 s breath as the
+     on-scene halos so every scene glow shares one rhythm */
   .cmd::after { content: ""; position: absolute; inset: -2px; border-radius: 18%; pointer-events: none;
-                animation: cmdhalo 1.6s ease-in-out infinite; }
+                animation: cmdhalo 2.2s ease-in-out infinite; }
   @keyframes cmdhalo {
     0%, 100% { box-shadow: 0 0 2px 1px rgba(70,255,120,.3); }
     50%      { box-shadow: 0 0 10px 4px rgba(70,255,120,.95), 0 0 24px 9px rgba(70,255,120,.45); }
