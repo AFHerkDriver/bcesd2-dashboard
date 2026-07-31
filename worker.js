@@ -1652,14 +1652,16 @@ export default {
         for (const u of roster.units) {
           const reg = String(u.reg || "").trim().toUpperCase();
           const cs  = String(u.cs  || "").trim().toUpperCase();
+          const rsv = u.rsv ? 1 : 0;
           if (!/^[0-9][0-9A-Z-]{0,9}$/.test(reg)) return json({ ok: false, error: "bad reg: " + reg }, 400);   /* exactly as the fleet master lists it: 31925, 21323-G, 6459, 802 */
-          if (!/^[A-Z][A-Z0-9]{1,7}$/.test(cs)) return json({ ok: false, error: "bad callsign: " + cs  }, 400);
+          if (!(rsv && cs === "") && !/^[A-Z][A-Z0-9]{1,7}$/.test(cs))                                          /* reserve rigs may be nameless */
+            return json({ ok: false, error: "bad callsign: " + cs }, 400);
           if (seen.has(reg)) return json({ ok: false, error: "duplicate reg: " + reg }, 400);
           seen.add(reg);
           units.push({ reg, cs, st: String(u.st || "").slice(0, 8),
                        vis: ["always", "oncall", "off"].includes(u.vis) ? u.vis : "oncall",
                        fam: ["app", "rb", "amber"].includes(u.fam) ? u.fam : "rb",
-                       cmd: u.cmd ? 1 : 0 });
+                       cmd: u.cmd ? 1 : 0, mk: String(u.mk || "").slice(0, 48), rsv });
         }
         await env.PINS.put("avlroster", JSON.stringify({ v: 1, units }));
         await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",

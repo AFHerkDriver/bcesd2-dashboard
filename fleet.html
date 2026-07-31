@@ -66,6 +66,8 @@
   .seg button[data-v=always].on{background:var(--green);color:#000;font-weight:500}
   .seg button[data-v=oncall].on{background:var(--blue);color:#fff;font-weight:500}
   .seg button[data-v=off].on{background:var(--red);color:#fff;font-weight:500}
+  #aRsvSeg button[data-v=no].on{background:var(--panel);color:var(--text)}
+  #aRsvSeg button[data-v=yes].on{background:var(--amber);color:#000;font-weight:700}
 
   /* Roster groups + unit rows */
   .grp-h{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;color:var(--dim);
@@ -80,6 +82,12 @@
   .unit-row input.cs:focus{outline:none;border-bottom:1px solid var(--accent)}
   .unit-row input.cs.bad{color:var(--red);border-bottom-color:var(--red)}
   .unit-row .reg{font-size:11px;color:var(--dim);letter-spacing:1px}
+  .unit-row .mk{font-size:11px;color:var(--dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* reserve chip — tap to toggle; checked = amber, callsign may stay blank */
+  .unit-row .rsv{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);
+    color:var(--dim);background:none;display:inline-block;margin:4px 0 0 4px;font-family:'DM Mono',monospace;
+    cursor:pointer;-webkit-appearance:none;appearance:none}
+  .unit-row .rsv.on{border-color:var(--amber);color:#000;background:var(--amber);font-weight:700}
   .unit-row .fam{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);color:var(--dim);display:inline-block;margin-top:4px}
   .unit-row .fam.app{border-color:var(--red);color:var(--red)}
   .unit-row .fam.rb{border-color:var(--blue);color:var(--blue)}
@@ -138,8 +146,11 @@
     <div class="row">
       <div class="field"><label>Dept Reg</label><input type="text" id="aReg" placeholder="31925" maxlength="10" autocomplete="off" autocapitalize="characters"></div>
       <div class="field"><label>Radio Callsign</label><input type="text" id="aCs" placeholder="E121" maxlength="8" autocomplete="off" autocapitalize="characters"></div>
+      <div class="field"><label>Make / Model</label><input type="text" id="aMk" placeholder="Pierce Engine" maxlength="48" autocomplete="off"></div>
       <div class="field"><label>Home Station</label>
         <select id="aStn"><option value="">&mdash;</option><option>121</option><option>122</option><option>123</option><option>124</option><option>125</option><option>161</option><option>162</option><option>163</option></select></div>
+      <div class="field"><label>Reserve</label>
+        <div class="seg" id="aRsvSeg"><button data-v="no" class="on" type="button">&mdash;</button><button data-v="yes" type="button">RESERVE</button></div></div>
       <div class="field"><label>&nbsp;</label><button class="btn primary" id="aAdd" style="width:100%;min-height:36px">+ ADD</button></div>
     </div>
     <div class="hint" id="aPrev" style="margin-top:0">&nbsp;</div>
@@ -197,7 +208,7 @@ var TYPES=[
   {p:'ADM', g:'Utility & Admin',    fam:'rb'},
   {p:'MX',  g:'Maintenance',        fam:'amber'}
 ];
-var GROUP_ORDER=['Engines','Aerials','Medics','Command','Tenders','Brush & Attack','Squads & Rescue','UAV','MOF & Air','Utility & Admin','Maintenance','Other'];
+var GROUP_ORDER=['Engines','Aerials','Medics','Command','Tenders','Brush & Attack','Squads & Rescue','UAV','MOF & Air','Utility & Admin','Maintenance','Other','Reserve'];
 var STATIONS=['','121','122','123','124','125','161','162','163'];
 function typeOf(cs){
   var pfx=(String(cs).toUpperCase().match(/^[A-Z]+/)||[''])[0];
@@ -218,17 +229,19 @@ function render(){
   var host=document.getElementById('roster');
   if(!roster.units.length){ host.innerHTML='<div class="empty">No units yet &mdash; add the first one above.</div>'; return; }
   var groups={};
-  roster.units.forEach(function(u,i){ u._i=i; var g=typeOf(u.cs).g; (groups[g]=groups[g]||[]).push(u); });
+  roster.units.forEach(function(u,i){ u._i=i; var g=u.rsv?'Reserve':typeOf(u.cs).g; (groups[g]=groups[g]||[]).push(u); });
   var html='';
   GROUP_ORDER.forEach(function(g){
     if(!groups[g]) return;
-    groups[g].sort(function(a,b){ return a.cs<b.cs?-1:a.cs>b.cs?1:0; });
+    groups[g].sort(function(a,b){ var x=a.cs||a.reg,y=b.cs||b.reg; return x<y?-1:x>y?1:0; });
     html+='<div class="grp-h">'+esc(g)+' <span class="n">'+groups[g].length+'</span></div>';
     groups[g].forEach(function(u){
       var t=typeOf(u.cs);
       html+='<div class="unit-row" data-i="'+u._i+'">'
-        +'<div><input class="cs" value="'+esc(u.cs)+'" maxlength="8" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
-        +'<span class="fam '+(t.cmd?'cmd':t.fam)+'">'+famLabel(t)+'</span></div>'
+        +'<div><input class="cs" value="'+esc(u.cs)+'" placeholder="&mdash;" maxlength="8" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
+        +(u.mk?'<div class="mk">'+esc(u.mk)+'</div>':'')
+        +(u.cs?'<span class="fam '+(t.cmd?'cmd':t.fam)+'">'+famLabel(t)+'</span>':'')
+        +'<button class="rsv'+(u.rsv?' on':'')+'">RESERVE</button></div>'
         +'<div class="mid">'
           +'<div class="seg" role="group">'
             +'<button data-v="always" class="'+(u.vis==='always'?'on':'')+'">ALWAYS</button>'
@@ -264,6 +277,15 @@ document.getElementById('roster').addEventListener('click',function(ev){
           setTimeout(function(){ delete row.dataset.armed; try{ ev.target.style.borderColor=''; ev.target.style.color=''; }catch(e){} },2500); }
     return;
   }
+  if(ev.target.classList.contains('rsv')){
+    if(u.rsv&&!u.cs){                      /* leaving reserve needs a callsign first */
+      var inp=row.querySelector('input.cs');
+      inp.classList.add('bad'); inp.focus();
+      setTimeout(function(){ inp.classList.remove('bad'); },1200);
+      return;
+    }
+    u.rsv=u.rsv?0:1; markDirty(); render(); return;
+  }
   var seg=ev.target.closest('.seg button');
   if(seg){ u.vis=seg.getAttribute('data-v'); markDirty(); render(); }
 });
@@ -273,6 +295,7 @@ document.getElementById('roster').addEventListener('change',function(ev){
   if(ev.target.tagName==='SELECT'){ u.st=ev.target.value; markDirty(); return; }
   if(ev.target.classList.contains('cs')){
     var cs=ev.target.value.toUpperCase().trim();
+    if(cs===''&&u.rsv){ if(u.cs!==''){ u.cs=''; markDirty(); render(); } return; }   /* reserve rigs may go nameless */
     if(!/^[A-Z][A-Z0-9]{1,7}$/.test(cs)){ ev.target.classList.add('bad'); ev.target.value=u.cs; setTimeout(function(){ ev.target.classList.remove('bad'); },1200); return; }
     if(cs!==u.cs){ u.cs=cs; var t=typeOf(cs); u.fam=t.fam; u.cmd=t.cmd?1:0; markDirty(); render(); }
   }
@@ -296,23 +319,35 @@ aCs.addEventListener('input',function(){
     ? t.g.toUpperCase()+' &middot; '+famLabel(t)+' &middot; defaults to '+defVis(t).toUpperCase()
     : '&nbsp;';
 });
+var aRsv=false;
+document.getElementById('aRsvSeg').addEventListener('click',function(ev){
+  var b=ev.target.closest('button'); if(!b) return;
+  aRsv=b.getAttribute('data-v')==='yes';
+  this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on',x===b); });
+  aCs.placeholder=aRsv?'— optional —':'E121';
+});
 document.getElementById('aAdd').addEventListener('click',function(){
   var reg=aReg.value.trim(), cs=aCs.value.toUpperCase().trim();
   if(!REG_RE.test(reg)){ aReg.focus(); aReg.style.borderColor='var(--red)'; setTimeout(function(){aReg.style.borderColor='';},1200); return; }
-  if(!/^[A-Z][A-Z0-9]{1,7}$/.test(cs)){ aCs.focus(); aCs.style.borderColor='var(--red)'; setTimeout(function(){aCs.style.borderColor='';},1200); return; }
+  if(!(aRsv&&cs==='') && !/^[A-Z][A-Z0-9]{1,7}$/.test(cs)){ aCs.focus(); aCs.style.borderColor='var(--red)'; setTimeout(function(){aCs.style.borderColor='';},1200); return; }
   if(roster.units.some(function(u){ return u.reg===reg; })){
     aReg.style.borderColor='var(--amber)'; setTimeout(function(){aReg.style.borderColor='';},1200); return;
   }
   var t=typeOf(cs);
-  roster.units.push({reg:reg,cs:cs,st:document.getElementById('aStn').value,vis:defVis(t),fam:t.fam,cmd:t.cmd?1:0});
-  aReg.value=''; aCs.value=''; document.getElementById('aStn').value='';
+  roster.units.push({reg:reg,cs:cs,st:document.getElementById('aStn').value,
+    vis:aRsv?'off':defVis(t),fam:t.fam,cmd:t.cmd?1:0,
+    mk:document.getElementById('aMk').value.trim().slice(0,48),rsv:aRsv?1:0});
+  aReg.value=''; aCs.value=''; document.getElementById('aMk').value=''; document.getElementById('aStn').value='';
   document.getElementById('aPrev').innerHTML='&nbsp;';
   markDirty(); render();
 });
 
 /* ── load / save ── */
 function normalize(){
-  roster.units.forEach(function(u){ var t=typeOf(u.cs); u.fam=t.fam; u.cmd=t.cmd?1:0; delete u._i; });
+  roster.units.forEach(function(u){
+    if(u.cs){ var t=typeOf(u.cs); u.fam=t.fam; u.cmd=t.cmd?1:0; }   /* nameless reserves keep their seeded family */
+    u.rsv=u.rsv?1:0; u.mk=String(u.mk||'').slice(0,48); delete u._i;
+  });
 }
 /* First-run seed: when the server roster is empty and no local draft exists, offer the
    pre-mapped Fleet Master List (fleet-seed.json) as an unsaved draft — review, adjust, SAVE. */
@@ -323,7 +358,8 @@ function seedIfEmpty(){
     .then(function(s){
       if(s&&Array.isArray(s.units)&&s.units.length){
         roster={v:1,units:s.units.map(function(u){ var t=typeOf(u.cs);
-          return {reg:u.reg,cs:u.cs,st:u.st||'',vis:u.vis||defVis(t),fam:t.fam,cmd:t.cmd?1:0}; })};
+          return {reg:u.reg,cs:u.cs,st:u.st||'',vis:u.vis||defVis(t),
+                  fam:u.cs?t.fam:(u.fam||'app'),cmd:t.cmd?1:0,mk:u.mk||'',rsv:u.rsv?1:0}; })};
         markDirty();
         document.getElementById('stat').textContent='seeded from '+(s.src||'fleet list')+' — review, then SAVE to publish';
       }
