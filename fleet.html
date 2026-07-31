@@ -119,11 +119,25 @@
   .savebar .stat{font-size:11px;color:var(--dim);text-align:center;margin-top:6px;min-height:14px}
   .savebar .stat.ok{color:var(--green)} .savebar .stat.bad{color:var(--red)}
 
-  /* PIN gate overlay */
-  .gate{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
+  /* ── PIN gate — identical to the control panel's ── */
+  .gate{position:fixed;inset:0;z-index:999;background:rgba(6,9,14,.96);display:flex;align-items:center;justify-content:center;
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
   .gate[hidden]{display:none}
-  .gate .card{width:100%;max-width:360px}
-  .gate .err{color:var(--red);font-size:12px;min-height:16px;margin-top:6px}
+  .gate-card{background:var(--panel,#161B22);border:1px solid #30363D;border-radius:16px;padding:34px 30px;width:min(88vw,360px);
+    text-align:center;box-shadow:0 16px 48px rgba(0,0,0,.6)}
+  .gate-title{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:3px;color:#FF6B35;line-height:1}
+  .gate-sub{font-size:11px;color:#8B949E;letter-spacing:1px;margin:6px 0 20px}
+  .gate-pin{width:100%;box-sizing:border-box;font-size:24px;letter-spacing:10px;text-align:center;font-family:'DM Mono',monospace;
+    background:#0D1117;border:1px solid #30363D;border-radius:10px;color:#E6EDF3;padding:12px 8px;outline:none;
+    -webkit-appearance:none;appearance:none;min-height:0}
+  .gate-pin:focus{border-color:#FF6B35}
+  .gate-btn{width:100%;margin-top:14px;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;cursor:pointer;
+    background:#FF6B35;color:#000;border:0;border-radius:10px;padding:12px 0;min-height:44px;-webkit-appearance:none;appearance:none}
+  .gate-btn:disabled{opacity:.5}
+  .gate-msg{margin-top:12px;font-size:12px;letter-spacing:.5px;min-height:16px}
+  .gate-msg.bad{color:#FF3B30}
+  @keyframes gateshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+  .gate-card.shake{animation:gateshake .3s ease}
 </style>
 </head>
 <body>
@@ -172,12 +186,12 @@
 </div>
 
 <div class="gate" id="gate" hidden>
-  <div class="card">
-    <h2>OFFICER PIN</h2>
-    <div class="hint">Same PIN as the control panel.</div>
-    <div class="field"><input type="tel" id="gPin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off"></div>
-    <button class="btn primary" id="gGo" style="width:100%">UNLOCK</button>
-    <div class="err" id="gErr"></div>
+  <div class="gate-card" id="gateCard">
+    <div class="gate-title">OFFICER ACCESS</div>
+    <div class="gate-sub">BC2FD Fleet GPS &middot; Unit Roster</div>
+    <input class="gate-pin" id="gPin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="PIN">
+    <button class="gate-btn" id="gGo">Unlock</button>
+    <div class="gate-msg" id="gErr"></div>
   </div>
 </div>
 
@@ -493,19 +507,27 @@ document.getElementById('save').addEventListener('click',function(){
 });
 
 /* ── PIN gate: reuse the control-panel session; prompt only if absent/invalid ── */
+function gateFail(txt){
+  var err=document.getElementById('gErr'), card=document.getElementById('gateCard');
+  err.textContent=txt; err.className='gate-msg bad';
+  card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+}
 function unlock(){
   var p=document.getElementById('gPin').value.trim();
-  var err=document.getElementById('gErr'); err.textContent='';
+  var err=document.getElementById('gErr'); err.textContent=''; err.className='gate-msg';
+  if(!p){ gateFail('Enter your PIN'); return; }
+  var go=document.getElementById('gGo'); go.disabled=true;
   fetch(AUTH_URL+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({pin:p,scope:'control'})})
     .then(function(r){ return r.json(); })
     .then(function(j){
+      go.disabled=false;
       if(j.ok&&j.tier!=='board'){
         try{ sessionStorage.setItem(SKEY,JSON.stringify({pin:p,name:j.name})); }catch(e){}
         document.getElementById('gate').hidden=true; load();
-      } else err.textContent=j.tier==='board'?'That PIN is display-only.':'Wrong PIN.';
+      } else gateFail(j.tier==='board'?'That PIN is display-only.':'Wrong PIN.');
     })
-    .catch(function(){ err.textContent='Network error — try again.'; });
+    .catch(function(){ go.disabled=false; gateFail('Network error — try again.'); });
 }
 document.getElementById('gGo').addEventListener('click',unlock);
 document.getElementById('gPin').addEventListener('keydown',function(e){ if(e.key==='Enter') unlock(); });
