@@ -206,6 +206,8 @@ var TYPES=[
   {p:'BR',  g:'Brush & Attack',     fam:'app'},
   {p:'AT',  g:'Brush & Attack',     fam:'app'},
   {p:'A',   g:'Brush & Attack',     fam:'app'},
+  {p:'B',   g:'Brush & Attack',     fam:'app'},
+  {p:'T',   g:'Tenders',            fam:'app'},
   {p:'SQD', g:'Squads & Rescue',    fam:'app'},
   {p:'RES', g:'Squads & Rescue',    fam:'app'},
   {p:'WMD', g:'Squads & Rescue',    fam:'app'},
@@ -415,10 +417,17 @@ function mergeSeed(){
       if(!s||!Array.isArray(s.units)){ render(); return; }
       var sv=s.sv||1;
       if(sv<=(roster.sv||1)){ render(); return; }
-      var have={}; roster.units.forEach(function(u){ have[u.reg]=1; });
+      var byReg={}; roster.units.forEach(function(u){ byReg[u.reg]=u; });
+      /* fix list: in-place callsign repairs — applied ONLY while the unit still wears
+         the exact old name, so anything the owner edited since stays untouched */
+      var fixed=0;
+      (s.fix||[]).forEach(function(f){
+        var u=byReg[f.reg];
+        if(u&&u.cs===f.from){ u.cs=f.to; var t=typeOf(f.to); if(!u.fmo) u.fam=t.fam; u.cmd=t.cmd?1:0; fixed++; }
+      });
       var added=0;
       s.units.forEach(function(u){
-        if(have[u.reg]) return;
+        if(byReg[u.reg]) return;
         var t=typeOf(u.cs);
         roster.units.push({reg:u.reg,cs:u.cs,st:u.st||'',vis:u.vis||defVis(t),
           fam:u.cs?t.fam:(u.fam||'app'),cmd:t.cmd?1:0,mk:u.mk||'',yr:u.yr||'',rsv:u.rsv?1:0});
@@ -426,7 +435,11 @@ function mergeSeed(){
       });
       roster.sv=sv;
       render();
-      if(added){ markDirty(); document.getElementById('stat').textContent=added+' new unit'+(added>1?'s':'')+' from the fleet list — review, then SAVE'; }
+      if(added||fixed){
+        markDirty();
+        var bits=[]; if(fixed) bits.push(fixed+' renamed'); if(added) bits.push(added+' new');
+        document.getElementById('stat').textContent=bits.join(', ')+' from the fleet list — review, then SAVE';
+      }
     })
     .catch(function(){ render(); });
 }
