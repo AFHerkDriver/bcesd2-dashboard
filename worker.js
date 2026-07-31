@@ -1626,6 +1626,49 @@ export default {
       return json({ ok: true }, 200);
     }
 
+    /* ── Fleet GPS roster (fleet.html) ──────────────────────────────────────
+       The Samsara AVL unit table: dept reg (###-##) → radio callsign, icon family,
+       home station, 3-way visibility (always / oncall / off). Lives in KV under
+       "avlroster" so edits are live on every board with no deploy. Reads allow any
+       valid PIN (boards will consume the roster via /avl later); writes get the
+       same board-tier wall as /state. */
+    if (url.pathname === "/roster") {
+      if (req.method === "GET") {
+        const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+        if (gate.res) return gate.res;
+        const raw = await env.PINS.get("avlroster");
+        let roster = null; try { roster = raw ? JSON.parse(raw) : null; } catch (e) { /* fall through to empty */ }
+        return json({ ok: true, roster: roster || { v: 1, units: [] } }, 200);
+      }
+      if (req.method === "POST") {
+        let body; try { body = await req.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
+        const gate = await pinGate(env, ip, String(body.pin || ""), json);
+        if (gate.res) return gate.res;
+        if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "display-only" }, 403);
+        const roster = body.roster;
+        if (!roster || !Array.isArray(roster.units) || roster.units.length > 200)
+          return json({ ok: false, error: "bad roster" }, 400);
+        const seen = new Set(), units = [];
+        for (const u of roster.units) {
+          const reg = String(u.reg || "").trim().toUpperCase();
+          const cs  = String(u.cs  || "").trim().toUpperCase();
+          if (!/^\d{3}-\d{2}$/.test(reg))      return json({ ok: false, error: "bad reg: "      + reg }, 400);
+          if (!/^[A-Z]{1,4}\d{2,4}$/.test(cs)) return json({ ok: false, error: "bad callsign: " + cs  }, 400);
+          if (seen.has(reg)) return json({ ok: false, error: "duplicate reg: " + reg }, 400);
+          seen.add(reg);
+          units.push({ reg, cs, st: String(u.st || "").slice(0, 8),
+                       vis: ["always", "oncall", "off"].includes(u.vis) ? u.vis : "oncall",
+                       fam: ["app", "rb", "amber"].includes(u.fam) ? u.fam : "rb",
+                       cmd: u.cmd ? 1 : 0 });
+        }
+        await env.PINS.put("avlroster", JSON.stringify({ v: 1, units }));
+        await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
+                               action: "updated fleet GPS roster (" + units.length + " units)" });
+        return json({ ok: true, n: units.length }, 200);
+      }
+      return json({ ok: false, error: "method" }, 405);
+    }
+
     /* Clear access-log entries. Admin only. Body {names:[...]} deletes only those people (a name in
        the list, or an empty/"unknown" name for the failed-login bucket); no `names` clears the WHOLE log. */
     if (url.pathname === "/accessclear") {

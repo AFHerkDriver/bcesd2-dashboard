@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BC2FD Fleet">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<title>BC2FD — Fleet GPS Roster</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0D1117; --panel:#161B22; --panel2:#1C2230; --border:#30363D;
+    --text:#E6EDF3; --dim:#8B949E; --accent:#FF6B35; --blue:#3B82F6;
+    --green:#34C759; --amber:#FFC107; --red:#FF3B30;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;line-height:1.4;
+    -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;-webkit-overflow-scrolling:touch;
+    padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+  h1,h2,h3{font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;font-weight:400}
+  .wrap{max-width:760px;margin:0 auto;padding:14px;padding-left:calc(14px + env(safe-area-inset-left));padding-right:calc(14px + env(safe-area-inset-right))}
+
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(13,17,23,.95);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;
+    padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top));
+    padding-left:calc(14px + env(safe-area-inset-left));padding-right:calc(14px + env(safe-area-inset-right))}
+  .topbar h1{font-size:22px;line-height:1}
+  .topbar .sub{font-size:10px;color:var(--dim);letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topbar .actions{margin-left:auto;display:flex;gap:8px}
+  .btn{font-family:'DM Mono',monospace;font-size:12px;letter-spacing:1px;border-radius:8px;
+    padding:6px 12px;min-height:32px;border:1px solid var(--border);background:var(--panel);color:var(--text);
+    cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    -webkit-appearance:none;appearance:none}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:500}
+  button:active,.btn:active{transform:translateY(1px);filter:brightness(.85)}
+
+  .notice{margin:12px 0;padding:10px 14px;border:1px solid var(--amber);border-radius:9px;
+    background:rgba(255,193,7,.08);font-size:12px;color:var(--amber)}
+  .notice[hidden]{display:none}
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin:10px 0}
+  .card > h2{font-size:17px;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .card .hint{font-size:11px;color:var(--dim);margin-bottom:8px}
+
+  .field{margin:10px 0}
+  .field > label{display:block;font-size:11px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin-bottom:5px}
+  input[type=text],input[type=tel],select{
+    width:100%;font-family:'DM Mono',monospace;font-size:16px;color:var(--text);   /* 16px stays — smaller makes iOS zoom on focus */
+    background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;min-height:36px;
+    -webkit-appearance:none;appearance:none}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  @media(min-width:700px){ .row{grid-template-columns:repeat(4,minmax(0,1fr))} }
+  .row > *{min-width:0}
+
+  /* Segmented toggle (3-way view mode) */
+  .seg{display:flex;width:100%;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .seg button{flex:1;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.5px;padding:8px 4px;min-height:34px;
+    background:var(--panel2);color:var(--dim);border:0;cursor:pointer;white-space:nowrap;-webkit-appearance:none;appearance:none}
+  .seg button[data-v=always].on{background:var(--green);color:#000;font-weight:500}
+  .seg button[data-v=oncall].on{background:var(--blue);color:#fff;font-weight:500}
+  .seg button[data-v=off].on{background:var(--red);color:#fff;font-weight:500}
+
+  /* Roster groups + unit rows */
+  .grp-h{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;color:var(--dim);
+    text-transform:uppercase;margin:14px 2px 6px;display:flex;align-items:center;gap:8px}
+  .grp-h .n{font-family:'DM Mono',monospace;font-size:11px;color:var(--dim)}
+  .unit-row{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:8px 0;
+    display:grid;grid-template-columns:minmax(84px,auto) 1fr auto;gap:8px 14px;align-items:center}
+  .unit-row .cs{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;line-height:1}
+  .unit-row .reg{font-size:11px;color:var(--dim);letter-spacing:1px}
+  .unit-row .fam{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);color:var(--dim);display:inline-block;margin-top:4px}
+  .unit-row .fam.app{border-color:var(--red);color:var(--red)}
+  .unit-row .fam.rb{border-color:var(--blue);color:var(--blue)}
+  .unit-row .fam.amber{border-color:var(--amber);color:var(--amber)}
+  .unit-row .fam.cmd{border-color:var(--green);color:var(--green)}
+  .unit-row .mid{display:grid;gap:6px}
+  .unit-row .mid .stn{display:flex;align-items:center;gap:8px}
+  .unit-row .mid .stn label{font-size:10px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;flex:0 0 auto}
+  .unit-row .mid select{min-height:32px;font-size:14px;padding:5px 8px;width:auto;flex:1 1 auto}
+  .unit-row .del{background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);
+    font-family:'DM Mono',monospace;font-size:14px;width:34px;height:34px;cursor:pointer;align-self:start}
+  .unit-row .del:hover{border-color:var(--red);color:var(--red)}
+  @media(max-width:560px){
+    .unit-row{grid-template-columns:1fr auto}
+    .unit-row .mid{grid-column:1 / -1}
+  }
+  .empty{padding:22px 10px;color:var(--dim);font-size:12px;text-align:center}
+
+  /* Sticky save */
+  .savebar{position:sticky;bottom:0;z-index:60;margin-top:14px;
+    padding:12px 0 calc(8px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,rgba(13,17,23,0),var(--bg) 42%)}
+  .savebar .btn.primary{width:100%;font-size:16px;padding:14px;letter-spacing:1px}
+  .savebar .btn.primary.dirty{box-shadow:0 0 0 3px rgba(255,107,53,.35)}
+  .savebar .stat{font-size:11px;color:var(--dim);text-align:center;margin-top:6px;min-height:14px}
+  .savebar .stat.ok{color:var(--green)} .savebar .stat.bad{color:var(--red)}
+
+  /* PIN gate overlay */
+  .gate{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
+  .gate[hidden]{display:none}
+  .gate .card{width:100%;max-width:360px}
+  .gate .err{color:var(--red);font-size:12px;min-height:16px;margin-top:6px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>FLEET GPS <span style="color:var(--accent)">ROSTER</span></h1>
+    <div class="sub">SAMSARA AVL &middot; REG &rarr; CALLSIGN &middot; VIEW MODE</div>
+  </div>
+  <div class="actions"><a class="btn" href="control.html">&larr; CONTROL</a></div>
+</div>
+
+<div class="wrap">
+
+  <div class="notice" id="preNote">Samsara feed not connected yet &mdash; roster edits save now and the
+    markers light up the day the API key lands. Auto-discovered vehicles will appear here once the feed is live.</div>
+  <div class="notice" id="wkNote" hidden>The deployed worker doesn&rsquo;t have the /roster endpoint yet &mdash;
+    edits are kept as a local draft on this device. Paste the updated worker.js, then hit SAVE again.</div>
+
+  <div class="card">
+    <h2>ADD UNIT</h2>
+    <div class="hint">Dept reg is the 3-digit fleet number + 2-digit year (e.g. 412-19) &mdash; that&rsquo;s how
+      Samsara reports the vehicle. The callsign is what CAD shows and what the map badge wears.</div>
+    <div class="row">
+      <div class="field"><label>Dept Reg</label><input type="tel" id="aReg" placeholder="412-19" maxlength="6" autocomplete="off"></div>
+      <div class="field"><label>Radio Callsign</label><input type="text" id="aCs" placeholder="E121" maxlength="7" autocomplete="off" autocapitalize="characters"></div>
+      <div class="field"><label>Home Station</label>
+        <select id="aStn"><option value="">&mdash;</option><option>121</option><option>122</option><option>123</option><option>124</option></select></div>
+      <div class="field"><label>&nbsp;</label><button class="btn primary" id="aAdd" style="width:100%;min-height:36px">+ ADD</button></div>
+    </div>
+    <div class="hint" id="aPrev" style="margin-top:0">&nbsp;</div>
+  </div>
+
+  <div id="roster"></div>
+
+  <div class="savebar">
+    <button class="btn primary" id="save">SAVE ROSTER</button>
+    <div class="stat" id="stat"></div>
+  </div>
+</div>
+
+<div class="gate" id="gate" hidden>
+  <div class="card">
+    <h2>OFFICER PIN</h2>
+    <div class="hint">Same PIN as the control panel.</div>
+    <div class="field"><input type="tel" id="gPin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off"></div>
+    <button class="btn primary" id="gGo" style="width:100%">UNLOCK</button>
+    <div class="err" id="gErr"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+var AUTH_URL='https://bc2fd-dash-auth.usafsentinel-45e.workers.dev';   /* same worker as control */
+var SKEY='bc2fd_ctl_auth';                                             /* shared session with control.html */
+var DRAFT='bc2fd_fleet_draft';
+
+/* ── unit typing: callsign prefix → display group, icon family, command flag ──
+   Families match the badge blanks on unit-demo.html: app = multicolor apparatus bar,
+   rb = plain blue/white/red bar, amber = maintenance. BC rides app; AC/DC ride rb. */
+var TYPES=[
+  {p:'ENG', g:'Engines',            fam:'app'},
+  {p:'E',   g:'Engines',            fam:'app'},
+  {p:'AP',  g:'Aerials',            fam:'app'},
+  {p:'LDR', g:'Aerials',            fam:'app'},
+  {p:'MED', g:'Medics',             fam:'app'},
+  {p:'M',   g:'Medics',             fam:'app'},
+  {p:'BC',  g:'Command',            fam:'app', cmd:1},
+  {p:'AC',  g:'Command',            fam:'rb',  cmd:1},
+  {p:'DC',  g:'Command',            fam:'rb',  cmd:1},
+  {p:'TDR', g:'Tenders',            fam:'app'},
+  {p:'BRS', g:'Brush',              fam:'app'},
+  {p:'BR',  g:'Brush',              fam:'app'},
+  {p:'SQD', g:'Squads & Rescue',    fam:'app'},
+  {p:'RES', g:'Squads & Rescue',    fam:'app'},
+  {p:'WMD', g:'Squads & Rescue',    fam:'app'},
+  {p:'MOF', g:'MOF',                fam:'app'},
+  {p:'UAV', g:'UAV',                fam:'rb'},
+  {p:'UTL', g:'Utility & Admin',    fam:'rb'},
+  {p:'ADM', g:'Utility & Admin',    fam:'rb'},
+  {p:'MX',  g:'Maintenance',        fam:'amber'}
+];
+var GROUP_ORDER=['Engines','Aerials','Medics','Command','Tenders','Brush','Squads & Rescue','UAV','MOF','Utility & Admin','Maintenance','Other'];
+function typeOf(cs){
+  var pfx=(String(cs).toUpperCase().match(/^[A-Z]+/)||[''])[0];
+  var best=null;
+  for(var i=0;i<TYPES.length;i++) if(pfx===TYPES[i].p && (!best||TYPES[i].p.length>best.p.length)) best=TYPES[i];
+  return best||{p:pfx,g:'Other',fam:'rb'};
+}
+function famLabel(t){ return t.cmd?'CMD &middot; GREEN ON SCENE':(t.fam==='app'?'APPARATUS BAR':t.fam==='amber'?'AMBER BAR':'PLAIN BAR'); }
+function defVis(t){ return (t.fam==='app'&&!t.cmd)?'always':'oncall'; }
+
+var roster={v:1,units:[]};
+var dirty=false;
+function pin(){ try{ var a=JSON.parse(sessionStorage.getItem(SKEY)||'null'); return (a&&a.pin)||''; }catch(e){ return ''; } }
+
+/* ── render ── */
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function render(){
+  var host=document.getElementById('roster');
+  if(!roster.units.length){ host.innerHTML='<div class="empty">No units yet &mdash; add the first one above.</div>'; return; }
+  var groups={};
+  roster.units.forEach(function(u,i){ u._i=i; var g=typeOf(u.cs).g; (groups[g]=groups[g]||[]).push(u); });
+  var html='';
+  GROUP_ORDER.forEach(function(g){
+    if(!groups[g]) return;
+    groups[g].sort(function(a,b){ return a.cs<b.cs?-1:a.cs>b.cs?1:0; });
+    html+='<div class="grp-h">'+esc(g)+' <span class="n">'+groups[g].length+'</span></div>';
+    groups[g].forEach(function(u){
+      var t=typeOf(u.cs);
+      html+='<div class="unit-row" data-i="'+u._i+'">'
+        +'<div><div class="cs">'+esc(u.cs)+'</div><div class="reg">'+esc(u.reg)+'</div>'
+        +'<span class="fam '+(t.cmd?'cmd':t.fam)+'">'+famLabel(t)+'</span></div>'
+        +'<div class="mid">'
+          +'<div class="seg" role="group">'
+            +'<button data-v="always" class="'+(u.vis==='always'?'on':'')+'">ALWAYS</button>'
+            +'<button data-v="oncall" class="'+(u.vis==='oncall'?'on':'')+'">ON-CALL</button>'
+            +'<button data-v="off"    class="'+(u.vis==='off'   ?'on':'')+'">OFF</button>'
+          +'</div>'
+          +'<div class="stn"><label>Home stn</label><select>'
+            +['','121','122','123','124'].map(function(s){
+               return '<option value="'+s+'"'+(String(u.st||'')===s?' selected':'')+'>'+(s||'—')+'</option>'; }).join('')
+          +'</select></div>'
+        +'</div>'
+        +'<button class="del" title="Remove">✕</button>'
+      +'</div>';
+    });
+  });
+  host.innerHTML=html;
+}
+function markDirty(){
+  dirty=true;
+  document.getElementById('save').classList.add('dirty');
+  document.getElementById('stat').textContent='unsaved changes';
+  document.getElementById('stat').className='stat';
+  try{ localStorage.setItem(DRAFT,JSON.stringify(roster)); }catch(e){}
+}
+
+/* row events (delegated) */
+document.getElementById('roster').addEventListener('click',function(ev){
+  var row=ev.target.closest('.unit-row'); if(!row) return;
+  var i=parseInt(row.getAttribute('data-i'),10); var u=roster.units[i]; if(!u) return;
+  if(ev.target.classList.contains('del')){
+    if(row.dataset.armed){ roster.units.splice(i,1); markDirty(); render(); }
+    else{ row.dataset.armed='1'; ev.target.style.borderColor='var(--red)'; ev.target.style.color='var(--red)';
+          setTimeout(function(){ delete row.dataset.armed; try{ ev.target.style.borderColor=''; ev.target.style.color=''; }catch(e){} },2500); }
+    return;
+  }
+  var seg=ev.target.closest('.seg button');
+  if(seg){ u.vis=seg.getAttribute('data-v'); markDirty(); render(); }
+});
+document.getElementById('roster').addEventListener('change',function(ev){
+  var row=ev.target.closest('.unit-row'); if(!row) return;
+  var u=roster.units[parseInt(row.getAttribute('data-i'),10)]; if(!u) return;
+  if(ev.target.tagName==='SELECT'){ u.st=ev.target.value; markDirty(); }
+});
+
+/* ── add form ── */
+function fmtReg(v){
+  var d=String(v).replace(/\D/g,'').slice(0,5);
+  return d.length>3 ? d.slice(0,3)+'-'+d.slice(3) : d;
+}
+var aReg=document.getElementById('aReg'), aCs=document.getElementById('aCs');
+aReg.addEventListener('input',function(){ this.value=fmtReg(this.value); });
+aCs.addEventListener('input',function(){
+  this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  var t=typeOf(this.value);
+  document.getElementById('aPrev').innerHTML=this.value
+    ? t.g.toUpperCase()+' &middot; '+famLabel(t)+' &middot; defaults to '+defVis(t).toUpperCase()
+    : '&nbsp;';
+});
+document.getElementById('aAdd').addEventListener('click',function(){
+  var reg=fmtReg(aReg.value), cs=aCs.value.toUpperCase().trim();
+  if(!/^\d{3}-\d{2}$/.test(reg)){ aReg.focus(); aReg.style.borderColor='var(--red)'; setTimeout(function(){aReg.style.borderColor='';},1200); return; }
+  if(!/^[A-Z]{1,4}\d{2,4}$/.test(cs)){ aCs.focus(); aCs.style.borderColor='var(--red)'; setTimeout(function(){aCs.style.borderColor='';},1200); return; }
+  if(roster.units.some(function(u){ return u.reg===reg; })){
+    aReg.style.borderColor='var(--amber)'; setTimeout(function(){aReg.style.borderColor='';},1200); return;
+  }
+  var t=typeOf(cs);
+  roster.units.push({reg:reg,cs:cs,st:document.getElementById('aStn').value,vis:defVis(t),fam:t.fam,cmd:t.cmd?1:0});
+  aReg.value=''; aCs.value=''; document.getElementById('aStn').value='';
+  document.getElementById('aPrev').innerHTML='&nbsp;';
+  markDirty(); render();
+});
+
+/* ── load / save ── */
+function normalize(){
+  roster.units.forEach(function(u){ var t=typeOf(u.cs); u.fam=t.fam; u.cmd=t.cmd?1:0; delete u._i; });
+}
+function load(){
+  fetch(AUTH_URL+'/roster?pin='+encodeURIComponent(pin()))
+    .then(function(r){ if(r.status===404) throw 'no-endpoint'; return r.json(); })
+    .then(function(j){
+      if(!j.ok) throw 'denied';
+      roster=j.roster&&Array.isArray(j.roster.units)?j.roster:{v:1,units:[]};
+      var d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT)||'null'); }catch(e){}
+      if(d&&Array.isArray(d.units)&&JSON.stringify(d)!==JSON.stringify(roster)){
+        roster=d; markDirty();
+        document.getElementById('stat').textContent='unsaved draft restored — hit SAVE to publish';
+      }
+      render();
+    })
+    .catch(function(err){
+      if(err==='no-endpoint') document.getElementById('wkNote').hidden=false;
+      var d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT)||'null'); }catch(e){}
+      if(d&&Array.isArray(d.units)){ roster=d; }
+      render();
+    });
+}
+document.getElementById('save').addEventListener('click',function(){
+  normalize();
+  var stat=document.getElementById('stat');
+  stat.textContent='saving…'; stat.className='stat';
+  fetch(AUTH_URL+'/roster',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pin:pin(),roster:roster})})
+    .then(function(r){ if(r.status===404) throw 'no-endpoint'; return r.json(); })
+    .then(function(j){
+      if(!j.ok) throw (j.error||'save failed');
+      dirty=false; document.getElementById('save').classList.remove('dirty');
+      try{ localStorage.removeItem(DRAFT); }catch(e){}
+      stat.textContent='saved — '+j.n+' units live'; stat.className='stat ok';
+    })
+    .catch(function(err){
+      if(err==='no-endpoint'){ document.getElementById('wkNote').hidden=false; stat.textContent='kept as local draft (worker missing /roster)'; stat.className='stat bad'; }
+      else{ stat.textContent=String(err); stat.className='stat bad'; }
+    });
+});
+
+/* ── PIN gate: reuse the control-panel session; prompt only if absent/invalid ── */
+function unlock(){
+  var p=document.getElementById('gPin').value.trim();
+  var err=document.getElementById('gErr'); err.textContent='';
+  fetch(AUTH_URL+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pin:p,scope:'control'})})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if(j.ok&&j.tier!=='board'){
+        try{ sessionStorage.setItem(SKEY,JSON.stringify({pin:p,name:j.name})); }catch(e){}
+        document.getElementById('gate').hidden=true; load();
+      } else err.textContent=j.tier==='board'?'That PIN is display-only.':'Wrong PIN.';
+    })
+    .catch(function(){ err.textContent='Network error — try again.'; });
+}
+document.getElementById('gGo').addEventListener('click',unlock);
+document.getElementById('gPin').addEventListener('keydown',function(e){ if(e.key==='Enter') unlock(); });
+
+if(pin()) load();
+else document.getElementById('gate').hidden=false;
+</script>
+</body>
+</html>
