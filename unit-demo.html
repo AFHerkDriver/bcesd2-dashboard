@@ -65,15 +65,15 @@
     50%      { box-shadow: 0 0 10px 4px rgba(70,255,120,.95), 0 0 24px 9px rgba(70,255,120,.45); }
   }
   @media (prefers-reduced-motion: reduce) { .cmd::after { animation: none; box-shadow: 0 0 6px 2px rgba(70,255,120,.7); } }
-  /* ── ON SCENE, non-command: same halo mechanic in BLUE, slower + dimmer than command green —
-     every unit working a scene glows, but green still outranks blue across the room ── */
-  .scene::after { content: ""; position: absolute; inset: -2px; border-radius: 18%; pointer-events: none;
-                  animation: scenehalo 2.2s ease-in-out infinite; }
-  @keyframes scenehalo {
-    0%, 100% { box-shadow: 0 0 3px 1px rgba(90,160,255,.35); }
-    50%      { box-shadow: 0 0 9px 3px rgba(90,160,255,.85), 0 0 20px 7px rgba(90,160,255,.4); }
-  }
-  @media (prefers-reduced-motion: reduce) { .scene::after { animation: none; box-shadow: 0 0 5px 2px rgba(90,160,255,.6); } }
+  /* ── ON SCENE, non-command: split halo — BLUE left / RED right, the lightbar colors wrapped
+     around the badge. A blurred gradient ring BEHIND the badge (box-shadow can't split colors),
+     breathing slower + dimmer than command green, so green still outranks it across the room ── */
+  .scene::before { content: ""; position: absolute; inset: -6px; border-radius: 26%; z-index: -1;
+                   background: linear-gradient(90deg, rgba(90,160,255,.95) 0 44%, rgba(255,90,70,.95) 56% 100%);
+                   filter: blur(7px); pointer-events: none;
+                   animation: scenehalo 2.2s ease-in-out infinite; }
+  @keyframes scenehalo { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .scene::before { animation: none; opacity: .6; } }
   @media (prefers-reduced-motion: reduce) { .gl { animation: none !important; opacity: 0 !important; } }
   /* stale GPS: dim beats everything — never animate data we don't trust */
   .stale .ubadge { filter: grayscale(.75) brightness(.55); }
@@ -101,7 +101,7 @@
       <div class="ucap">121</div></div>
   </div>
   <div class="card">
-    <span class="state">ON SCENE &mdash; BLUE breathing halo = working</span><br>
+    <span class="state">ON SCENE &mdash; BLUE/RED split halo = working</span><br>
     <div class="unit u64"><span class="ubadge scene"><img src="unit-eng.png" alt="Engine badge"></span>
       <div class="ucap">121</div></div>
   </div>
@@ -146,8 +146,8 @@
 
 <div class="note">
   <b>Lights ON</b> = attached to a live call + more than ~150 m from the scene. <b>Arrival</b>
-  (&lt;150 m and stopped ~30 s) ends the wig-wag and starts the <b>BLUE breathing halo &mdash; blue on the map =
-  unit working that scene</b> (command rigs breathe GREEN instead, and green outranks blue). The halo ends &mdash;
+  (&lt;150 m and stopped ~30 s) ends the wig-wag and starts the <b>BLUE/RED split breathing halo &mdash; the lightbar colors ringing
+  the badge = unit working that scene</b> (command rigs breathe GREEN instead, and green outranks the split). The halo ends &mdash;
   and everything goes steady &mdash; when the call ends or DISREGARD, the unit detaches, or the unit leaves the
   scene radius; wig-wag also ends on no movement for 5 min while attached, or the 30-minute backstop. <b>Turnaround (future metrics):</b> attached + closing on scene, then distance
   climbs ~400 m past its minimum and keeps climbing 45&ndash;60 s without ever arriving = cleared en route &mdash;
