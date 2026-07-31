@@ -1653,7 +1653,7 @@ export default {
           const reg = String(u.reg || "").trim().toUpperCase();
           const cs  = String(u.cs  || "").trim().toUpperCase();
           if (!/^[0-9][0-9A-Z-]{0,9}$/.test(reg)) return json({ ok: false, error: "bad reg: " + reg }, 400);   /* exactly as the fleet master lists it: 31925, 21323-G, 6459, 802 */
-          if (!/^[A-Z]{1,4}\d{2,4}$/.test(cs)) return json({ ok: false, error: "bad callsign: " + cs  }, 400);
+          if (!/^[A-Z][A-Z0-9]{1,7}$/.test(cs)) return json({ ok: false, error: "bad callsign: " + cs  }, 400);
           if (seen.has(reg)) return json({ ok: false, error: "duplicate reg: " + reg }, 400);
           seen.add(reg);
           units.push({ reg, cs, st: String(u.st || "").slice(0, 8),

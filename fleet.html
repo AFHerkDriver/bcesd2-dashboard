@@ -137,7 +137,7 @@
       what ties to Samsara. The callsign is what CAD shows and what the map badge wears.</div>
     <div class="row">
       <div class="field"><label>Dept Reg</label><input type="text" id="aReg" placeholder="31925" maxlength="10" autocomplete="off" autocapitalize="characters"></div>
-      <div class="field"><label>Radio Callsign</label><input type="text" id="aCs" placeholder="E121" maxlength="7" autocomplete="off" autocapitalize="characters"></div>
+      <div class="field"><label>Radio Callsign</label><input type="text" id="aCs" placeholder="E121" maxlength="8" autocomplete="off" autocapitalize="characters"></div>
       <div class="field"><label>Home Station</label>
         <select id="aStn"><option value="">&mdash;</option><option>121</option><option>122</option><option>123</option><option>124</option><option>125</option><option>161</option><option>162</option><option>163</option></select></div>
       <div class="field"><label>&nbsp;</label><button class="btn primary" id="aAdd" style="width:100%;min-height:36px">+ ADD</button></div>
@@ -273,7 +273,7 @@ document.getElementById('roster').addEventListener('change',function(ev){
   if(ev.target.tagName==='SELECT'){ u.st=ev.target.value; markDirty(); return; }
   if(ev.target.classList.contains('cs')){
     var cs=ev.target.value.toUpperCase().trim();
-    if(!/^[A-Z]{1,4}\d{2,4}$/.test(cs)){ ev.target.classList.add('bad'); ev.target.value=u.cs; setTimeout(function(){ ev.target.classList.remove('bad'); },1200); return; }
+    if(!/^[A-Z][A-Z0-9]{1,7}$/.test(cs)){ ev.target.classList.add('bad'); ev.target.value=u.cs; setTimeout(function(){ ev.target.classList.remove('bad'); },1200); return; }
     if(cs!==u.cs){ u.cs=cs; var t=typeOf(cs); u.fam=t.fam; u.cmd=t.cmd?1:0; markDirty(); render(); }
   }
 });
@@ -299,7 +299,7 @@ aCs.addEventListener('input',function(){
 document.getElementById('aAdd').addEventListener('click',function(){
   var reg=aReg.value.trim(), cs=aCs.value.toUpperCase().trim();
   if(!REG_RE.test(reg)){ aReg.focus(); aReg.style.borderColor='var(--red)'; setTimeout(function(){aReg.style.borderColor='';},1200); return; }
-  if(!/^[A-Z]{1,4}\d{2,4}$/.test(cs)){ aCs.focus(); aCs.style.borderColor='var(--red)'; setTimeout(function(){aCs.style.borderColor='';},1200); return; }
+  if(!/^[A-Z][A-Z0-9]{1,7}$/.test(cs)){ aCs.focus(); aCs.style.borderColor='var(--red)'; setTimeout(function(){aCs.style.borderColor='';},1200); return; }
   if(roster.units.some(function(u){ return u.reg===reg; })){
     aReg.style.borderColor='var(--amber)'; setTimeout(function(){aReg.style.borderColor='';},1200); return;
   }
