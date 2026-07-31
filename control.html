@@ -300,7 +300,7 @@
     <div class="hint" style="text-align:center;margin:2px 0 10px">🕐 All dates &amp; times on this panel are <b>San Antonio time (Central)</b>, regardless of your device&rsquo;s clock or location.</div>
 
     <nav class="jump">
-      <a href="#cardAnn">📢 Announce</a><a href="#cardCal">📅 Events</a><a href="#cardUnits">🚒 Units</a><a href="#cardHosp">🏥 Hospitals</a><a href="#cardOOS">💧 Hydrants</a><a href="#cardStrike">🔥 Strike</a><a href="#nwsCard">🌩️ NWS</a><a href="#setCard">⚙️ Settings</a>
+      <a href="#cardAnn">📢 Announce</a><a href="#cardCal">📅 Events</a><a href="#cardUnits">🚒 Units</a><a href="#cardHosp">🏥 Hospitals</a><a href="#cardOOS">💧 Hydrants</a><a href="#nwsCard">🌩️ NWS</a><a href="#cardStrike">🔥 Strike</a><a href="#setCard">⚙️ Settings</a>
     </nav>
 
     <!-- District Metrics — officer-gated page (own PIN gate; permanent call archive + standards) -->
@@ -426,6 +426,22 @@
     </div>
     </div><!-- /nwsCard -->
 
+    <!-- Strike Teams — name / callsign / phone shown stacked in the NWS Alerts tile footer when staffed -->
+    <div class="card fold clps" id="cardStrike">
+      <h2>Strike Teams <span class="fold-sum" id="stFoldSum"></span></h2>
+      <div class="hint">When staffed, the board shows the team name, its STEN callsign, and the phone number — stacked — in the NWS Alerts tile.</div>
+      <div class="field"><label>Strike Team West</label><div class="seg red useg" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+      <div class="row">
+        <div class="field"><label>West Callsign</label><input type="text" id="stCsWest" placeholder="STEN124"></div>
+        <div class="field"><label>West Phone</label><input type="tel" id="stPhWest" placeholder="(210) 000-0000"></div>
+      </div>
+      <div class="field" style="margin-top:10px"><label>Strike Team East</label><div class="seg red useg" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
+      <div class="row">
+        <div class="field"><label>East Callsign</label><input type="text" id="stCsEast" placeholder="STEN162"></div>
+        <div class="field"><label>East Phone</label><input type="tel" id="stPhEast" placeholder="(210) 000-0000"></div>
+      </div>
+    </div>
+
     <!-- Settings — board display behavior, folded: Pixel Shift / Drone Takeover -->
     <div class="card fold clps" id="setCard">
       <h2>Settings <span class="fold-sum">· pixel shift · drone takeover</span></h2>
@@ -446,22 +462,6 @@
       </div>
     </div>
     </div><!-- /setCard -->
-
-    <!-- Strike Teams — name / callsign / phone shown stacked in the NWS Alerts tile footer when staffed -->
-    <div class="card fold clps" id="cardStrike">
-      <h2>Strike Teams <span class="fold-sum" id="stFoldSum"></span></h2>
-      <div class="hint">When staffed, the board shows the team name, its STEN callsign, and the phone number — stacked — in the NWS Alerts tile.</div>
-      <div class="field"><label>Strike Team West</label><div class="seg red useg" id="segWest"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
-      <div class="row">
-        <div class="field"><label>West Callsign</label><input type="text" id="stCsWest" placeholder="STEN124"></div>
-        <div class="field"><label>West Phone</label><input type="tel" id="stPhWest" placeholder="(210) 000-0000"></div>
-      </div>
-      <div class="field" style="margin-top:10px"><label>Strike Team East</label><div class="seg red useg" id="segEast"><button data-v="on">Staffed</button><button data-v="off">—</button></div></div>
-      <div class="row">
-        <div class="field"><label>East Callsign</label><input type="text" id="stCsEast" placeholder="STEN162"></div>
-        <div class="field"><label>East Phone</label><input type="tel" id="stPhEast" placeholder="(210) 000-0000"></div>
-      </div>
-    </div>
 
 
     <!-- Access Log — admin PIN only; who opened (or tried to open) this control panel -->
