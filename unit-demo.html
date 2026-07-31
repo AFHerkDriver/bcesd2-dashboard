@@ -168,7 +168,11 @@
   state, live on all boards instantly, no deploy. <b>Home-station hiding:</b> an ALWAYS unit disappears
   only while sitting at its OWN station (~150 m geofence) and not attached to a call &mdash; E122 visiting
   station 121 still plots, and any unit attached to a call plots even from its own bay. Home station may
-  be a slash list (121/124): the rig hides idle at ANY of its listed stations. Feed vehicles
+  be a slash list (121/124): the rig hides idle at ANY of its listed stations.
+  <b>Station docking:</b> a unit that plots while inside any station&rsquo;s geofence (~150 m) &mdash; a
+  visiting rig, or one attached to a call and still in the bay &mdash; never covers the station shield:
+  it docks in a tidy row lined up BELOW the station icon (callsign order, wrapping if several), and
+  snaps back to its raw GPS position the moment it leaves the geofence. Feed vehicles
   not in the roster surface as &ldquo;needs callsign&rdquo; and never plot untagged; rostered units that
   stop reporting get a no-GPS flag.
   <b>Icon assignment:</b> plain BLUE/WHITE/RED bar = UAV, ADM, UTL, AC, DC (2-light wig-wag) &middot;
