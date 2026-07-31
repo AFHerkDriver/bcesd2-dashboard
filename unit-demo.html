@@ -82,6 +82,15 @@
   .stale .ubadge { filter: grayscale(.75) brightness(.55); }
   .ucap { font-size: 15px; font-weight: 500; color: #FFF; margin-top: 2px;
           text-shadow: 0 0 3px #000, 0 0 3px #000, 0 1px 2px #000; }
+  /* ── ONE-BADGE experiment: baked letters patched out (unit-blank.png), full designator
+     drawn by CSS on the plate — any unit string from a single asset ── */
+  .ulabel { position: absolute; left: 5%; right: 5%; top: 44%; bottom: 12%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: Arial, 'Helvetica Neue', sans-serif; font-weight: 700; color: #FFF;
+            letter-spacing: .02em; text-shadow: 0 1px 1px rgba(0,0,0,.65); }
+  .u64 .ulabel { font-size: 19px; }
+  .u44 .ulabel { font-size: 13px; }
+  .u34 .ulabel { font-size: 10px; }
   .u34 .ucap { font-size: 12px; }
   .u44 .ucap { font-size: 13px; }
   .note { font-size: 11px; color: #8B949E; margin-top: 16px; line-height: 1.7; }
@@ -127,6 +136,14 @@
     <span class="state">BC121 ON SCENE &mdash; mains off, GREEN pulse = command</span><br>
     <div class="unit u64"><span class="ubadge cmd"><img src="unit-bc.png" alt="BC badge"><span class="gl cl"></span><span class="gl cr"></span></span>
       <div class="ucap">121</div></div>
+  </div>
+  <div class="card">
+    <span class="state">ONE BADGE, ANY UNIT &mdash; letters patched out, label is CSS text</span><br>
+    <div class="unit u64"><span class="ubadge cmd"><img src="unit-blank.png" alt="blank badge"><span class="ulabel">BC121</span><span class="gl cl"></span><span class="gl cr"></span></span></div>
+    &nbsp;&nbsp;
+    <div class="unit u44"><span class="ubadge"><img src="unit-blank.png" alt="blank badge"><span class="ulabel">BC121</span></span></div>
+    &nbsp;&nbsp;
+    <div class="unit u34"><span class="ubadge"><img src="unit-blank.png" alt="blank badge"><span class="ulabel">BC121</span></span></div>
   </div>
   <div class="card">
     <span class="state">MAP SIZES &mdash; 44 px / 34 px</span><br>
