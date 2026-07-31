@@ -1661,7 +1661,8 @@ export default {
           units.push({ reg, cs, st: String(u.st || "").slice(0, 8),
                        vis: ["always", "oncall", "off"].includes(u.vis) ? u.vis : "oncall",
                        fam: ["app", "rb", "amber"].includes(u.fam) ? u.fam : "rb",
-                       cmd: u.cmd ? 1 : 0, mk: String(u.mk || "").slice(0, 48), rsv });
+                       cmd: u.cmd ? 1 : 0, mk: String(u.mk || "").slice(0, 48),
+                       yr: String(u.yr || "").replace(/\D/g, "").slice(0, 4), rsv });
         }
         await env.PINS.put("avlroster", JSON.stringify({ v: 1, units }));
         await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",

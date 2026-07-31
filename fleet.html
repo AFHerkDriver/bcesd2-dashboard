@@ -146,6 +146,7 @@
     <div class="row">
       <div class="field"><label>Dept Reg</label><input type="text" id="aReg" placeholder="31925" maxlength="10" autocomplete="off" autocapitalize="characters"></div>
       <div class="field"><label>Radio Callsign</label><input type="text" id="aCs" placeholder="E121" maxlength="8" autocomplete="off" autocapitalize="characters"></div>
+      <div class="field"><label>Year</label><input type="tel" id="aYr" placeholder="2025" maxlength="4" autocomplete="off"></div>
       <div class="field"><label>Make / Model</label><input type="text" id="aMk" placeholder="Pierce Engine" maxlength="48" autocomplete="off"></div>
       <div class="field"><label>Home Station</label>
         <select id="aStn"><option value="">&mdash;</option><option>121</option><option>122</option><option>123</option><option>124</option><option>125</option><option>161</option><option>162</option><option>163</option></select></div>
@@ -239,7 +240,7 @@ function render(){
       var t=typeOf(u.cs);
       html+='<div class="unit-row" data-i="'+u._i+'">'
         +'<div><input class="cs" value="'+esc(u.cs)+'" placeholder="&mdash;" maxlength="8" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
-        +(u.mk?'<div class="mk">'+esc(u.mk)+'</div>':'')
+        +((u.mk||u.yr)?'<div class="mk">'+esc(((u.yr?u.yr+' ':'')+(u.mk||'')).trim())+'</div>':'')
         +(u.cs?'<span class="fam '+(t.cmd?'cmd':t.fam)+'">'+famLabel(t)+'</span>':'')
         +'<button class="rsv'+(u.rsv?' on':'')+'">RESERVE</button></div>'
         +'<div class="mid">'
@@ -336,8 +337,9 @@ document.getElementById('aAdd').addEventListener('click',function(){
   var t=typeOf(cs);
   roster.units.push({reg:reg,cs:cs,st:document.getElementById('aStn').value,
     vis:aRsv?'off':defVis(t),fam:t.fam,cmd:t.cmd?1:0,
-    mk:document.getElementById('aMk').value.trim().slice(0,48),rsv:aRsv?1:0});
-  aReg.value=''; aCs.value=''; document.getElementById('aMk').value=''; document.getElementById('aStn').value='';
+    mk:document.getElementById('aMk').value.trim().slice(0,48),
+    yr:document.getElementById('aYr').value.replace(/\D/g,'').slice(0,4),rsv:aRsv?1:0});
+  aReg.value=''; aCs.value=''; document.getElementById('aMk').value=''; document.getElementById('aYr').value=''; document.getElementById('aStn').value='';
   document.getElementById('aPrev').innerHTML='&nbsp;';
   markDirty(); render();
 });
@@ -346,7 +348,7 @@ document.getElementById('aAdd').addEventListener('click',function(){
 function normalize(){
   roster.units.forEach(function(u){
     if(u.cs){ var t=typeOf(u.cs); u.fam=t.fam; u.cmd=t.cmd?1:0; }   /* nameless reserves keep their seeded family */
-    u.rsv=u.rsv?1:0; u.mk=String(u.mk||'').slice(0,48); delete u._i;
+    u.rsv=u.rsv?1:0; u.mk=String(u.mk||'').slice(0,48); u.yr=String(u.yr||'').slice(0,4); delete u._i;
   });
 }
 /* First-run seed: when the server roster is empty and no local draft exists, offer the
@@ -359,7 +361,7 @@ function seedIfEmpty(){
       if(s&&Array.isArray(s.units)&&s.units.length){
         roster={v:1,units:s.units.map(function(u){ var t=typeOf(u.cs);
           return {reg:u.reg,cs:u.cs,st:u.st||'',vis:u.vis||defVis(t),
-                  fam:u.cs?t.fam:(u.fam||'app'),cmd:t.cmd?1:0,mk:u.mk||'',rsv:u.rsv?1:0}; })};
+                  fam:u.cs?t.fam:(u.fam||'app'),cmd:t.cmd?1:0,mk:u.mk||'',yr:u.yr||'',rsv:u.rsv?1:0}; })};
         markDirty();
         document.getElementById('stat').textContent='seeded from '+(s.src||'fleet list')+' — review, then SAVE to publish';
       }
