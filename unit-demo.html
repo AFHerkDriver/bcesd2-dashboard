@@ -155,7 +155,9 @@
   <b>Placement:</b> dashboard = always on; MDT = optional layer in the layers control.
   <b>Labels match CAD:</b> the designator you see on dispatch (E121, M121, AP124, BC121, UAV121&hellip;) is CSS
   text drawn on a blank plate &mdash; one badge asset per lightbar family, any unit string, auto-shrunk
-  until it clears the plate margins so no designator ever touches the badge edge.
+  until it clears the plate margins so no designator ever touches the badge edge. <b>Shared rigs</b> carry
+  slash-separated callsigns in the roster (MOF123/UAV121): dispatch matching accepts ANY of them, the badge
+  wears the one the call was assigned to, and idle wears the first listed.
   <b>Unit roster (fleet.html &mdash; built, linked from the control panel):</b> KV-backed via the worker&rsquo;s
   /roster endpoints. Units grouped by type, listed by dept reg (###-## fleet number + year, what Samsara
   reports); per unit: radio callsign (manual, once) + icon family (auto from callsign prefix,

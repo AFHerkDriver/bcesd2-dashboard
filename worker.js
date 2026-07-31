@@ -1654,7 +1654,9 @@ export default {
           const cs  = String(u.cs  || "").trim().toUpperCase();
           const rsv = u.rsv ? 1 : 0;
           if (!/^[0-9][0-9A-Z-]{0,9}$/.test(reg)) return json({ ok: false, error: "bad reg: " + reg }, 400);   /* exactly as the fleet master lists it: 31925, 21323-G, 6459, 802 */
-          if (!(rsv && cs === "") && !/^[A-Z][A-Z0-9]{1,7}$/.test(cs))                                          /* reserve rigs may be nameless */
+          const csParts = cs === "" ? [] : cs.split("/");                                                       /* shared rigs: MOF123/UAV121 — any part matches dispatch */
+          if (!(rsv && cs === "") &&
+              !(csParts.length && csParts.length <= 3 && csParts.every(s => /^[A-Z][A-Z0-9]{1,7}$/.test(s))))   /* reserve rigs may be nameless */
             return json({ ok: false, error: "bad callsign: " + cs }, 400);
           if (seen.has(reg)) return json({ ok: false, error: "duplicate reg: " + reg }, 400);
           seen.add(reg);

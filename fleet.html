@@ -81,6 +81,7 @@
     border-bottom:1px dashed rgba(139,148,158,.35);-webkit-appearance:none;appearance:none}
   .unit-row input.cs:focus{outline:none;border-bottom:1px solid var(--accent)}
   .unit-row input.cs.bad{color:var(--red);border-bottom-color:var(--red)}
+  .unit-row input.cs.sm{font-size:18px}   /* slash-shared callsigns shrink to fit */
   .unit-row .reg{font-size:11px;color:var(--dim);letter-spacing:1px}
   .unit-row .mk{font-size:11px;color:var(--dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* reserve chip — tap to toggle; checked = amber, callsign may stay blank */
@@ -142,10 +143,12 @@
   <div class="card">
     <h2>ADD UNIT</h2>
     <div class="hint">Dept reg exactly as the fleet master lists it (31925, 21323-G, 6459&hellip;) &mdash; that&rsquo;s
-      what ties to Samsara. The callsign is what CAD shows and what the map badge wears.</div>
+      what ties to Samsara. The callsign is what CAD shows and what the map badge wears. A rig that changes
+      roles shift to shift can carry slash-separated callsigns (MOF123/UAV121) &mdash; the badge wears
+      whichever one the call was assigned to; the first is its everyday identity.</div>
     <div class="row">
       <div class="field"><label>Dept Reg</label><input type="text" id="aReg" placeholder="31925" maxlength="10" autocomplete="off" autocapitalize="characters"></div>
-      <div class="field"><label>Radio Callsign</label><input type="text" id="aCs" placeholder="E121" maxlength="8" autocomplete="off" autocapitalize="characters"></div>
+      <div class="field"><label>Radio Callsign</label><input type="text" id="aCs" placeholder="E121" maxlength="26" autocomplete="off" autocapitalize="characters"></div>
       <div class="field"><label>Year</label><input type="tel" id="aYr" placeholder="2025" maxlength="4" autocomplete="off"></div>
       <div class="field"><label>Make / Model</label><input type="text" id="aMk" placeholder="Pierce Engine" maxlength="48" autocomplete="off"></div>
       <div class="field"><label>Home Station</label>
@@ -211,8 +214,15 @@ var TYPES=[
 ];
 var GROUP_ORDER=['Engines','Aerials','Medics','Command','Tenders','Brush & Attack','Squads & Rescue','UAV','MOF & Air','Utility & Admin','Maintenance','Other','Reserve'];
 var STATIONS=['','121','122','123','124','125','161','162','163'];
+/* A shared rig may carry slash-separated callsigns ("MOF123/UAV121") — dispatch matches
+   ANY of them and the badge wears the one the call was assigned; idle wears the FIRST.
+   Type/family/grouping run off the first. */
+function csOk(cs){
+  var p=String(cs).split('/');
+  return p.length<=3 && p.every(function(s){ return /^[A-Z][A-Z0-9]{1,7}$/.test(s); });
+}
 function typeOf(cs){
-  var pfx=(String(cs).toUpperCase().match(/^[A-Z]+/)||[''])[0];
+  var pfx=(String(cs).split('/')[0].toUpperCase().match(/^[A-Z]+/)||[''])[0];
   var best=null;
   for(var i=0;i<TYPES.length;i++) if(pfx===TYPES[i].p && (!best||TYPES[i].p.length>best.p.length)) best=TYPES[i];
   return best||{p:pfx,g:'Other',fam:'rb'};
@@ -239,7 +249,7 @@ function render(){
     groups[g].forEach(function(u){
       var t=typeOf(u.cs);
       html+='<div class="unit-row" data-i="'+u._i+'">'
-        +'<div><input class="cs" value="'+esc(u.cs)+'" placeholder="&mdash;" maxlength="8" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
+        +'<div><input class="cs'+(u.cs.length>8?' sm':'')+'" value="'+esc(u.cs)+'" placeholder="&mdash;" maxlength="26" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
         +((u.mk||u.yr)?'<div class="mk">'+esc(((u.yr?u.yr+' ':'')+(u.mk||'')).trim())+'</div>':'')
         +(u.cs?'<span class="fam '+(t.cmd?'cmd':t.fam)+'">'+famLabel(t)+'</span>':'')
         +'<button class="rsv'+(u.rsv?' on':'')+'">RESERVE</button></div>'
@@ -297,14 +307,14 @@ document.getElementById('roster').addEventListener('change',function(ev){
   if(ev.target.classList.contains('cs')){
     var cs=ev.target.value.toUpperCase().trim();
     if(cs===''&&u.rsv){ if(u.cs!==''){ u.cs=''; markDirty(); render(); } return; }   /* reserve rigs may go nameless */
-    if(!/^[A-Z][A-Z0-9]{1,7}$/.test(cs)){ ev.target.classList.add('bad'); ev.target.value=u.cs; setTimeout(function(){ ev.target.classList.remove('bad'); },1200); return; }
+    if(!csOk(cs)){ ev.target.classList.add('bad'); ev.target.value=u.cs; setTimeout(function(){ ev.target.classList.remove('bad'); },1200); return; }
     if(cs!==u.cs){ u.cs=cs; var t=typeOf(cs); u.fam=t.fam; u.cmd=t.cmd?1:0; markDirty(); render(); }
   }
 });
 /* keep callsign typing uppercase + clean as it happens */
 document.getElementById('roster').addEventListener('input',function(ev){
   if(ev.target.classList&&ev.target.classList.contains('cs'))
-    ev.target.value=ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+    ev.target.value=ev.target.value.toUpperCase().replace(/[^A-Z0-9\/]/g,'');
 });
 
 /* ── add form ── */
@@ -314,7 +324,7 @@ var REG_RE=/^[0-9][0-9A-Z-]{0,9}$/;
 var aReg=document.getElementById('aReg'), aCs=document.getElementById('aCs');
 aReg.addEventListener('input',function(){ this.value=this.value.toUpperCase().replace(/[^0-9A-Z-]/g,''); });
 aCs.addEventListener('input',function(){
-  this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  this.value=this.value.toUpperCase().replace(/[^A-Z0-9\/]/g,'');
   var t=typeOf(this.value);
   document.getElementById('aPrev').innerHTML=this.value
     ? t.g.toUpperCase()+' &middot; '+famLabel(t)+' &middot; defaults to '+defVis(t).toUpperCase()
@@ -330,7 +340,7 @@ document.getElementById('aRsvSeg').addEventListener('click',function(ev){
 document.getElementById('aAdd').addEventListener('click',function(){
   var reg=aReg.value.trim(), cs=aCs.value.toUpperCase().trim();
   if(!REG_RE.test(reg)){ aReg.focus(); aReg.style.borderColor='var(--red)'; setTimeout(function(){aReg.style.borderColor='';},1200); return; }
-  if(!(aRsv&&cs==='') && !/^[A-Z][A-Z0-9]{1,7}$/.test(cs)){ aCs.focus(); aCs.style.borderColor='var(--red)'; setTimeout(function(){aCs.style.borderColor='';},1200); return; }
+  if(!(aRsv&&cs==='') && !csOk(cs)){ aCs.focus(); aCs.style.borderColor='var(--red)'; setTimeout(function(){aCs.style.borderColor='';},1200); return; }
   if(roster.units.some(function(u){ return u.reg===reg; })){
     aReg.style.borderColor='var(--amber)'; setTimeout(function(){aReg.style.borderColor='';},1200); return;
   }
