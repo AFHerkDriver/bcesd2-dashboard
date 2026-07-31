@@ -82,17 +82,14 @@
   .stale .ubadge { filter: grayscale(.75) brightness(.55); }
   /* ── production style: one blank badge per lightbar family, the CAD designator
      (E121, AP124, BC121, UAV121…) drawn on the plate as CSS text ── */
-  .ulabel { position: absolute; left: 5%; right: 5%; top: 44%; bottom: 12%;
-            display: flex; align-items: center; justify-content: center;
+  .ulabel { position: absolute; left: 8%; right: 8%; top: 44%; bottom: 12%;
+            display: flex; align-items: center; justify-content: center; white-space: nowrap;
             font-family: Arial, 'Helvetica Neue', sans-serif; font-weight: 700; color: #FFF;
             letter-spacing: .02em; text-shadow: 0 1px 1px rgba(0,0,0,.65); }
+  /* starting sizes only — the fit() pass below shrinks any label that would touch the plate edge */
   .u64 .ulabel { font-size: 19px; }
   .u44 .ulabel { font-size: 12px; }
   .u34 .ulabel { font-size: 10px; }
-  /* 6+ character designators (UAV121) shrink to stay on the plate */
-  .u64 .ulabel.lng { font-size: 15px; }
-  .u44 .ulabel.lng { font-size: 10px; }
-  .u34 .ulabel.lng { font-size: 8px; }
   .note { font-size: 11px; color: #8B949E; margin-top: 16px; line-height: 1.7; }
   .note b { color: #E6EDF3; }
 </style>
@@ -116,11 +113,11 @@
   </div>
   <div class="card">
     <span class="state">STALE GPS &mdash; dimmed, never animated</span><br>
-    <div class="unit u64 stale"><span class="ubadge"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel lng">UAV121</span></span></div>
+    <div class="unit u64 stale"><span class="ubadge"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel">UAV121</span></span></div>
   </div>
   <div class="card">
     <span class="state">UAV121 RESPONDING &mdash; 2-light wig-wag</span><br>
-    <div class="unit u64"><span class="ubadge resp"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel lng">UAV121</span><span class="gl l"></span><span class="gl r"></span></span></div>
+    <div class="unit u64"><span class="ubadge resp"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel">UAV121</span><span class="gl l"></span><span class="gl r"></span></span></div>
   </div>
   <div class="card">
     <span class="state">BC121 RESPONDING &mdash; red/blue wig-wag, greens dark</span><br>
@@ -144,7 +141,7 @@
     &nbsp;&nbsp;
     <div class="unit u34"><span class="ubadge scene"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">M121</span></span></div>
     &nbsp;&nbsp;
-    <div class="unit u34"><span class="ubadge"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel lng">UAV121</span></span></div>
+    <div class="unit u34"><span class="ubadge"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel">UAV121</span></span></div>
   </div>
 </div>
 
@@ -164,12 +161,21 @@
   <b>Stale GPS dims and overrides everything.</b> prefers-reduced-motion disables the animation.
   <b>Placement:</b> dashboard = always on; MDT = optional layer in the layers control.
   <b>Labels match CAD:</b> the designator you see on dispatch (E121, M121, AP124, BC121, UAV121&hellip;) is CSS
-  text drawn on a blank plate &mdash; one badge asset per lightbar family, any unit string.
+  text drawn on a blank plate &mdash; one badge asset per lightbar family, any unit string, auto-shrunk
+  until it clears the plate margins so no designator ever touches the badge edge.
   <b>Fleet lightbar families (per the icon sheet):</b> GREEN-end bar = AC/DC/BC (command logic above) &middot;
   plain BLUE/WHITE/RED bar = UAV, ADM, UTL (2-light wig-wag; in practice you'll mostly see UAV) &middot;
   AMBER bar = MX/Maintenance (never runs code &mdash; steady badge only, no wig-wag state) &middot; MULTICOLOR
   red-blue-white-blue-red bar = all typical apparatus incl. MOF (ENG, MOF, MED, TDR, LDR, SQD, RES, BRS,
   WMD, AP &mdash; 4-light criss-cross).
 </div>
+<script>
+  // auto-fit: shrink any designator until it clears the plate margins — same pass
+  // production will run when it builds a marker divIcon
+  document.querySelectorAll('.ulabel').forEach(el => {
+    let s = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > el.offsetWidth && s > 5) { s -= .5; el.style.fontSize = s + 'px'; }
+  });
+</script>
 </body>
 </html>
