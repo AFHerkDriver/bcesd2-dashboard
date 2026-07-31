@@ -1652,7 +1652,7 @@ export default {
         for (const u of roster.units) {
           const reg = String(u.reg || "").trim().toUpperCase();
           const cs  = String(u.cs  || "").trim().toUpperCase();
-          if (!/^\d{3,4}-\d{2}$|^\d{2,6}$/.test(reg)) return json({ ok: false, error: "bad reg: " + reg }, 400);   /* ###-## normal; plain digits for oddballs (6459, 802) */
+          if (!/^[0-9][0-9A-Z-]{0,9}$/.test(reg)) return json({ ok: false, error: "bad reg: " + reg }, 400);   /* exactly as the fleet master lists it: 31925, 21323-G, 6459, 802 */
           if (!/^[A-Z]{1,4}\d{2,4}$/.test(cs)) return json({ ok: false, error: "bad callsign: " + cs  }, 400);
           if (seen.has(reg)) return json({ ok: false, error: "duplicate reg: " + reg }, 400);
           seen.add(reg);

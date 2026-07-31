@@ -128,10 +128,10 @@
 
   <div class="card">
     <h2>ADD UNIT</h2>
-    <div class="hint">Dept reg is the 3-digit fleet number + 2-digit year (e.g. 412-19) &mdash; that&rsquo;s how
-      Samsara reports the vehicle. The callsign is what CAD shows and what the map badge wears.</div>
+    <div class="hint">Dept reg exactly as the fleet master lists it (31925, 21323-G, 6459&hellip;) &mdash; that&rsquo;s
+      what ties to Samsara. The callsign is what CAD shows and what the map badge wears.</div>
     <div class="row">
-      <div class="field"><label>Dept Reg</label><input type="tel" id="aReg" placeholder="319-25" maxlength="7" autocomplete="off"></div>
+      <div class="field"><label>Dept Reg</label><input type="text" id="aReg" placeholder="31925" maxlength="10" autocomplete="off" autocapitalize="characters"></div>
       <div class="field"><label>Radio Callsign</label><input type="text" id="aCs" placeholder="E121" maxlength="7" autocomplete="off" autocapitalize="characters"></div>
       <div class="field"><label>Home Station</label>
         <select id="aStn"><option value="">&mdash;</option><option>121</option><option>122</option><option>123</option><option>124</option><option>125</option><option>161</option><option>162</option><option>163</option></select></div>
@@ -269,13 +269,11 @@ document.getElementById('roster').addEventListener('change',function(ev){
 });
 
 /* ── add form ── */
-function fmtReg(v){
-  var d=String(v).replace(/\D/g,'').slice(0,6);
-  return d.length===5 ? d.slice(0,3)+'-'+d.slice(3) : d;   /* 5 digits = ###-##; oddballs (6459, 802…) stay as typed */
-}
-var REG_RE=/^\d{3,4}-\d{2}$|^\d{2,6}$/;
+/* no auto-format — the fleet list has 21323-G, 6459, 802 alongside #####; store exactly
+   what the master list (and Samsara) says */
+var REG_RE=/^[0-9][0-9A-Z-]{0,9}$/;
 var aReg=document.getElementById('aReg'), aCs=document.getElementById('aCs');
-aReg.addEventListener('input',function(){ this.value=fmtReg(this.value); });
+aReg.addEventListener('input',function(){ this.value=this.value.toUpperCase().replace(/[^0-9A-Z-]/g,''); });
 aCs.addEventListener('input',function(){
   this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
   var t=typeOf(this.value);
@@ -284,7 +282,7 @@ aCs.addEventListener('input',function(){
     : '&nbsp;';
 });
 document.getElementById('aAdd').addEventListener('click',function(){
-  var reg=fmtReg(aReg.value), cs=aCs.value.toUpperCase().trim();
+  var reg=aReg.value.trim(), cs=aCs.value.toUpperCase().trim();
   if(!REG_RE.test(reg)){ aReg.focus(); aReg.style.borderColor='var(--red)'; setTimeout(function(){aReg.style.borderColor='';},1200); return; }
   if(!/^[A-Z]{1,4}\d{2,4}$/.test(cs)){ aCs.focus(); aCs.style.borderColor='var(--red)'; setTimeout(function(){aCs.style.borderColor='';},1200); return; }
   if(roster.units.some(function(u){ return u.reg===reg; })){
