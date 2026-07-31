@@ -327,6 +327,12 @@
      ["161",29.21967,-98.45806],["162",29.17785,-98.42410]].forEach(s =>
       L.marker([s[1], s[2]], { icon: L.icon({ iconUrl: "station-" + s[0] + ".png", iconSize: [30, 30], iconAnchor: [15, 15] }),
         interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(map));
+    /* Bexar County line — same soft white dashed ring as the wall (bexar-county.json) */
+    fetch("bexar-county.json").then(r => r.ok ? r.json() : null).then(c => {
+      if (!c || !Array.isArray(c.ring)) return;
+      L.polyline(c.ring.map(p => [p[1], p[0]]),
+        { color: "#FFFFFF", weight: 2, opacity: .45, dashArray: "7 7", interactive: false }).addTo(map);
+    }).catch(() => {});
     fetch("district-bounds.json").then(r => r.json()).then(b => {
       ["esd2", "esd6"].forEach(k => (b[k] || []).forEach(ring =>
         L.polygon(ring.map(p => [p[1], p[0]]), { color: "#FF6B35", weight: 1.5, fill: false, opacity: .55 }).addTo(map)));
