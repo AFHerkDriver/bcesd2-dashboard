@@ -31,10 +31,10 @@
   /* white-hot core inside each color — the pop comes from the core, the color from the halo */
   .gl.l { left: 7%;  background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(120,175,255,1) 26%, rgba(120,175,255,0) 78%); }
   .gl.r { right: 7%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(255,95,80,1)  26%, rgba(255,95,80,0)  78%); }
-  /* wig-wag: hard alternation, ~86 flashes/min */
+  /* wig-wag: hard alternation, ~55 flashes/min */
   @keyframes wig { 0%, 46% { opacity: 1; } 50%, 100% { opacity: 0; } }
-  .resp .gl.l { animation: wig .7s linear infinite; }
-  .resp .gl.r { animation: wig .7s linear infinite -.35s; }
+  .resp .gl.l { animation: wig 1.1s linear infinite; }
+  .resp .gl.r { animation: wig 1.1s linear infinite -.55s; }
   /* ── COMMAND rigs (BC / AC / DC): greens live at the lightbar ENDS ──
      Responding wig-wags the INNER red/blue only — the greens stay dark.
      On scene, mains go dark and the greens pulse: green = command established. */
@@ -46,10 +46,10 @@
   .gl.e2 { left: 25%; width: 21%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(110,170,255,1) 26%, rgba(110,170,255,0) 78%); }
   .gl.e3 { right: 25%; width: 21%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(110,170,255,1) 26%, rgba(110,170,255,0) 78%); }
   .gl.e4 { right: 2%; width: 25%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(255,80,66,1) 26%, rgba(255,80,66,0) 78%); }
-  .resp .gl.e1, .resp .gl.e3 { animation: wig .7s linear infinite; }
-  .resp .gl.e2, .resp .gl.e4 { animation: wig .7s linear infinite -.35s; }
-  .resp .gl.inl { animation: wig .7s linear infinite; }
-  .resp .gl.inr { animation: wig .7s linear infinite -.35s; }
+  .resp .gl.e1, .resp .gl.e3 { animation: wig 1.1s linear infinite; }
+  .resp .gl.e2, .resp .gl.e4 { animation: wig 1.1s linear infinite -.55s; }
+  .resp .gl.inl { animation: wig 1.1s linear infinite; }
+  .resp .gl.inr { animation: wig 1.1s linear infinite -.55s; }
   .gl.cl { left: 3%;  width: 26%; height: 26%; top: 5%; filter: blur(2px);
            background: radial-gradient(ellipse at center, rgba(90,255,130,1), rgba(90,255,130,0) 78%); }
   .gl.cr { right: 3%; width: 26%; height: 26%; top: 5%; filter: blur(2px);
