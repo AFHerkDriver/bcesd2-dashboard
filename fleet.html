@@ -131,10 +131,10 @@
     <div class="hint">Dept reg is the 3-digit fleet number + 2-digit year (e.g. 412-19) &mdash; that&rsquo;s how
       Samsara reports the vehicle. The callsign is what CAD shows and what the map badge wears.</div>
     <div class="row">
-      <div class="field"><label>Dept Reg</label><input type="tel" id="aReg" placeholder="412-19" maxlength="6" autocomplete="off"></div>
+      <div class="field"><label>Dept Reg</label><input type="tel" id="aReg" placeholder="319-25" maxlength="7" autocomplete="off"></div>
       <div class="field"><label>Radio Callsign</label><input type="text" id="aCs" placeholder="E121" maxlength="7" autocomplete="off" autocapitalize="characters"></div>
       <div class="field"><label>Home Station</label>
-        <select id="aStn"><option value="">&mdash;</option><option>121</option><option>122</option><option>123</option><option>124</option></select></div>
+        <select id="aStn"><option value="">&mdash;</option><option>121</option><option>122</option><option>123</option><option>124</option><option>125</option><option>161</option><option>162</option><option>163</option></select></div>
       <div class="field"><label>&nbsp;</label><button class="btn primary" id="aAdd" style="width:100%;min-height:36px">+ ADD</button></div>
     </div>
     <div class="hint" id="aPrev" style="margin-top:0">&nbsp;</div>
@@ -172,24 +172,28 @@ var TYPES=[
   {p:'E',   g:'Engines',            fam:'app'},
   {p:'AP',  g:'Aerials',            fam:'app'},
   {p:'LDR', g:'Aerials',            fam:'app'},
+  {p:'L',   g:'Aerials',            fam:'app'},
   {p:'MED', g:'Medics',             fam:'app'},
   {p:'M',   g:'Medics',             fam:'app'},
   {p:'BC',  g:'Command',            fam:'app', cmd:1},
   {p:'AC',  g:'Command',            fam:'rb',  cmd:1},
   {p:'DC',  g:'Command',            fam:'rb',  cmd:1},
   {p:'TDR', g:'Tenders',            fam:'app'},
-  {p:'BRS', g:'Brush',              fam:'app'},
-  {p:'BR',  g:'Brush',              fam:'app'},
+  {p:'BRS', g:'Brush & Attack',     fam:'app'},
+  {p:'BR',  g:'Brush & Attack',     fam:'app'},
+  {p:'AT',  g:'Brush & Attack',     fam:'app'},
   {p:'SQD', g:'Squads & Rescue',    fam:'app'},
   {p:'RES', g:'Squads & Rescue',    fam:'app'},
   {p:'WMD', g:'Squads & Rescue',    fam:'app'},
-  {p:'MOF', g:'MOF',                fam:'app'},
+  {p:'MOF', g:'MOF & Air',          fam:'app'},
+  {p:'MAC', g:'MOF & Air',          fam:'app'},
   {p:'UAV', g:'UAV',                fam:'rb'},
   {p:'UTL', g:'Utility & Admin',    fam:'rb'},
   {p:'ADM', g:'Utility & Admin',    fam:'rb'},
   {p:'MX',  g:'Maintenance',        fam:'amber'}
 ];
-var GROUP_ORDER=['Engines','Aerials','Medics','Command','Tenders','Brush','Squads & Rescue','UAV','MOF','Utility & Admin','Maintenance','Other'];
+var GROUP_ORDER=['Engines','Aerials','Medics','Command','Tenders','Brush & Attack','Squads & Rescue','UAV','MOF & Air','Utility & Admin','Maintenance','Other'];
+var STATIONS=['','121','122','123','124','125','161','162','163'];
 function typeOf(cs){
   var pfx=(String(cs).toUpperCase().match(/^[A-Z]+/)||[''])[0];
   var best=null;
@@ -227,7 +231,7 @@ function render(){
             +'<button data-v="off"    class="'+(u.vis==='off'   ?'on':'')+'">OFF</button>'
           +'</div>'
           +'<div class="stn"><label>Home stn</label><select>'
-            +['','121','122','123','124'].map(function(s){
+            +STATIONS.map(function(s){
                return '<option value="'+s+'"'+(String(u.st||'')===s?' selected':'')+'>'+(s||'—')+'</option>'; }).join('')
           +'</select></div>'
         +'</div>'
@@ -266,9 +270,10 @@ document.getElementById('roster').addEventListener('change',function(ev){
 
 /* ── add form ── */
 function fmtReg(v){
-  var d=String(v).replace(/\D/g,'').slice(0,5);
-  return d.length>3 ? d.slice(0,3)+'-'+d.slice(3) : d;
+  var d=String(v).replace(/\D/g,'').slice(0,6);
+  return d.length===5 ? d.slice(0,3)+'-'+d.slice(3) : d;   /* 5 digits = ###-##; oddballs (6459, 802…) stay as typed */
 }
+var REG_RE=/^\d{3,4}-\d{2}$|^\d{2,6}$/;
 var aReg=document.getElementById('aReg'), aCs=document.getElementById('aCs');
 aReg.addEventListener('input',function(){ this.value=fmtReg(this.value); });
 aCs.addEventListener('input',function(){
@@ -280,7 +285,7 @@ aCs.addEventListener('input',function(){
 });
 document.getElementById('aAdd').addEventListener('click',function(){
   var reg=fmtReg(aReg.value), cs=aCs.value.toUpperCase().trim();
-  if(!/^\d{3}-\d{2}$/.test(reg)){ aReg.focus(); aReg.style.borderColor='var(--red)'; setTimeout(function(){aReg.style.borderColor='';},1200); return; }
+  if(!REG_RE.test(reg)){ aReg.focus(); aReg.style.borderColor='var(--red)'; setTimeout(function(){aReg.style.borderColor='';},1200); return; }
   if(!/^[A-Z]{1,4}\d{2,4}$/.test(cs)){ aCs.focus(); aCs.style.borderColor='var(--red)'; setTimeout(function(){aCs.style.borderColor='';},1200); return; }
   if(roster.units.some(function(u){ return u.reg===reg; })){
     aReg.style.borderColor='var(--amber)'; setTimeout(function(){aReg.style.borderColor='';},1200); return;
@@ -296,6 +301,23 @@ document.getElementById('aAdd').addEventListener('click',function(){
 function normalize(){
   roster.units.forEach(function(u){ var t=typeOf(u.cs); u.fam=t.fam; u.cmd=t.cmd?1:0; delete u._i; });
 }
+/* First-run seed: when the server roster is empty and no local draft exists, offer the
+   pre-mapped Fleet Master List (fleet-seed.json) as an unsaved draft — review, adjust, SAVE. */
+function seedIfEmpty(){
+  if(roster.units.length) { render(); return; }
+  fetch('fleet-seed.json',{cache:'no-store'})
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(s){
+      if(s&&Array.isArray(s.units)&&s.units.length){
+        roster={v:1,units:s.units.map(function(u){ var t=typeOf(u.cs);
+          return {reg:u.reg,cs:u.cs,st:u.st||'',vis:u.vis||defVis(t),fam:t.fam,cmd:t.cmd?1:0}; })};
+        markDirty();
+        document.getElementById('stat').textContent='seeded from '+(s.src||'fleet list')+' — review, then SAVE to publish';
+      }
+      render();
+    })
+    .catch(function(){ render(); });
+}
 function load(){
   fetch(AUTH_URL+'/roster?pin='+encodeURIComponent(pin()))
     .then(function(r){ if(r.status===404) throw 'no-endpoint'; return r.json(); })
@@ -304,16 +326,17 @@ function load(){
       roster=j.roster&&Array.isArray(j.roster.units)?j.roster:{v:1,units:[]};
       var d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT)||'null'); }catch(e){}
       if(d&&Array.isArray(d.units)&&JSON.stringify(d)!==JSON.stringify(roster)){
-        roster=d; markDirty();
+        roster=d; markDirty(); render();
         document.getElementById('stat').textContent='unsaved draft restored — hit SAVE to publish';
+        return;
       }
-      render();
+      seedIfEmpty();
     })
     .catch(function(err){
       if(err==='no-endpoint') document.getElementById('wkNote').hidden=false;
       var d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT)||'null'); }catch(e){}
-      if(d&&Array.isArray(d.units)){ roster=d; }
-      render();
+      if(d&&Array.isArray(d.units)){ roster=d; render(); return; }
+      seedIfEmpty();
     });
 }
 document.getElementById('save').addEventListener('click',function(){

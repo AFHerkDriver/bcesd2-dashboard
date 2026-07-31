@@ -1652,7 +1652,7 @@ export default {
         for (const u of roster.units) {
           const reg = String(u.reg || "").trim().toUpperCase();
           const cs  = String(u.cs  || "").trim().toUpperCase();
-          if (!/^\d{3}-\d{2}$/.test(reg))      return json({ ok: false, error: "bad reg: "      + reg }, 400);
+          if (!/^\d{3,4}-\d{2}$|^\d{2,6}$/.test(reg)) return json({ ok: false, error: "bad reg: " + reg }, 400);   /* ###-## normal; plain digits for oddballs (6459, 802) */
           if (!/^[A-Z]{1,4}\d{2,4}$/.test(cs)) return json({ ok: false, error: "bad callsign: " + cs  }, 400);
           if (seen.has(reg)) return json({ ok: false, error: "duplicate reg: " + reg }, 400);
           seen.add(reg);
