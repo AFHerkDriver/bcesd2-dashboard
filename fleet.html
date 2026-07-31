@@ -155,7 +155,7 @@
       <div class="field"><label>Year</label><input type="tel" id="aYr" placeholder="2025" maxlength="4" autocomplete="off"></div>
       <div class="field"><label>Make / Model</label><input type="text" id="aMk" placeholder="Pierce Engine" maxlength="48" autocomplete="off"></div>
       <div class="field"><label>Home Station</label>
-        <input type="text" id="aStn" placeholder="121 or 121/124" maxlength="12" inputmode="numeric" autocomplete="off"></div>
+        <input type="text" id="aStn" placeholder="121 or 121/124" maxlength="12" autocomplete="off"></div>
       <div class="field"><label>Reserve</label>
         <div class="seg" id="aRsvSeg"><button data-v="no" class="on" type="button">&mdash;</button><button data-v="yes" type="button">RESERVE</button></div></div>
       <div class="field"><label>&nbsp;</label><button class="btn primary" id="aAdd" style="width:100%;min-height:36px">+ ADD</button></div>
@@ -267,7 +267,7 @@ function render(){
             +'<button data-v="oncall" class="'+(u.vis==='oncall'?'on':'')+'">ON-CALL</button>'
             +'<button data-v="off"    class="'+(u.vis==='off'   ?'on':'')+'">OFF</button>'
           +'</div>'
-          +'<div class="stn"><label>Home stn</label><input class="stn-in" value="'+esc(u.st||'')+'" placeholder="&mdash;" maxlength="12" inputmode="numeric" autocomplete="off"></div>'
+          +'<div class="stn"><label>Home stn</label><input class="stn-in" value="'+esc(u.st||'')+'" placeholder="&mdash;" maxlength="12" autocomplete="off"></div>'
         +'</div>'
         +'<button class="del" title="Remove">✕</button>'
       +'</div>';
