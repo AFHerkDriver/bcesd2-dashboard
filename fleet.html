@@ -129,7 +129,7 @@
     <h1>FLEET GPS <span style="color:var(--accent)">ROSTER</span></h1>
     <div class="sub">SAMSARA AVL &middot; REG &rarr; CALLSIGN &middot; VIEW MODE</div>
   </div>
-  <div class="actions"><a class="btn" href="control.html">&larr; CONTROL</a></div>
+  <div class="actions"><button class="btn" id="reseed" type="button">&#8635; RESEED</button><a class="btn" href="control.html">&larr; CONTROL</a></div>
 </div>
 
 <div class="wrap">
@@ -351,10 +351,9 @@ function normalize(){
     u.rsv=u.rsv?1:0; u.mk=String(u.mk||'').slice(0,48); u.yr=String(u.yr||'').slice(0,4); delete u._i;
   });
 }
-/* First-run seed: when the server roster is empty and no local draft exists, offer the
-   pre-mapped Fleet Master List (fleet-seed.json) as an unsaved draft — review, adjust, SAVE. */
-function seedIfEmpty(){
-  if(roster.units.length) { render(); return; }
+/* Seed from the pre-mapped Fleet Master List (fleet-seed.json), as an unsaved draft —
+   review, adjust, SAVE. Runs on first open when empty; the RESEED button forces it. */
+function applySeed(){
   fetch('fleet-seed.json',{cache:'no-store'})
     .then(function(r){ return r.ok?r.json():null; })
     .then(function(s){
@@ -369,6 +368,24 @@ function seedIfEmpty(){
     })
     .catch(function(){ render(); });
 }
+function seedIfEmpty(){
+  if(roster.units.length) { render(); return; }
+  applySeed();
+}
+/* RESEED — two-tap arm: discards the on-screen list AND the local draft, reloads the
+   packaged seed. Does not touch the published KV roster until you SAVE. */
+document.getElementById('reseed').addEventListener('click',function(){
+  var b=this;
+  if(!b.dataset.armed){
+    b.dataset.armed='1'; b.textContent='SURE? TAP AGAIN';
+    b.style.borderColor='var(--red)'; b.style.color='var(--red)';
+    setTimeout(function(){ delete b.dataset.armed; b.innerHTML='&#8635; RESEED'; b.style.borderColor=''; b.style.color=''; },3000);
+    return;
+  }
+  delete b.dataset.armed; b.innerHTML='&#8635; RESEED'; b.style.borderColor=''; b.style.color='';
+  try{ localStorage.removeItem(DRAFT); }catch(e){}
+  applySeed();
+});
 function load(){
   fetch(AUTH_URL+'/roster?pin='+encodeURIComponent(pin()))
     .then(function(r){ if(r.status===404) throw 'no-endpoint'; return r.json(); })
