@@ -1585,10 +1585,18 @@
         if(o && o.length>=4 && a.indexOf(o)>=0) return true; }
       return false;
     }
-    try{ onBoardState(function(ok,st){                              /* officer OOS list changes repaint the pins */
-      var next=((st&&st.oosHydrants)||[]).map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
-      if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)){ window.OOS_HYD=next; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} }
-    }); }catch(e){}
+    /* onBoardState is declared ~800 lines BELOW this module (var — hoisted undefined here). The old
+       try{onBoardState(...)}catch{} threw at init and SWALLOWED it, so the OOS subscription never
+       registered: flagged plugs painted as ordinary blue/teal on the wall while the MDT (which
+       fetches state itself) showed red. Root cause of the 7/31 "OOS shows in service" bug. Wait for
+       the declaration instead — the subscription replays the latest state on registration. */
+    (function hookOOS(){
+      if(typeof onBoardState!=="function"){ setTimeout(hookOOS,400); return; }
+      onBoardState(function(ok,st){                              /* officer OOS list changes repaint the pins */
+        var next=((st&&st.oosHydrants)||[]).map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
+        if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)){ window.OOS_HYD=next; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} }
+      });
+    })();
     function hydUpdate(){
       if(map.getZoom()<HYD_Z || !window.HYDB){ hydLayer.clearLayers(); hydPainted=""; return; }
       var b=map.getBounds().pad(0.12);
