@@ -35,11 +35,6 @@
   @keyframes wig { 0%, 46% { opacity: 1; } 50%, 100% { opacity: 0; } }
   .resp .gl.l { animation: wig .5s linear infinite; }
   .resp .gl.r { animation: wig .5s linear infinite -.25s; }
-  /* ── COMMAND rigs (BC / AC / DC): greens live at the lightbar ENDS ──
-     Responding wig-wags the INNER red/blue only — the greens stay dark.
-     On scene, mains go dark and the greens pulse: green = command established. */
-  .gl.inl { left: 26%; width: 24%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(120,175,255,1) 26%, rgba(120,175,255,0) 78%); }
-  .gl.inr { right: 22%; width: 24%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(255,95,80,1) 26%, rgba(255,95,80,0) 78%); }
   /* ENGINE — the full-width bar earns a 4-light criss-cross: outer reds and inner blues in
      opposite phase, so something is always lit on both halves */
   .gl.e1 { left: 2%;  width: 25%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(255,80,66,1) 26%, rgba(255,80,66,0) 78%); }
@@ -48,17 +43,10 @@
   .gl.e4 { right: 2%; width: 25%; background: radial-gradient(ellipse at center, rgba(255,255,255,.95) 0%, rgba(255,80,66,1) 26%, rgba(255,80,66,0) 78%); }
   .resp .gl.e1, .resp .gl.e3 { animation: wig .5s linear infinite; }
   .resp .gl.e2, .resp .gl.e4 { animation: wig .5s linear infinite -.25s; }
-  .resp .gl.inl { animation: wig .5s linear infinite; }
-  .resp .gl.inr { animation: wig .5s linear infinite -.25s; }
-  .gl.cl { left: 3%;  width: 26%; height: 26%; top: 5%; filter: blur(2px);
-           background: radial-gradient(ellipse at center, rgba(90,255,130,1), rgba(90,255,130,0) 78%); }
-  .gl.cr { right: 3%; width: 26%; height: 26%; top: 5%; filter: blur(2px);
-           background: radial-gradient(ellipse at center, rgba(90,255,130,1), rgba(90,255,130,0) 78%); }
-  @keyframes cmdpulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
-  .cmd .gl.cl, .cmd .gl.cr { animation: cmdpulse 2.2s ease-in-out infinite; }
-  /* the corner LEDs are pixels at map size — the HALO is what carries "command established"
-     across the room: a breathing green ring around the whole badge, same 2.2 s breath as the
-     on-scene halos so every scene glow shares one rhythm */
+  /* ── COMMAND (BC / AC / DC): they run their family's normal icon and wig-wag —
+     BC on the apparatus badge, AC/DC on the plain bar like UAV. What marks command is the
+     ON-SCENE halo: GREEN instead of blue/red, same 2.2 s breath so every scene glow
+     shares one rhythm. Green on the map = command established. */
   .cmd::after { content: ""; position: absolute; inset: 1%; border-radius: 14%; pointer-events: none;
                 animation: cmdhalo 2.2s ease-in-out infinite; }
   @keyframes cmdhalo {
@@ -120,12 +108,16 @@
     <div class="unit u64"><span class="ubadge resp"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel">UAV121</span><span class="gl l"></span><span class="gl r"></span></span></div>
   </div>
   <div class="card">
-    <span class="state">BC121 RESPONDING &mdash; red/blue wig-wag, greens dark</span><br>
-    <div class="unit u64"><span class="ubadge resp"><img src="unit-blank-cmd.png" alt="BC badge"><span class="ulabel">BC121</span><span class="gl inl"></span><span class="gl inr"></span></span></div>
+    <span class="state">BC121 RESPONDING &mdash; apparatus icon, criss-cross</span><br>
+    <div class="unit u64"><span class="ubadge resp"><img src="unit-blank-app.png" alt="BC badge"><span class="ulabel">BC121</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div>
   </div>
   <div class="card">
-    <span class="state">BC121 ON SCENE &mdash; mains off, GREEN pulse = command</span><br>
-    <div class="unit u64"><span class="ubadge cmd"><img src="unit-blank-cmd.png" alt="BC badge"><span class="ulabel">BC121</span><span class="gl cl"></span><span class="gl cr"></span></span></div>
+    <span class="state">BC121 ON SCENE &mdash; GREEN halo = command</span><br>
+    <div class="unit u64"><span class="ubadge cmd"><img src="unit-blank-app.png" alt="BC badge"><span class="ulabel">BC121</span></span></div>
+  </div>
+  <div class="card">
+    <span class="state">AC121 ON SCENE &mdash; UAV-style icon, GREEN halo = command</span><br>
+    <div class="unit u64"><span class="ubadge cmd"><img src="unit-blank-rb.png" alt="AC badge"><span class="ulabel">AC121</span></span></div>
   </div>
   <div class="card">
     <span class="state">MX121 &mdash; maintenance, never runs code</span><br>
@@ -135,7 +127,7 @@
     <span class="state">MAP SIZES &mdash; 44 px / 34 px</span><br>
     <div class="unit u44"><span class="ubadge resp"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">E121</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div>
     &nbsp;&nbsp;
-    <div class="unit u44"><span class="ubadge cmd"><img src="unit-blank-cmd.png" alt="BC badge"><span class="ulabel">BC121</span><span class="gl cl"></span><span class="gl cr"></span></span></div>
+    <div class="unit u44"><span class="ubadge cmd"><img src="unit-blank-app.png" alt="BC badge"><span class="ulabel">BC121</span></span></div>
     &nbsp;&nbsp;
     <div class="unit u34"><span class="ubadge resp"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">E121</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div>
     &nbsp;&nbsp;
@@ -154,8 +146,9 @@
   scene radius; wig-wag also ends on no movement for 5 min while attached, or the 30-minute backstop. <b>Turnaround (future metrics):</b> attached + closing on scene, then distance
   climbs ~400 m past its minimum and keeps climbing 45&ndash;60 s without ever arriving = cleared en route &mdash;
   lights off, normal icon, and log the handoff timestamp for metrics (distance FLAT is staging, not a turnaround;
-  skip inference on geo-suspect calls). Returning after clearing = normal icon, no lights, no special state. <b>Command rigs (BC/AC/DC):</b> responding wig-wags red/blue only, greens dark;
-  on arrival the mains go dark and the <b>greens pulse &mdash; green on the map = command established at that scene</b>,
+  skip inference on geo-suspect calls). Returning after clearing = normal icon, no lights, no special state. <b>Command rigs (BC/AC/DC):</b> run their family's normal icon and responding
+  wig-wag &mdash; BC on the apparatus badge (criss-cross), AC/DC on the plain bar like UAV (2-light); on arrival
+  the <b>on-scene halo is GREEN instead of blue/red &mdash; green on the map = command established at that scene</b>,
   ending when the call closes or the rig leaves. <b>Stacking: command rigs always render on top</b> when
   units overlap at a scene &mdash; and command-established on top of other command rigs.
   <b>Stale GPS dims and overrides everything.</b> prefers-reduced-motion disables the animation.
@@ -163,11 +156,11 @@
   <b>Labels match CAD:</b> the designator you see on dispatch (E121, M121, AP124, BC121, UAV121&hellip;) is CSS
   text drawn on a blank plate &mdash; one badge asset per lightbar family, any unit string, auto-shrunk
   until it clears the plate margins so no designator ever touches the badge edge.
-  <b>Fleet lightbar families (per the icon sheet):</b> GREEN-end bar = AC/DC/BC (command logic above) &middot;
-  plain BLUE/WHITE/RED bar = UAV, ADM, UTL (2-light wig-wag; in practice you'll mostly see UAV) &middot;
+  <b>Icon assignment:</b> plain BLUE/WHITE/RED bar = UAV, ADM, UTL, AC, DC (2-light wig-wag) &middot;
   AMBER bar = MX/Maintenance (never runs code &mdash; steady badge only, no wig-wag state) &middot; MULTICOLOR
-  red-blue-white-blue-red bar = all typical apparatus incl. MOF (ENG, MOF, MED, TDR, LDR, SQD, RES, BRS,
-  WMD, AP &mdash; 4-light criss-cross).
+  red-blue-white-blue-red bar = BC + all typical apparatus incl. MOF (BC, ENG, MOF, MED, TDR, LDR, SQD,
+  RES, BRS, WMD, AP &mdash; 4-light criss-cross). Command is marked by the GREEN on-scene halo, not a
+  special badge (the green-end blank stays in the repo unused).
 </div>
 <script>
   // auto-fit: shrink any designator until it clears the plate margins — same pass
