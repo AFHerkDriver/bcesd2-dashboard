@@ -1645,6 +1645,18 @@ export default {
         const gate = await pinGate(env, ip, String(body.pin || ""), json);
         if (gate.res) return gate.res;
         if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "display-only" }, 403);
+        /* {restore:true} swaps the automatic backup back in (and banks the current copy),
+           so any bad save is one call from undone */
+        if (body.restore) {
+          const bak = await env.PINS.get("avlroster:bak");
+          if (!bak) return json({ ok: false, error: "no backup yet" }, 404);
+          const cur = await env.PINS.get("avlroster");
+          if (cur) await env.PINS.put("avlroster:bak", cur);
+          await env.PINS.put("avlroster", bak);
+          await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
+                                 action: "RESTORED fleet GPS roster from backup" });
+          return json({ ok: true, restored: true }, 200);
+        }
         const roster = body.roster;
         if (!roster || !Array.isArray(roster.units) || roster.units.length > 200)
           return json({ ok: false, error: "bad roster" }, 400);
@@ -1668,6 +1680,8 @@ export default {
                        cmd: u.cmd ? 1 : 0, fmo: u.fmo ? 1 : 0, mk: String(u.mk || "").slice(0, 48),
                        yr: String(u.yr || "").replace(/\D/g, "").slice(0, 4), rsv });
         }
+        const prev = await env.PINS.get("avlroster");
+        if (prev) await env.PINS.put("avlroster:bak", prev);   /* every save banks the previous copy — one-step undo */
         await env.PINS.put("avlroster", JSON.stringify({ v: 1, sv: parseInt(roster.sv, 10) || 1, at: Date.now(), units }));   /* sv = fleet-seed version absorbed; at = save stamp so stale drafts can't outrank this copy */
         await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
                                action: "updated fleet GPS roster (" + units.length + " units)" });
