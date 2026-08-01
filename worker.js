@@ -153,6 +153,7 @@ function clsOf(t) { t = String(t || "").toUpperCase();
      pages during a CAD outage (observed 2026-07-26) — dispatcher traffic, never workload. */
   if (/GENERAL|BURNING|BURN BAN|HYDRANT|CAD OUTAGE|DISREGARD/.test(t)) return "gen";
   if (/MUTUAL/.test(t)) return "mutual";
+  if (/ALARM/.test(t) && /MED/.test(t)) return "med";   /* "ALARM - MEDICAL" — a medical-alert pendant is an EMS run, not a fire alarm (observed 2026-08-01) */
   if (/ALARM/.test(t)) return "alarm";
   if (/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "mvc";
   if (/FIRE|STRUCTURE|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "fire";

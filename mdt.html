@@ -720,6 +720,7 @@
   function callColor(t) { t = String(t || "").toUpperCase();
     if (GEN_RE.test(t)) return "#3FB950";              /* broadcast, not a run — green, before any run class can claim it */
     if (/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "#FF8C42";
+    if (/ALARM/.test(t) && /MED/.test(t)) return "#FFC107";   /* "ALARM - MEDICAL" — EMS gold, not alarm purple */
     if (/ALARM/.test(t)) return "#A371F7";
     if (/FIRE|STRUCT|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "#F85149";
     if (/RESCUE/.test(t)) return "#FF7EB6";
@@ -745,6 +746,7 @@
   const tenderCache = {};
   const tenderKey = (c) => c.cad_code || ("id:" + (c && c.id));
   function tenderClass(t) { t = String(t || "").toUpperCase();   /* wall's classify order: ALARM, then MVC (excluded), then FIRE */
+    if (/ALARM/.test(t) && /MED/.test(t)) return "";   /* medical-alert pendant — no water-supply question */
     if (/ALARM/.test(t)) return "alarm";
     if (/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "";
     if (/FIRE|STRUCT|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "fire";

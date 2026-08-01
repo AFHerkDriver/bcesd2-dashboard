@@ -2839,6 +2839,7 @@
          Buckets to OTHER, which paints a GRAY map pin (dim), keeping it visually distinct
          from our own in-district run types. */
       if(/MUTUAL/.test(t)) return "";
+      if(/ALARM/.test(t) && /MED/.test(t)) return "k-med";   /* "ALARM - MEDICAL" — medical-alert pendant = EMS run, not a fire alarm */
       if(/ALARM/.test(t)) return "k-alarm";
       if(/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "k-mvc";
       if(/FIRE|STRUCTURE|SMOKE|BRUSH|GRASS|WILDLAND/.test(t)) return "k-fire";
