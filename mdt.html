@@ -829,8 +829,9 @@
               (when ? '<span><b>' + when + '</b> &middot; ' + age + '</span>' : "") +
               (c.cross ? '<span>X: ' + esc(c.cross) + "</span>" : "") +
               (c.mapc ? '<span>MAP <b>' + esc(c.mapc) + "</b></span>" : "") + "</div>" : "") +
-            (() => {                                       /* nearest district camera — eyes on scene before arrival */
+            (() => {                                       /* nearest district camera — ONLY when it will likely show the incident: roadway call types within 1 mi (a camera sees its corridor, not into a house) */
               if (slim || c.lat == null || c.lng == null || c.gs) return "";
+              if (!/MVC|MVA|ACCIDENT|COLLISION|CRASH|FIRE - VEHICLE|VEHICLE FIRE/i.test(String(c.type || ""))) return "";
               const n = camNearest(c.lat, c.lng);
               if (!n) return "";
               return '<button class="cambtn" data-cam="' + esc(n.cam.id) + '" type="button">&#128249; NEAREST CAMERA &middot; ' + n.mi.toFixed(1) + ' mi</button>';
@@ -1121,9 +1122,10 @@
   function camAttach() {                             /* idempotent: runs from the fetch callback AND from boot — whichever finds both map and db LAST wins */
     if (!CAMDB || !map || camLayer) return;
     camLayer = L.layerGroup();
-    const camIcon = L.divIcon({ className: "", html: '<div style="font-size:15px;text-shadow:0 0 3px #000">&#128249;</div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+    const camIcon = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15],
+      html: '<div style="width:30px;height:30px;border-radius:8px;background:rgba(13,17,23,.88);border:2px solid #2DD4BF;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 1px 4px rgba(0,0,0,.7)">&#128249;</div>' });   /* a real tap target, visible on satellite imagery */
     j.cams.forEach(c => {
-      L.marker([c.la, c.ln], { icon: camIcon, keyboard: false, zIndexOffset: -400 })
+      L.marker([c.la, c.ln], { icon: camIcon, keyboard: false, zIndexOffset: -100 })
         .on("click", () => camOpen(c)).addTo(camLayer);
     });
     camLayer.addTo(map);
@@ -1136,7 +1138,7 @@
       const dy = (c.la - lat) * 110574, dx = (c.ln - lng) * 96900, d = Math.sqrt(dy * dy + dx * dx);
       if (d < bd) { bd = d; best = c; }
     }
-    return (best && bd <= 4023) ? { cam: best, mi: (bd / 1609.34) } : null;   /* 2.5 mi cap — beyond that it isn't "eyes on scene" */
+    return (best && bd <= 1609) ? { cam: best, mi: (bd / 1609.34) } : null;   /* 1 mi cap — a traffic camera sees its corridor, not a neighborhood */
   }
   function camStop() {
     clearTimeout(camTimer); camTimer = null;               /* a stale fallback timer must never kill the NEXT camera's session */

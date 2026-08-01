@@ -1340,7 +1340,8 @@
        the MDT carries the live-video experience. ── */
     var camWallLayer=L.layerGroup();
     fetch("cameras.json").then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(j){
-      var ic=L.divIcon({className:"",html:'<div style="font-size:14px;text-shadow:0 0 3px #000">&#128249;</div>',iconSize:[16,16],iconAnchor:[8,8]});
+      var ic=L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
+        html:'<div style="width:26px;height:26px;border-radius:7px;background:rgba(13,17,23,.88);border:2px solid #2DD4BF;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 1px 4px rgba(0,0,0,.7)">&#128249;</div>'});
       j.cams.forEach(function(c){
         L.marker([c.la,c.ln],{icon:ic,keyboard:false,zIndexOffset:-400})
           .bindPopup('<div style="min-width:200px"><b>'+String(c.id).replace(/[<>&]/g,"")+'</b><br><span class="cam-slot" data-cam="'+String(c.id).replace(/[<>&"]/g,"")+'">loading snapshot\u2026</span></div>',{maxWidth:340})
