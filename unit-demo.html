@@ -108,7 +108,7 @@
   @keyframes mflash  { 0%, 46% { filter: brightness(2.3) saturate(1.35); } 50%, 100% { filter: brightness(.32) saturate(1.15); } }   /* OFF = deep dark red/blue — the flash pops against its own dark half, not the map */
   .micro.resp .mb { animation: mflash .5s linear infinite; }
   .micro.resp .mr { animation: mflash .5s linear infinite -.25s; }
-  @keyframes mbreath { 0%, 100% { filter: brightness(.75); } 50% { filter: brightness(2.3) saturate(1.35); } }
+  @keyframes mbreath { 0%, 100% { filter: brightness(.4) saturate(1.15); } 50% { filter: brightness(2.3) saturate(1.35); } }   /* same dark-off trick as the wig-wag, kept a notch softer so it still breathes */
   .micro.scene .mb { animation: mbreath 4.4s ease-in-out infinite; }
   .micro.scene .mr { animation: mbreath 4.4s ease-in-out infinite -2.2s; }
   .micro.cmd { background: rgb(70,255,120); }
