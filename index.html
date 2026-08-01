@@ -588,7 +588,9 @@
     header{flex-wrap:wrap;row-gap:8px}
     /* phone header — two deliberate rows: [shield · centered title] then [BURN BAN · clock · ON DUTY].
        .id takes the rest of row one, which FORCES the chips+clock onto their own balanced strip. */
-    .id{flex:1 1 calc(100% - 78px);text-align:center;min-width:0}
+    header{position:relative}
+    .shield{position:absolute;left:12px;top:12px}   /* out of flow: the title centers on the TRUE screen middle, not the leftover space */
+    .id{flex:1 1 100%;text-align:center;min-width:0;padding:0 64px}   /* symmetric clearance past the shield */
     .id h1{font-size:22px}
     .hchip{order:3}
     .clock{order:3;flex:1 1 auto;text-align:center;margin-left:0}
