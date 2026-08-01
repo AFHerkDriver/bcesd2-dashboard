@@ -105,7 +105,7 @@
   .micro.app.scene .m1, .micro.app.scene .m4 { animation: mbreath 4.4s ease-in-out infinite -2.2s; }
   .micro.mx .mb { background: rgb(255,176,46); }             /* maintenance: steady AMBER|RED, never animates */
   .micro.mx .mr { background: rgb(255,42,30); }
-  @keyframes mflash  { 0%, 46% { filter: brightness(2.3) saturate(1.35); } 50%, 100% { filter: brightness(.8); } }
+  @keyframes mflash  { 0%, 46% { filter: brightness(2.3) saturate(1.35); } 50%, 100% { filter: brightness(.32) saturate(1.15); } }   /* OFF = deep dark red/blue — the flash pops against its own dark half, not the map */
   .micro.resp .mb { animation: mflash .5s linear infinite; }
   .micro.resp .mr { animation: mflash .5s linear infinite -.25s; }
   @keyframes mbreath { 0%, 100% { filter: brightness(.75); } 50% { filter: brightness(2.3) saturate(1.35); } }
