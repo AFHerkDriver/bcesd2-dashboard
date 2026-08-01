@@ -123,6 +123,13 @@
                     50%      { box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 9px 3px rgba(70,255,120,.95), 0 0 20px 7px rgba(70,255,120,.45); } }
   .micro.stale { filter: grayscale(1) brightness(.5); }
   @media (prefers-reduced-motion: reduce) { .micro, .micro i { animation: none !important; } }
+  /* ── RESPONSE PLAYBACK — pins glide on left/top transitions; JS swaps state classes on arrival ── */
+  .pin.mv { transition: left 6s linear, top 6s linear; }
+  .inc-ring { display: block; width: 10px; height: 10px; border-radius: 50%; position: relative;
+              background: rgba(255,107,53,.95); box-shadow: 0 0 6px 2px rgba(255,107,53,.55); }
+  .inc-ring::after { content: ""; position: absolute; inset: -7px; border-radius: 50%;
+              border: 2px solid rgba(255,107,53,.75); animation: incping 1.6s ease-out infinite; }
+  @keyframes incping { 0% { transform: scale(.35); opacity: 1; } 100% { transform: scale(1.7); opacity: 0; } }
   .note { font-size: 11px; color: #8B949E; margin-top: 16px; line-height: 1.7; }
   .note b { color: #E6EDF3; }
 </style>
@@ -195,6 +202,13 @@
   <div class="pin" style="left:22%;top:74%"><span class="micro mx"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
 </div>
 
+<div class="sub" style="margin:22px 0 8px">RESPONSE PLAYBACK &mdash; a call drops, E121 rolls and goes to work, BC121 follows and establishes command. Loops.</div>
+<div class="stage2" id="playStage">
+  <div class="pin" id="playInc" style="left:60%;top:44%" hidden><span class="inc-ring"></span></div>
+  <div class="pin mv" id="playE" style="left:16%;top:80%"><span class="micro app resp" id="playEchip"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
+  <div class="pin mv" id="playBC" style="left:86%;top:14%"><span class="micro app resp" id="playBCchip"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
+</div>
+
 <div class="note"><div class="note">
   <b>Lights ON</b> = attached to a live call + more than ~150 m from the scene. <b>Arrival</b>
   (&lt;150 m and stopped ~30 s) ends the wig-wag and starts the <b>lightbar slow-breath &mdash; blue and red
@@ -246,6 +260,32 @@
     let s = parseFloat(getComputedStyle(el).fontSize);
     while (el.scrollWidth > el.offsetWidth && s > 5) { s -= .5; el.style.fontSize = s + 'px'; }
   });
+
+/* ── response playback loop ── */
+(function () {
+  var E = document.getElementById("playE"), BC = document.getElementById("playBC"),
+      eChip = document.getElementById("playEchip"), bcChip = document.getElementById("playBCchip"),
+      inc = document.getElementById("playInc");
+  if (!E) return;
+  function put(el, l, t, glide) {
+    el.classList.toggle("mv", !!glide);
+    if (!glide) { void el.offsetWidth; }
+    el.style.left = l; el.style.top = t;
+    if (!glide) { void el.offsetWidth; }
+  }
+  function cycle() {
+    inc.hidden = true;
+    eChip.className = "micro app resp"; bcChip.className = "micro app resp";
+    put(E, "16%", "80%", false); put(BC, "86%", "14%", false);
+    setTimeout(function () { inc.hidden = false; }, 600);                      /* tone drops */
+    setTimeout(function () { put(E, "56%", "46%", true); }, 1000);            /* E121 rolls */
+    setTimeout(function () { put(BC, "65%", "47%", true); }, 2600);           /* chief follows */
+    setTimeout(function () { eChip.className = "micro app scene"; }, 7050);    /* E arrives: bar breathes */
+    setTimeout(function () { bcChip.className = "micro app cmd"; }, 8650);     /* BC arrives: command established */
+    setTimeout(cycle, 15000);                                                  /* hold the scene, then replay */
+  }
+  cycle();
+})();
 </script>
 </body>
 </html>
