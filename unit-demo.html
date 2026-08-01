@@ -54,18 +54,15 @@
     50%      { box-shadow: 0 0 10px 4px rgba(70,255,120,.95), 0 0 24px 9px rgba(70,255,120,.45); }
   }
   @media (prefers-reduced-motion: reduce) { .cmd::after { animation: none; box-shadow: 0 0 6px 2px rgba(70,255,120,.7); } }
-  /* ── ON SCENE, non-command: the LIGHTBAR slow-breathes — blue left, red right, alternating
-     swells confined to the bar itself (the old whole-badge halo pulsed the entire tile and read
-     too loud next to the wig-wag). Same 4.4 s blue-then-red cycle, half opposite phase, so the
-     bar is never fully dark. Command green (whole-badge halo) is untouched and still outranks. ── */
-  .scene::before, .scene::after { content: ""; position: absolute; top: 6%; height: 25%; width: 42%;
-                  border-radius: 50%; filter: blur(2px); mix-blend-mode: screen; opacity: 0; pointer-events: none; }
-  .scene::before { left: 7%;  background: radial-gradient(ellipse at center, rgba(255,255,255,.98) 0%, rgba(120,175,255,1) 34%, rgba(120,175,255,0) 82%);
-                  animation: sbreath 4.4s ease-in-out infinite; }
-  .scene::after  { right: 7%; background: radial-gradient(ellipse at center, rgba(255,255,255,.98) 0%, rgba(255,95,80,1)  34%, rgba(255,95,80,0)  82%);
-                  animation: sbreath 4.4s ease-in-out infinite -2.2s; }
-  @keyframes sbreath { 0%, 100% { opacity: .12; } 50% { opacity: 1; } }   /* floor at .12: the bar never reads dead, peak at full — the flare has to carry at 34 px */
-  @media (prefers-reduced-motion: reduce) { .scene::before, .scene::after { animation: none; opacity: .45; } }
+  /* ── ON SCENE, non-command: the lightbar SEGMENTS slow-breathe in their real split colors —
+     blues swell first, then reds, one 4.4 s cycle in opposite phase (apparatus: inner blues e2/e3
+     then outer reds e1/e4; plain bar: left blue then right red). Same .gl geometry as the wig-wag,
+     so on-scene is literally the responding bar breathing instead of flashing. Floor at .12 keeps
+     the bar from ever reading dead. Command green (whole-badge halo) untouched and outranks. ── */
+  .scene .gl.e2, .scene .gl.e3, .scene .gl.l { animation: sbreath 4.4s ease-in-out infinite; }
+  .scene .gl.e1, .scene .gl.e4, .scene .gl.r { animation: sbreath 4.4s ease-in-out infinite -2.2s; }
+  @keyframes sbreath { 0%, 100% { opacity: .12; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .scene .gl { animation: none !important; opacity: .45 !important; } }
   @media (prefers-reduced-motion: reduce) { .gl { animation: none !important; opacity: 0 !important; } }
   /* stale GPS: dim beats everything — never animate data we don't trust */
   .stale .ubadge { filter: grayscale(.75) brightness(.55); }
@@ -98,9 +95,9 @@
   </div>
   <div class="card">
     <span class="state">ON SCENE &mdash; lightbar slow-breathes BLUE / RED = working</span><br>
-    <div class="unit u64"><span class="ubadge scene"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">E121</span></span></div>
+    <div class="unit u64"><span class="ubadge scene"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">E121</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div>
     &nbsp;&nbsp;
-    <div class="unit u64"><span class="ubadge scene"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel">UAV121</span></span></div>
+    <div class="unit u64"><span class="ubadge scene"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel">UAV121</span><span class="gl l"></span><span class="gl r"></span></span></div>
   </div>
   <div class="card">
     <span class="state">STALE GPS &mdash; dimmed, never animated</span><br>
@@ -134,7 +131,7 @@
     &nbsp;&nbsp;
     <div class="unit u34"><span class="ubadge resp"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">E121</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div>
     &nbsp;&nbsp;
-    <div class="unit u34"><span class="ubadge scene"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">M121</span></span></div>
+    <div class="unit u34"><span class="ubadge scene"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">M121</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div>
     &nbsp;&nbsp;
     <div class="unit u34"><span class="ubadge"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel">UAV121</span></span></div>
   </div>
