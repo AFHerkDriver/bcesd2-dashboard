@@ -29,8 +29,8 @@
 <meta name="twitter:image" content="https://afherkdriver.github.io/bcesd2-dashboard/og-image.jpg">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
 <!-- Leaflet (drone location map) — keyless. Degrades to a placeholder pane if the CDN is unreachable. -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<link rel="stylesheet" href="vendor/leaflet-1.9.4.css">   <!-- VENDORED, byte-identical to the previously-pinned unpkg build (hash verified at vendor time) -->
+<script src="vendor/leaflet-1.9.4.js"></script>
 <style>
   button:active,.btn:active{transform:translateY(1px);filter:brightness(.85)}   /* gentle press feedback — consistent across every BC2FD page */
   :root{

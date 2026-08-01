@@ -24,7 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="vendor/leaflet-1.9.4.css">   <!-- VENDORED (byte-identical to the unpkg build the wall pins by integrity hash): the cab must not depend on a CDN to draw its map -->
 <style>
   button:active,.btn:active,a.navbtn:active{transform:translateY(1px);filter:brightness(.85)}   /* gentle press feedback — consistent across every BC2FD page */
   /* MDT tier — Windows touchscreen in the cab. One screen, map-dominant, big touch targets.
@@ -244,8 +244,8 @@
   <button id="refit" title="Frame the district">&#8982; District</button>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script src="vendor/leaflet-1.9.4.js"></script>
+<script src="vendor/hls-1.5.15.min.js"></script>   <!-- pinned exact — a floating @1 tag was an unreviewed code path on a safety screen -->
 <script>
 (() => {
   const WORKER = "https://bc2fd-dash-auth.usafsentinel-45e.workers.dev";
@@ -1024,6 +1024,21 @@
   if (PIN) { $("gate").style.display = "none"; boot(); }
   else setTimeout(() => $("pin").focus(), 60);
 })();
+</script>
+<script>
+/* Auto-update + offline shell — same pattern as the wall board. This page is read-only, so a
+   silent reload on a new deploy is always safe. */
+if('serviceWorker' in navigator){
+  var __reloading=false;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    if(__reloading)return; __reloading=true; location.reload();
+  });
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      setInterval(function(){ reg.update(); }, 10*60*1000);
+    }).catch(function(){});
+  });
+}
 </script>
 </body>
 </html>

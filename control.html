@@ -579,6 +579,12 @@
       noteFail=function(n){ failNames.push(n); };
       function chk(p){ P.push(p.then(function(ok){ if(!ok) bad++; }).catch(function(){ bad++; })); }
       var FS_KEY2='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ';
+      var EXPECTED_WORKER=1;   /* the worker build this page shipped alongside — keep in step with WORKER_VERSION in worker.js */
+      chk(jget(CTL_AUTH+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})}).then(function(r){
+        var wv=r.j&&r.j.wv;
+        return row('Worker build (Cloudflare paste)', wv===EXPECTED_WORKER,
+          wv==null?'PRE-VERSIONED — paste the current worker':(wv===EXPECTED_WORKER?('build '+wv+' — current'):('build '+wv+' but repo is at '+EXPECTED_WORKER+' — PASTE NEEDED')), r.ms);
+      }));
       chk(tget('sw.js').then(function(r){ var v=(r.t.match(/bc2fd-dash-v\d+/)||['?'])[0]; return row('Board version (Pages)',r.ok&&v!=='?',v,r.ms); }));
       chk(jget(CTL_AUTH+'/dispatch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})}).then(function(r){ return row('Dispatch relay (Active911)',!!(r.j&&r.j.ok),(r.j&&r.j.ok)?((r.j.calls||[]).length+' active'):(r.j&&r.j.error||'HTTP '+r.http),r.ms); }));
       chk(jget(CTL_AUTH+'/calls?pin='+encodeURIComponent(pin)).then(function(r){ return row('48h call log',!!(r.j&&r.j.ok),(r.j&&r.j.ok)?(r.j.count+' incidents'):'error',r.ms); }));

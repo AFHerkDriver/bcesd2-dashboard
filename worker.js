@@ -148,6 +148,11 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
                     when units attach or a chute stamps — bounded writes, not one per poll.
    agg:<YYYY-MM>    monthly rollup the metrics page reads: run count, class mix, hour-of-day bands,
                     station + apparatus workload, chute samples [cls,seconds]. Central-time months. */
+/* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
+   compares this (via /verify) against the build it was deployed expecting, so a lagging paste
+   finally has a warning light instead of being discovered by a wrong recount. ── */
+const WORKER_VERSION = 1;
+
 /* Distinct-type inventory key: whitespace-collapsed uppercase; dated burning recs collapse to one row */
 function typeKey(ty) {
   let k = String(ty || "").toUpperCase().replace(/\s+/g, " ").trim();
@@ -1510,7 +1515,7 @@ export default {
         return fail(403, "display-only");
       }
       await logCtl({ ok:true, name: who.name || "Officer", tier });
-      return json({ ok: true, name: who.name || "Officer", tier: tier }, 200);
+      return json({ ok: true, name: who.name || "Officer", tier: tier, wv: WORKER_VERSION }, 200);
     }
 
     if (url.pathname === "/dispatch") {
@@ -1951,7 +1956,7 @@ export default {
         } catch (e) { /* inventory must never break the feed */ } }
         /* remove the stale log rows for absorbed duplicate ids so the tally isn't padded by copies */
         for (const id of absorbed) { try { await env.PINS.delete("call:" + id); } catch (e) { /* best-effort */ } }
-        return json({ ok: true, feed: feedSource, calls }, 200);
+        return json({ ok: true, feed: feedSource, wv: WORKER_VERSION, calls }, 200);
       } catch (e) {
         return json({ ok: false, error: "relay error" }, 502);
       }

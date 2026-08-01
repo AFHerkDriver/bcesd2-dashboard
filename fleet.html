@@ -598,5 +598,22 @@ document.getElementById('gPin').addEventListener('keydown',function(e){ if(e.key
 if(pin()) load();
 else document.getElementById('gate').hidden=false;
 </script>
+<script>
+/* Auto-update + offline shell — but this page can hold UNSAVED officer edits, so a new deploy
+   reloads only when the form is clean; mid-edit we take the update on the next clean load. */
+if('serviceWorker' in navigator){
+  var __reloading=false;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    if(__reloading)return;
+    if(typeof dirty!=="undefined" && dirty) return;   /* unsaved edits outrank a silent refresh */
+    __reloading=true; location.reload();
+  });
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      setInterval(function(){ reg.update(); }, 10*60*1000);
+    }).catch(function(){});
+  });
+}
+</script>
 </body>
 </html>

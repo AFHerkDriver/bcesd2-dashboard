@@ -289,5 +289,20 @@
   })();
 })();
 </script>
+<script>
+/* Auto-update + offline shell — same pattern as the wall board. This page is read-only, so a
+   silent reload on a new deploy is always safe. */
+if('serviceWorker' in navigator){
+  var __reloading=false;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    if(__reloading)return; __reloading=true; location.reload();
+  });
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      setInterval(function(){ reg.update(); }, 10*60*1000);
+    }).catch(function(){});
+  });
+}
+</script>
 </body>
 </html>

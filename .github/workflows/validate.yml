@@ -1,0 +1,22 @@
+name: validate
+# BC2FD pre-flight — the manual validation ritual, enforced on every push.
+# Fails the run (and shows a red X on the commit) if any page script block has a syntax
+# error, a control byte sneaks into a source file, a precached page changes without a
+# service-worker cache bump, or the boards crash on a headless render.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # the SW-bump guard diffs HEAD against its parent
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-save jsdom
+      - run: node tools/validate.js
