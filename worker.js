@@ -900,6 +900,24 @@ export default {
       if (gate.res) return gate.res;
       if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "officers only" }, 403);
       try {
+        /* ── METRICS EPOCH ── the reporting baseline. Calls logged before this instant are kept in
+           the raw arch: archive but excluded from every aggregate (live flush, rebuild, listing).
+           Set: ?setepoch=2026-08-01T12:00:00Z (admin). Clear: ?setepoch=clear — history returns
+           after a ?rebuild=1. Non-destructive by design: the epoch hides, it never deletes. */
+        const se = url.searchParams.get("setepoch");
+        if (se) {
+          if ((gate.who.tier || "") !== "admin") return json({ ok: false, error: "admin only" }, 403);
+          if (se === "clear") {
+            await env.PINS.delete("archmeta:epoch");
+            await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer", action: "CLEARED metrics epoch (full history restored on next rebuild)" });
+          } else {
+            if (!Number.isFinite(Date.parse(se))) return json({ ok: false, error: "bad epoch — want ISO like 2026-08-01T12:00:00Z" }, 400);
+            await env.PINS.put("archmeta:epoch", se);
+            await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer", action: "SET metrics epoch to " + se });
+          }
+        }
+        const EPOCH = await env.PINS.get("archmeta:epoch");
+        const epochMs = EPOCH ? Date.parse(EPOCH) : null;
         /* One-time seed from the live 48h log, MARKER-based (not if-empty: live archiving creates agg
            docs before the first /metrics call, which skipped the backfill and lost the trailing 48h).
            Dedupe-safe: incidents that already have an arch: row (archived live) are not re-counted. */
@@ -949,6 +967,7 @@ export default {
               let c; try { c = JSON.parse(v); } catch { continue; }
               scanned++;
               const cls = clsOf(c.ty); if (cls === "gen") continue;
+              if (epochMs && Date.parse(c.t) < epochMs) continue;   /* pre-epoch: archived but off the books */
               const mh = ctMonthHour(c.t);
               if (!aggs2[mh.mon]) aggs2[mh.mon] = newAgg();
               let o = !inOurs(esdR, c.ln, c.la);
@@ -970,6 +989,7 @@ export default {
           const v = await env.PINS.get(kk.name); if (!v) continue;
           try { months.push({ m: kk.name.slice(4), ...JSON.parse(v) }); } catch (e) {}
         }
+        if (EPOCH) { const epMon = ctMonthHour(EPOCH).mon; for (let i = months.length - 1; i >= 0; i--) if (months[i].m < epMon) months.splice(i, 1); }   /* epoch month itself stays: its pre-epoch hours were never aggregated */
         months.sort((a, b) => (a.m < b.m ? 1 : -1));
         return json({ ok: true, months }, 200);
       } catch (e) { return json({ ok: false, error: "metrics read error" }, 502); }
@@ -1673,7 +1693,8 @@ export default {
            attachments. Every call here came from a SUCCESSFUL detail fetch, so no write-from-failed-read.
            Log failures never break the live feed. */
         const aggDelta = {};   /* month -> events; flushed once per poll so rollup writes stay bounded */
-        const esdAll = await esdData();          /* official borders (holes filled): ours+buffer for the metrics split, neighbors for mutual-aid attribution */
+        const esdAll = await esdData();
+        const epochLive = await env.PINS.get("archmeta:epoch");   /* metrics epoch — one read per poll, gates the rollup flush below */          /* official borders (holes filled): ours+buffer for the metrics split, neighbors for mutual-aid attribution */
         for (const c of calls) {
           try {
             /* Key the log by CAD case number when present, so a re-tone that surfaces long after the
@@ -1726,6 +1747,7 @@ export default {
                   await env.PINS.put("arch:" + (c.cad_code || c.id), JSON.stringify({
                     t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
                     u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "", ms: c.msf }));
+                  if (epochLive && Date.parse(c.logged) < Date.parse(epochLive)) { /* pre-epoch: raw-archived above, excluded from rollups */ } else {
                   const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
                   let out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */
                   let aid = out ? aidDistrictOf(esdAll, c.lng, c.lat) : "";
@@ -1733,6 +1755,7 @@ export default {
                   (aggDelta[mh.mon] = aggDelta[mh.mon] || []).push(
                     isNewInc ? { kind: "new", cls, hour: mh.hour, sft, out, aid, units: newUnits, chute: chuteNew ? chute : null }
                              : { kind: "delta", cls, sft, out, units: newUnits, chute: chuteNew ? chute : null });
+                  }
                 }
               }
             }
