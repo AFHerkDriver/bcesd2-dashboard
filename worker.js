@@ -1400,6 +1400,27 @@ export default {
     }
 
 
+    /* ── GET /hydrantlog?pin — the permanent hydrant-traffic log from the watch above. Any valid
+       PIN reads it (operational infrastructure info, same wall as /roster reads). NOTE: must stay
+       above the global POST-only guard below. ── */
+    if (req.method === "GET" && url.pathname === "/hydrantlog") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
+      try {
+        const entries = []; let cur;
+        do {
+          const lst = await env.PINS.list({ prefix: "hyd:", cursor: cur, limit: 1000 });
+          for (const kk of lst.keys) {
+            const v = await env.PINS.get(kk.name);
+            if (v) { try { entries.push({ id: kk.name.slice(4), ...JSON.parse(v) }); } catch (e) {} }
+          }
+          cur = lst.list_complete ? null : lst.cursor;
+        } while (cur);
+        entries.sort((a, b) => String(b.t || "").localeCompare(String(a.t || "")));
+        return json({ ok: true, count: entries.length, entries: entries.slice(0, 200) }, 200);
+      } catch (e) { return json({ ok: false, error: "hydrant log read error" }, 502); }
+    }
+
     if (req.method !== "POST")    return json({ ok: false, error: "POST only" }, 405);
 
     if (url.pathname === "/verify") {
@@ -1779,6 +1800,19 @@ export default {
             const seenU = {}, merged = [];
             for (const u of prevUnits.concat(c.units || [])) { const key = String(u).toUpperCase(); if (u && !seenU[key]) { seenU[key] = 1; merged.push(u); } }
             c.units = merged;
+            /* HYDRANT WATCH — hydrant traffic (OOS notices, back-in-service, flow tests) is the one
+               announcement class with LASTING operational value, so it earns a carve-out from the
+               notes-are-live-only rule: infrastructure status, not PII. Banked permanently under
+               hyd:<id>, re-written per sighting while live so late note updates are captured.
+               Read back via GET /hydrantlog. */
+            try {
+              const hydTxt = ((c.type || "") + " " + ((c.notes || []).map(n => n.x).join(" | "))).trim();
+              if (/HYDRANT/i.test(hydTxt) && (c.cad_code || c.id)) {
+                await env.PINS.put("hyd:" + (c.cad_code || c.id), JSON.stringify({
+                  t: c.logged, ty: c.type || "", ad: c.address || "",
+                  tx: (c.notes || []).map(n => n.x).join(" | ").slice(0, 500) }));
+              }
+            } catch (e) { /* the watch must never break the feed */ }
             if (c.id || c.cad_code) {
               await env.PINS.put(k, JSON.stringify({ ...c, stations: stationsOf(c.units), logged: c.logged,
                                  notes: undefined,   /* narrative stays LIVE-ONLY — same PII stance as msf */
