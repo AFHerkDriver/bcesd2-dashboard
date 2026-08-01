@@ -90,12 +90,13 @@
   .micro { position: relative; display: inline-block; width: 16px; height: 7px; border-radius: 2px;
            overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 1px 3px rgba(0,0,0,.55); vertical-align: middle; }
   .micro i { position: absolute; top: 0; bottom: 0; width: 50%; }
-  .micro .mb { left: 0;  background: rgb(110,170,255); }
-  .micro .mr { right: 0; background: rgb(255,90,74); }
-  @keyframes mflash  { 0%, 46% { filter: brightness(2) saturate(1.2); } 50%, 100% { filter: brightness(.45); } }
+  .micro .mb { left: 0;  background: rgb(255,42,30); }    /* normal bar: RED | BLUE, saturated — the washed look was dim base colors */
+  .micro .mr { right: 0; background: rgb(40,125,255); }
+  .micro.app .mr { background: rgb(255,42,30); }            /* APPARATUS bar: RED | RED */
+  @keyframes mflash  { 0%, 46% { filter: brightness(2.3) saturate(1.35); } 50%, 100% { filter: brightness(.8); } }
   .micro.resp .mb { animation: mflash .5s linear infinite; }
   .micro.resp .mr { animation: mflash .5s linear infinite -.25s; }
-  @keyframes mbreath { 0%, 100% { filter: brightness(.5); } 50% { filter: brightness(2) saturate(1.2); } }
+  @keyframes mbreath { 0%, 100% { filter: brightness(.75); } 50% { filter: brightness(2.3) saturate(1.35); } }
   .micro.scene .mb { animation: mbreath 4.4s ease-in-out infinite; }
   .micro.scene .mr { animation: mbreath 4.4s ease-in-out infinite -2.2s; }
   .micro.cmd { background: rgb(70,255,120); }
@@ -165,12 +166,12 @@
   </div>
 </div>
 
-<div class="sub" style="margin:22px 0 8px">DISTRICT FRAME &mdash; far zoom: MICRO markers (the lightbar alone — blue|red chip, same states &amp; rhythms). Zoom past ~z13 and they become the full badges above — the 34 px E121 top-left is the size comparison. Steady chip bottom-right = available.</div>
+<div class="sub" style="margin:22px 0 8px">DISTRICT FRAME &mdash; far zoom: MICRO markers (the lightbar alone — RED|RED chip = apparatus, RED|BLUE = normal bar, same states &amp; rhythms). Zoom past ~z13 and they become the full badges above — the 34 px E121 top-left is the size comparison. Steady chip bottom-right = available.</div>
 <div class="stage2">
-  <div class="pin" style="left:54%;top:38%"><span class="micro resp"><i class="mb"></i><i class="mr"></i></span></div>
-  <div class="pin" style="left:76%;top:64%"><span class="micro resp"><i class="mb"></i><i class="mr"></i></span></div>
+  <div class="pin" style="left:54%;top:38%"><span class="micro app resp"><i class="mb"></i><i class="mr"></i></span></div>
+  <div class="pin" style="left:76%;top:64%"><span class="micro app resp"><i class="mb"></i><i class="mr"></i></span></div>
   <div class="pin" style="left:30%;top:55%"><span class="micro resp"><i class="mb"></i><i class="mr"></i></span></div>
-  <div class="pin" style="left:40%;top:26%"><span class="micro scene"><i class="mb"></i><i class="mr"></i></span></div>
+  <div class="pin" style="left:40%;top:26%"><span class="micro app scene"><i class="mb"></i><i class="mr"></i></span></div>
   <div class="pin" style="left:44%;top:29%"><span class="micro cmd"><i class="mb"></i><i class="mr"></i></span></div>
   <div class="pin" style="left:63%;top:80%"><span class="micro"><i class="mb"></i><i class="mr"></i></span></div>
   <div class="pin" style="left:18%;top:20%"><div class="unit u34"><span class="ubadge resp"><img src="unit-blank-app.png" alt=""><span class="ulabel">E121</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div></div>
