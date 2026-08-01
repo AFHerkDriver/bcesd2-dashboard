@@ -127,7 +127,7 @@ function parseNotes(details) {
     if ((m = e.match(/Automatic Case Number\(s\) issued for Incident #\[?([A-Z0-9-]+)/i))) { out.caseNo = m[1]; return; }
     if (/^Automatic Case/i.test(e)) return;                                 /* truncated legalese — even cut mid-word */
     if ((m = e.match(/\[Notification\]\s*\[[^\]]*\]-?Problem changed from\s+(.+?)\s+to\s+(.+?)\s+by\b/i))) { push("TYPE CHANGED: " + m[1] + " → " + m[2], 1); return; }
-    if (/^UNITS RESPOND ON\b/i.test(e)) return;                             /* channel already on the card */
+    if (/^(ALL\s+)?UNITS?\s+(WILL\s+)?RESPOND(ING)?\s+ON\b|^RESPOND(ING)?\s+ON\s+[A-Z0-9 ]{2,10}$/i.test(e)) return;   /* channel instructions in every phrasing — the amber channel chip already says it */
     if (/^Multiple Response Areas found/i.test(e)) return;                  /* CAD dispatch-console chatter (observed live 7/31) */
     push(e, 0);                                                             /* a real dispatcher/caller note */
   };

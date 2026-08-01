@@ -462,7 +462,7 @@
   .drone-map .leaflet-control-layers label{margin-bottom:2px}
   .drone-map .leaflet-control-layers input{accent-color:#FF6B35}
   .drone-map .leaflet-control-layers-separator{border-top-color:#30363D}
-  .drone-idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;background:#000;
+  .drone-idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--bg);
     color:var(--dim);font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:clamp(14px,1.6vmin,26px)}
   .drone-idle img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}  /* Fire Hawk placeholder; image already carries the NO ACTIVE FEED text */
   .drone-idle .idle-fallback[hidden]{display:none}   /* fail-loud: shown only if the placeholder PNG fails to load */
@@ -1141,7 +1141,7 @@
         </div>
         <div class="drone-split">
           <div class="drone-video">
-            <div class="drone-idle" id="droneIdle"><img src="drone-idle.png" alt="No active drone feed" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="idle-fallback" hidden>NO ACTIVE FEED</span></div>
+            <div class="drone-idle" id="droneIdle"><img alt="" hidden onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="idle-fallback" hidden>NO ACTIVE FEED</span></div>
             <div class="drone-err" id="droneErr" hidden><span class="de-dot"></span><span>AIRSPACE FEED DOWN &mdash; CHECK REMOTE CONNECTION</span></div>
             <div class="drone-overlay" id="droneOverlay" hidden>
               <div class="dro-banner" id="droBanner"><span class="dro-dot"></span><div class="dro-btext"><div class="dro-mission" id="droTitle">DRONE LIVE</div><div class="dro-cs" id="droLbls"></div></div><button class="dro-reload" id="droReload" type="button" title="Reload feed" aria-label="Reload feed">&#8635;</button></div>
@@ -1185,7 +1185,11 @@
      Guarded so an unreachable CDN just leaves the pane dark and never breaks the board. */
   (function(){
     var el=document.getElementById("droneMap"); if(!el) return;
-    if(typeof L==="undefined"){ return; }
+    if(typeof L==="undefined"){
+      /* Leaflet CDN unreachable: the standby plate used to say this implicitly — now the pane is
+         bare at rest, so say it explicitly (fail loud, never a silent black box) */
+      try{ var fbk=document.querySelector("#droneIdle .idle-fallback"); if(fbk){ fbk.textContent="MAP UNAVAILABLE"; fbk.hidden=false; } }catch(e){}
+      return; }
     var CARTO="© OSM · CARTO", ESRI="© Esri";
     /* updateWhenIdle + no mid-zoom updates + a fat keepBuffer: tiles load when the map settles instead
        of churning through every animation frame — the satellite hybrid is 3 tile layers, and without
@@ -2738,12 +2742,19 @@
         var idle=document.getElementById("droneIdle");
         var img=idle && idle.querySelector("img");
         var fb=idle && idle.querySelector(".idle-fallback");
-        var want=down ? "drone-broken.png" : "drone-idle.png";
-        if(img && img.getAttribute("src")!==want){
-          img.src=want; img.hidden=false;                       /* clear any prior onerror state */
+        /* RESTING STATE IS NOW BARE (officer call 2026-07-31): the old Fire Hawk standby plate
+           flashed through while the map tiles were still loading. The art appears ONLY on a real
+           failure — BROKEN CONNECTION when the relay is unreachable; otherwise nothing to flash. */
+        if(down){
+          if(img && img.getAttribute("src")!=="drone-broken.png"){
+            img.src="drone-broken.png"; img.hidden=false;       /* clear any prior onerror state */
+            if(fb) fb.hidden=true;
+          }
+        } else {
+          if(img){ img.hidden=true; img.removeAttribute("src"); }
           if(fb) fb.hidden=true;
         }
-        if(fb) fb.textContent = down ? "BROKEN CONNECTION" : "NO ACTIVE FEED";   /* keep the text fallback honest too */
+        if(fb) fb.textContent="BROKEN CONNECTION";              /* the text fallback only ever speaks for the down state now */
         var ov=document.getElementById("droneOverlay");
         var covered=!!(ov && !ov.hidden);
         var e=document.getElementById("droneErr"); if(e) e.hidden=!(down && covered);

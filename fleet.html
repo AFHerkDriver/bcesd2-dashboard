@@ -74,9 +74,6 @@
   .stn-c{font-family:'DM Mono',monospace;font-size:11px;padding:4px 7px;border:1px solid var(--border);
     border-radius:6px;background:var(--panel2);color:var(--dim);cursor:pointer;line-height:1}
   .stn-c.on{border-color:var(--accent);color:var(--accent);background:rgba(255,107,53,.14);font-weight:600}
-  .restore-link{display:block;margin:8px auto 0;background:none;border:none;color:var(--dim);
-    font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.5px;cursor:pointer;text-decoration:underline}
-  .restore-link.armed{color:var(--red)}
   .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   @media(min-width:700px){ .row{grid-template-columns:repeat(4,minmax(0,1fr))} }
   .row > *{min-width:0}
@@ -203,8 +200,7 @@
 
   <div class="savebar">
     <button class="btn primary" id="save">SAVE ROSTER</button>
-    <div class="stat" id="stat"></div>
-    <button class="restore-link" id="restoreBtn" type="button">restore previous save</button>
+    <div class="stat" id="stat"></div>
   </div>
 </div>
 
@@ -553,27 +549,6 @@ document.getElementById('save').addEventListener('click',function(){
     });
 });
 
-/* restore previous save — two-tap confirm; the worker banks a backup on every save */
-(function(){ var b=document.getElementById('restoreBtn'); if(!b) return;
-  var armed=false, tmr=null;
-  b.addEventListener('click',function(){
-    var stat=document.getElementById('stat');
-    if(!armed){ armed=true; b.classList.add('armed'); b.textContent='tap again to RESTORE the previous save';
-      tmr=setTimeout(function(){ armed=false; b.classList.remove('armed'); b.textContent='restore previous save'; },3500); return; }
-    clearTimeout(tmr); armed=false; b.classList.remove('armed'); b.textContent='restoring…';
-    fetch(AUTH_URL+'/roster',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pin:pin(),restore:true})})
-      .then(function(r){ return r.json(); })
-      .then(function(j){
-        b.textContent='restore previous save';
-        if(!j.ok){ stat.textContent=String(j.error||'restore failed'); stat.className='stat bad'; return; }
-        try{ localStorage.removeItem(DRAFT); }catch(e){}
-        stat.textContent='previous save restored — reloading'; stat.className='stat ok';
-        setTimeout(load,700);
-      })
-      .catch(function(){ b.textContent='restore previous save'; stat.textContent='restore failed — network'; stat.className='stat bad'; });
-  });
-})();
 /* add-form station chips */
 (function(){ var el=document.getElementById('aStnChips'); if(!el) return;
   el.innerHTML=STN_LIST.map(function(s){ return '<button type="button" class="stn-c" data-s="'+s+'">'+s+'</button>'; }).join('');
