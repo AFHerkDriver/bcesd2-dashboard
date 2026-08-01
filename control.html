@@ -326,10 +326,6 @@
       <div id="chuteBody" class="chute-body">Loading&hellip;</div>
     </div>
 
-    <div class="card" id="typesCard" style="display:none">
-      <h2>Call Types Seen</h2>
-      <div class="hint">Every distinct CAD call type the relay has ever sighted — runs since Jul 21 from the permanent archive, announcements from Aug 1 onward. Count, first and last seen. Admin eyes only.</div>
-      <div id="typesBody" class="chute-body">Loading&hellip;</div>
     </div>
 
     <!-- Announcements (top ticker) — collapsible, count in header -->
@@ -486,6 +482,12 @@
       <div class="diag-out" id="diagOut" hidden></div>
     </div>
 
+    <div class="card fold clps" id="typesCard" style="display:none">
+      <h2>Call Types Seen <span class="fold-sum" id="typesFoldSum"></span></h2>
+      <div class="hint">Every distinct CAD call type the relay has ever sighted — runs since Jul 21 from the permanent archive, announcements from Aug 1 onward. A–Z. Admin eyes only.</div>
+      <div id="typesBody" class="chute-body">Loading&hellip;</div>
+    </div>
+
     <!-- Sticky Save — always in reach at the bottom of the screen; the unsaved-orange ring rides here -->
     <div class="savebar"><button class="btn primary" id="saveTop">Save</button></div>
 
@@ -640,6 +642,8 @@
         if(!j||!j.ok||!Array.isArray(j.types)) return;             /* stay hidden on failure — inventory, not safety */
         card.style.display='block';
         if(!j.types.length){ body.textContent='Nothing sighted yet.'; return; }
+        j.types.sort(function(a,b){ return String(a.ty).localeCompare(String(b.ty)); });   /* A–Z — an inventory reads like a dictionary, not a leaderboard */
+        var fsum=$g('typesFoldSum'); if(fsum) fsum.textContent=j.types.length+' types';
         var d=function(x){ if(!x) return '—'; try{ return new Date(x).toLocaleDateString('en-US',{timeZone:'America/Chicago',month:'numeric',day:'numeric'}); }catch(e){ return '—'; } };
         var esc=function(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
         body.innerHTML='<table class="chute-tbl"><tr><th>Type</th><th>N</th><th>First</th><th>Last</th></tr>'+
