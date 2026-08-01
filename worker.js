@@ -1694,7 +1694,55 @@ export default {
            Log failures never break the live feed. */
         const aggDelta = {};   /* month -> events; flushed once per poll so rollup writes stay bounded */
         const esdAll = await esdData();
-        const epochLive = await env.PINS.get("archmeta:epoch");   /* metrics epoch — one read per poll, gates the rollup flush below */          /* official borders (holes filled): ours+buffer for the metrics split, neighbors for mutual-aid attribution */
+        const epochLive = await env.PINS.get("archmeta:epoch");   /* metrics epoch — one read per poll, gates the rollup flush below */
+        /* GEO-SUSPECT stamp (gs:1) — A911 flips highway N/S addresses (the observed 281 flip: a
+           south-corridor address geocoded onto the N 281/1604 interchange 30 km up, S-corridor
+           ground tops out ~29.32), and drops the occasional pin >1 km from any real ESD (LOC?).
+           Stamped HERE, before the log/archive writes, so gs PERSISTS into the 48h rows — it used
+           to be stamped only on the live response, so the run sheet's history zoom trusted the bad
+           point (observed live 2026-07-31, "24037 Us Hwy 281 S" @ 29.65N).
+           GEO-REPAIR — a flagged call is then re-geocoded FROM ITS ADDRESS (Census Bureau public
+           geocoder, results KV-cached 30 days, 2 fresh lookups per poll max, 4s timeout, never
+           breaks the feed). A hit only sticks if the point is credible: inside our districts, or
+           on the south corridor for a south-corridor address. Repaired calls carry gf:1 and plot
+           like any other call; unrepairable ones keep gs:1 and the boards keep refusing to trust
+           them. */
+        for (const c of calls) {
+          if (c.lat == null || c.lng == null) continue;
+          if (addrInfersOurs(c.address) && c.lat > 29.36) { c.gs = 1; continue; }
+          if (esdAll && !inOurs(esdAll, c.lng, c.lat) && aidDistrictOf(esdAll, c.lng, c.lat) === "LOC?") c.gs = 1;
+        }
+        let geoBudget = 2;
+        for (const c of calls) {
+          if (!c.gs) continue;
+          const ad = String(c.address || "").trim();
+          if (!ad || /[&\/@]|\bAND\b/i.test(ad)) continue;          /* intersections: the geocoder can't, the boards keep gs handling */
+          const gk = "geo:" + ad.toUpperCase().replace(/\s+/g, " ");
+          let hit = null;
+          const cached = await env.PINS.get(gk);
+          if (cached) { try { hit = JSON.parse(cached); } catch (e) {} }
+          else if (geoBudget > 0) {
+            geoBudget--;
+            try {
+              const ac = new AbortController(); const tt = setTimeout(() => ac.abort(), 4000);
+              /* south-corridor addresses NEED the 78264 zip: "24037 US Hwy 281" exists on BOTH ends of the
+                 highway and Census (like A911) otherwise matches the north one (verified live: no zip -> 29.665N,
+                 zip 78264 -> 29.168S). Everything else gets the mail city, which Census requires. */
+              const suffix = addrInfersOurs(ad) ? ", San Antonio, TX 78264" : ", San Antonio, TX";
+              const gr = await fetch("https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=json&address=" +
+                encodeURIComponent(ad + suffix), { signal: ac.signal });
+              clearTimeout(tt);
+              const gj = gr.ok ? await gr.json() : null;
+              const mm = gj && gj.result && Array.isArray(gj.result.addressMatches) && gj.result.addressMatches[0];
+              hit = (mm && mm.coordinates) ? { la: +mm.coordinates.y, ln: +mm.coordinates.x } : { miss: 1 };
+              await env.PINS.put(gk, JSON.stringify(hit), { expirationTtl: 30 * 86400 });   /* misses cached too — a dead address must not burn the budget every poll */
+            } catch (e) { hit = null; }                                  /* network fault: uncached, retried next poll */
+          }
+          if (hit && !hit.miss && isFinite(hit.la) && isFinite(hit.ln)) {
+            const credible = inOurs(esdAll, hit.ln, hit.la) || (addrInfersOurs(ad) && hit.la < 29.32);
+            if (credible) { c.lat = hit.la; c.lng = hit.ln; c.gs = 0; c.gf = 1; }   /* repaired: plots + logs + archives at the ADDRESS point */
+          }
+        }
         for (const c of calls) {
           try {
             /* Key the log by CAD case number when present, so a re-tone that surfaces long after the
@@ -1777,18 +1825,6 @@ export default {
         }
         /* remove the stale log rows for absorbed duplicate ids so the tally isn't padded by copies */
         for (const id of absorbed) { try { await env.PINS.delete("call:" + id); } catch (e) { /* best-effort */ } }
-        /* GEO-SUSPECT stamp (gs:1) — the metrics path has long known A911 flips highway N/S
-           addresses (addrInfersOurs); the LIVE feed now carries the same knowledge so the boards
-           can refuse to zoom a crew toward the wrong corridor or hand bad coords to navigation:
-           - a south-corridor ADDRESS pinned well north of that corridor = the observed 281 flip
-             (the S-281 / S-1604 ground tops out ~29.32; flips land at the N interchange 30 km up)
-           - otherwise: pin far outside ours AND unattributable to any real neighbor (LOC?) —
-             the observed geocode-error signature (>1 km from any ESD). */
-        for (const c of calls) {
-          if (c.lat == null || c.lng == null) continue;
-          if (addrInfersOurs(c.address) && c.lat > 29.36) { c.gs = 1; continue; }
-          if (esdAll && !inOurs(esdAll, c.lng, c.lat) && aidDistrictOf(esdAll, c.lng, c.lat) === "LOC?") c.gs = 1;
-        }
         return json({ ok: true, feed: feedSource, calls }, 200);
       } catch (e) {
         return json({ ok: false, error: "relay error" }, 502);

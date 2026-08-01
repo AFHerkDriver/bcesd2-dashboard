@@ -797,11 +797,10 @@
             '<div class="ad">' + esc(c.address) + (c.apt ? ' <span class="aptc">APT ' + esc(c.apt) + '</span>' : '') + '</div>' +
             (td === "need" ? '<div><span class="tdops">TENDER OPS</span></div>'
            : td === "if" ? '<div><span class="tdops if">TENDER IF FIRE</span></div>' : '') +
-            ((when || c.cross || c.gs) ? '<div class="meta">' +
+            ((when || c.cross || c.mapc) ? '<div class="meta">' +
               (when ? '<span><b>' + when + '</b> &middot; ' + age + '</span>' : "") +
               (c.cross ? '<span>X: ' + esc(c.cross) + "</span>" : "") +
-              (c.mapc ? '<span>MAP <b>' + esc(c.mapc) + "</b></span>" : "") +
-              (c.gs ? '<span style="color:#FFC107">&#9888; MAP PIN UNVERIFIED &mdash; nav uses the address</span>' : "") + "</div>" : "") +
+              (c.mapc ? '<span>MAP <b>' + esc(c.mapc) + "</b></span>" : "") + "</div>" : "") +
             (() => {                                       /* channel + assigned units get their OWN line, units as visible tags */
               const us = (c.units || []).filter(isApp).length ? (c.units || []).filter(isApp) : (c.units || []);
               const inner = (c.channel ? "<b>" + esc(c.channel) + "</b>" : "") + us.map(u => '<span class="utag' + (isApp(u) ? " app" : "") + '">' + esc(u) + "</span>").join("");   /* GREEN = a real rig attached (assigned or self-assigned) — trucks are rolling; gray box code = toned, no rig yet */
