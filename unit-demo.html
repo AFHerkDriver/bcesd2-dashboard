@@ -54,17 +54,18 @@
     50%      { box-shadow: 0 0 10px 4px rgba(70,255,120,.95), 0 0 24px 9px rgba(70,255,120,.45); }
   }
   @media (prefers-reduced-motion: reduce) { .cmd::after { animation: none; box-shadow: 0 0 6px 2px rgba(70,255,120,.7); } }
-  /* ── ON SCENE, non-command: the halo BREATHES BLUE, THEN RED — one slow lightbar cycle wrapped
-     around the badge. Slower + dimmer than command green, so green still outranks it ── */
-  .scene::after { content: ""; position: absolute; inset: 1%; border-radius: 14%; pointer-events: none;
-                  animation: scenehalo 4.4s ease-in-out infinite; }
-  @keyframes scenehalo {
-    0%, 100% { box-shadow: 0 0 3px 1px rgba(90,160,255,.3); }
-    25%      { box-shadow: 0 0 9px 3px rgba(90,160,255,.85), 0 0 20px 7px rgba(90,160,255,.4); }
-    50%      { box-shadow: 0 0 3px 1px rgba(255,90,70,.3); }
-    75%      { box-shadow: 0 0 9px 3px rgba(255,90,70,.85), 0 0 20px 7px rgba(255,90,70,.4); }
-  }
-  @media (prefers-reduced-motion: reduce) { .scene::after { animation: none; box-shadow: 0 0 5px 2px rgba(90,160,255,.6); } }
+  /* ── ON SCENE, non-command: the LIGHTBAR slow-breathes — blue left, red right, alternating
+     swells confined to the bar itself (the old whole-badge halo pulsed the entire tile and read
+     too loud next to the wig-wag). Same 4.4 s blue-then-red cycle, half opposite phase, so the
+     bar is never fully dark. Command green (whole-badge halo) is untouched and still outranks. ── */
+  .scene::before, .scene::after { content: ""; position: absolute; top: 6%; height: 25%; width: 42%;
+                  border-radius: 50%; filter: blur(2px); mix-blend-mode: screen; opacity: 0; pointer-events: none; }
+  .scene::before { left: 7%;  background: radial-gradient(ellipse at center, rgba(255,255,255,.85) 0%, rgba(120,175,255,1) 26%, rgba(120,175,255,0) 78%);
+                  animation: sbreath 4.4s ease-in-out infinite; }
+  .scene::after  { right: 7%; background: radial-gradient(ellipse at center, rgba(255,255,255,.85) 0%, rgba(255,95,80,1)  26%, rgba(255,95,80,0)  78%);
+                  animation: sbreath 4.4s ease-in-out infinite -2.2s; }
+  @keyframes sbreath { 0%, 100% { opacity: 0; } 50% { opacity: .85; } }
+  @media (prefers-reduced-motion: reduce) { .scene::before, .scene::after { animation: none; opacity: .45; } }
   @media (prefers-reduced-motion: reduce) { .gl { animation: none !important; opacity: 0 !important; } }
   /* stale GPS: dim beats everything — never animate data we don't trust */
   .stale .ubadge { filter: grayscale(.75) brightness(.55); }
@@ -96,7 +97,7 @@
     <div class="unit u64"><span class="ubadge"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">AP124</span></span></div>
   </div>
   <div class="card">
-    <span class="state">ON SCENE &mdash; halo breathes BLUE then RED = working</span><br>
+    <span class="state">ON SCENE &mdash; lightbar slow-breathes BLUE / RED = working</span><br>
     <div class="unit u64"><span class="ubadge scene"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">E121</span></span></div>
   </div>
   <div class="card">
@@ -139,8 +140,8 @@
 
 <div class="note">
   <b>Lights ON</b> = attached to a live call + more than ~150 m from the scene. <b>Arrival</b>
-  (&lt;150 m and stopped ~30 s) ends the wig-wag and starts the <b>breathing halo that alternates BLUE, then RED &mdash; the lightbar
-  colors cycling around the badge = unit working that scene</b> (command rigs breathe GREEN instead, and
+  (&lt;150 m and stopped ~30 s) ends the wig-wag and starts the <b>lightbar slow-breath &mdash; blue and red
+  swelling alternately on the bar itself = unit working that scene</b> (command rigs breathe GREEN instead, and
   green outranks blue/red). The halo ends &mdash;
   and everything goes steady &mdash; when the call ends or DISREGARD, the unit detaches, or the unit leaves the
   scene radius; wig-wag also ends on no movement for 5 min while attached, or the 30-minute backstop. <b>Turnaround (future metrics):</b> attached + closing on scene, then distance
