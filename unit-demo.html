@@ -60,11 +60,11 @@
      bar is never fully dark. Command green (whole-badge halo) is untouched and still outranks. ── */
   .scene::before, .scene::after { content: ""; position: absolute; top: 6%; height: 25%; width: 42%;
                   border-radius: 50%; filter: blur(2px); mix-blend-mode: screen; opacity: 0; pointer-events: none; }
-  .scene::before { left: 7%;  background: radial-gradient(ellipse at center, rgba(255,255,255,.85) 0%, rgba(120,175,255,1) 26%, rgba(120,175,255,0) 78%);
+  .scene::before { left: 7%;  background: radial-gradient(ellipse at center, rgba(255,255,255,.98) 0%, rgba(120,175,255,1) 34%, rgba(120,175,255,0) 82%);
                   animation: sbreath 4.4s ease-in-out infinite; }
-  .scene::after  { right: 7%; background: radial-gradient(ellipse at center, rgba(255,255,255,.85) 0%, rgba(255,95,80,1)  26%, rgba(255,95,80,0)  78%);
+  .scene::after  { right: 7%; background: radial-gradient(ellipse at center, rgba(255,255,255,.98) 0%, rgba(255,95,80,1)  34%, rgba(255,95,80,0)  82%);
                   animation: sbreath 4.4s ease-in-out infinite -2.2s; }
-  @keyframes sbreath { 0%, 100% { opacity: 0; } 50% { opacity: .85; } }
+  @keyframes sbreath { 0%, 100% { opacity: .12; } 50% { opacity: 1; } }   /* floor at .12: the bar never reads dead, peak at full — the flare has to carry at 34 px */
   @media (prefers-reduced-motion: reduce) { .scene::before, .scene::after { animation: none; opacity: .45; } }
   @media (prefers-reduced-motion: reduce) { .gl { animation: none !important; opacity: 0 !important; } }
   /* stale GPS: dim beats everything — never animate data we don't trust */
@@ -99,6 +99,8 @@
   <div class="card">
     <span class="state">ON SCENE &mdash; lightbar slow-breathes BLUE / RED = working</span><br>
     <div class="unit u64"><span class="ubadge scene"><img src="unit-blank-app.png" alt="apparatus badge"><span class="ulabel">E121</span></span></div>
+    &nbsp;&nbsp;
+    <div class="unit u64"><span class="ubadge scene"><img src="unit-blank-rb.png" alt="UAV badge"><span class="ulabel">UAV121</span></span></div>
   </div>
   <div class="card">
     <span class="state">STALE GPS &mdash; dimmed, never animated</span><br>
