@@ -1,0 +1,14 @@
+# Local-only stable-build backups — never commit or deploy these.
+# GitHub Pages would otherwise serve every copy publicly and bloat the repo.
+# Off-machine backup of shipped code lives in git history + the stable-vNN tags.
+stable-builds/
+
+# Handoff notes that quote a live admin PIN — must never reach a public repo.
+worker-accesslog-spec.md
+*-spec.md
+
+# Local handoff / paste-ready files — never commit or serve (may reference PINs/tokens).
+_handoff/
+
+# Claude Code local config — machine-specific, never commit.
+.claude/
