@@ -76,6 +76,13 @@
   .u64 .ulabel { font-size: 19px; }
   .u44 .ulabel { font-size: 12px; }
   .u34 .ulabel { font-size: 10px; }
+  /* ── DISTRICT FRAME — four z11 tiles at NATIVE resolution (no scaling), the board’s idle zoom.
+     Markers ride at production 34 px so this is a true-scale legibility check. ── */
+  .stage2 { position: relative; width: 512px; height: 512px; max-width: 100%; border-radius: 12px;
+            border: 1px solid #30363D; overflow: hidden; margin-top: 26px;
+            background: url("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/11/849/461") 0 0 no-repeat, url("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/11/849/462") 256px 0 no-repeat,
+                        url("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/11/850/461") 0 256px no-repeat, url("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/11/850/462") 256px 256px no-repeat; }
+  .pin { position: absolute; transform: translate(-50%, -50%); }
   .note { font-size: 11px; color: #8B949E; margin-top: 16px; line-height: 1.7; }
   .note b { color: #E6EDF3; }
 </style>
@@ -137,7 +144,16 @@
   </div>
 </div>
 
-<div class="note">
+<div class="sub" style="margin:22px 0 8px">DISTRICT FRAME &mdash; the board’s default idle zoom, tiles at native resolution, markers at production 34 px</div>
+<div class="stage2">
+  <div class="pin" style="left:54%;top:38%"><div class="unit u34"><span class="ubadge resp"><img src="unit-blank-app.png" alt=""><span class="ulabel">E121</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div></div>
+  <div class="pin" style="left:76%;top:64%"><div class="unit u34"><span class="ubadge resp"><img src="unit-blank-app.png" alt=""><span class="ulabel">M123</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div></div>
+  <div class="pin" style="left:30%;top:55%"><div class="unit u34"><span class="ubadge resp"><img src="unit-blank-rb.png" alt=""><span class="ulabel">UAV121</span><span class="gl l"></span><span class="gl r"></span></span></div></div>
+  <div class="pin" style="left:40%;top:26%"><div class="unit u34"><span class="ubadge scene"><img src="unit-blank-app.png" alt=""><span class="ulabel">E124</span><span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span></span></div></div>
+  <div class="pin" style="left:44%;top:29%"><div class="unit u34"><span class="ubadge cmd"><img src="unit-blank-app.png" alt=""><span class="ulabel">BC121</span></span></div></div>
+</div>
+
+<div class="note"><div class="note">
   <b>Lights ON</b> = attached to a live call + more than ~150 m from the scene. <b>Arrival</b>
   (&lt;150 m and stopped ~30 s) ends the wig-wag and starts the <b>lightbar slow-breath &mdash; blue and red
   swelling alternately on the bar itself = unit working that scene</b> (command rigs breathe GREEN instead, and
