@@ -45,10 +45,10 @@
   .resp .gl.e2, .resp .gl.e4 { animation: wig .5s linear infinite -.25s; }
   /* ── COMMAND (BC / AC / DC): they run their family's normal icon and wig-wag —
      BC on the apparatus badge, AC/DC on the plain bar like UAV. What marks command is the
-     ON-SCENE halo: GREEN instead of blue/red, same 2.2 s breath so every scene glow
+     ON-SCENE halo: GREEN instead of blue/red, same slow 4.4 s breath so every scene glow
      shares one rhythm. Green on the map = command established. */
   .cmd::after { content: ""; position: absolute; inset: 1%; border-radius: 14%; pointer-events: none;
-                animation: cmdhalo 2.2s ease-in-out infinite; }
+                animation: cmdhalo 4.4s ease-in-out infinite; }   /* same period as the on-scene bar breath — one calm scene rhythm */
   @keyframes cmdhalo {
     0%, 100% { box-shadow: 0 0 2px 1px rgba(70,255,120,.3); }
     50%      { box-shadow: 0 0 10px 4px rgba(70,255,120,.95), 0 0 24px 9px rgba(70,255,120,.45); }
