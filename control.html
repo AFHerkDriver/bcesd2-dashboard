@@ -326,8 +326,6 @@
       <div id="chuteBody" class="chute-body">Loading&hellip;</div>
     </div>
 
-    </div>
-
     <!-- Announcements (top ticker) — collapsible, count in header -->
     <div class="card fold clps" id="cardAnn">
       <h2>Announcements <span class="tag live">TICKER</span> <span class="fold-sum" id="annFoldSum"></span></h2>
@@ -701,7 +699,7 @@
         /* group by person; unknown/failed logins (no name) get their own bucket */
         var groups={}, order=[];
         for(var i=0;i<entries.length;i++){
-          var e=entries[i]||{}, key=e.name?('n:'+e.name):' unknown';
+          var e=entries[i]||{}, key=e.name?('n:'+e.name):'\u0000unknown';
           if(!groups[key]){ groups[key]={name:e.name||'Unknown / failed', items:[], total:0, last:0, unknown:!e.name}; order.push(key); }
           var g=groups[key]; g.total++;
           if(g.items.length<10) g.items.push(e);            /* entries arrive newest-first: keep only each person's last 10 */
@@ -829,7 +827,7 @@ var Store={
     if(!pin) return direct();
     /* Secure path: worker verifies the control PIN, then writes to Firestore server-side. */
     return fetch(CTL_AUTH+'/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin,scope:'control',stateJson:stateJson,action:action||''})})
-      .then(function(r){ if(r.ok) return true; return direct(); })   /* worker OK -> done; ANY worker failure (401/403/404/5xx) -> direct write (rules still open) so a post never silently fails */
+      .then(function(r){ if(r.ok) return true; if(r.status===401||r.status===403||r.status===429) return false; return direct(); })   /* auth rejection = REJECTED (a revoked PIN must not write around the gate); only 404/5xx fall back to the direct write */
       .catch(function(){ return direct(); });
   }
 };
@@ -851,16 +849,8 @@ function defaults(){
     tExp:{}, aExp:{},                                    /* unit -> optional expiry (datetime-local); board auto-reverts past it */
     oosHydrants:[],                                      /* address fragments; board flags matching CAD hydrants with the red slashed pin */
     writeins:[],                                         /* [{name, mode:'on'|'oos', exp}] ad-hoc units */
-    announcements:[
-      {text:'Water tender OOS until 1500 — cross-staff Engine 62.', by:'BC Alvarez'},
-      {text:'Station 122 bay door repair 1300–1500 — stage apparatus outside.', by:'Station Officer'}
-    ],
-    calendar:[
-      {time:'09:00', desc:'Apparatus checks + SCBA'},
-      {time:'13:00', desc:'UAS currency flights — M30T'},
-      {time:'15:00', desc:'Wildland PPE inspection'},
-      {time:'19:00', desc:'Blue Card scenario drill'}
-    ],
+    announcements:[],                                   /* EMPTY — demo text here once masqueraded as live board state after a failed load */
+    calendar:[],
     display:{ pixelShift:true }                          /* wall-TV burn-in guard; board reads state.display.pixelShift */
   };
 }
@@ -1206,7 +1196,7 @@ function xsAutoPrefill(){
       if((state.xsAck||{})[x[1]]===until || xsPrefillFor[x[1]]===until) return;   /* surfaced / officer already acted */
       xsPrefillFor[x[1]]=until;
       state.apparatus[x[1]]=true;
-      var cur=(state.aExp&&state.aExp[x[1]])?new Date(state.aExp[x[1]]).getTime():0;
+      var cur=(state.aExp&&state.aExp[x[1]])?ctParse(state.aExp[x[1]]):0;   /* Central wall-clock by contract — device zone must not shift the comparison */
       if(!(cur>until)) state.aExp[x[1]]=dtLocal(until);              /* keep a manually-set LATER return time */
       (state.xsAck=state.xsAck||{})[x[1]]=until;
       segSet(x[2],'oos');
@@ -1229,7 +1219,7 @@ function macAutoPrefill(){
     if(!until || until<=Date.now()) return;                      /* no live dispatch window */
     if(state.macAck===until || macPrefillFor===until) return;    /* this dispatch already surfaced / officer already acted on it */
     macPrefillFor=until;
-    var cur=(state.tExp&&state.tExp.mac121)?new Date(state.tExp.mac121).getTime():0;
+    var cur=(state.tExp&&state.tExp.mac121)?ctParse(state.tExp.mac121):0;   /* Central wall-clock by contract */
     state.teams.mac121=true;
     if(!(cur>until)){                                            /* keep a manually-set LONGER expiry */
       state.tExp.mac121=dtLocal(until);                          /* Central wall-clock, device zone irrelevant */
@@ -1260,7 +1250,7 @@ function setOOSBadge(i){
   if(!f||f.length<4){ el.className='oosck'; el.textContent=''; return; }
   if(!HYDN){ el.className='oosck'; el.textContent='…'; return; }
   var n=0,id='';
-  for(var k=0;k<HYDN.length;k++){ if(HYDN[k][0].indexOf(f)>=0){ n++; if(!id) id=HYDN[k][1]; } }
+  for(var k=0;k<HYDN.length;k++){ if(/^\d/.test(f) ? HYDN[k][0].indexOf(f)===0 : HYDN[k][0].indexOf(f)>=0){ n++; if(!id) id=HYDN[k][1]; } }   /* SHARED MATCHER CONTRACT: numeric flags anchor at the address start (no 5123-vs-123 kills), street-name flags match anywhere */
   if(n){ el.className='oosck ok'; el.textContent='✓ '+(n===1?('HYD '+id):(n+' plugs')); }
   else { el.className='oosck bad'; el.textContent='✗ no match'; }
 }
@@ -1383,7 +1373,8 @@ function save(){
     else { t.textContent='✕ Save failed — not on board'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},2800); }
   });
 }
-$('saveTop').addEventListener('click',save);
+var loadFailed=false;
+$('saveTop').addEventListener('click',function(){ if(loadFailed){ var t=$('savedToast'); if(t){ t.textContent='⚠ Board state never loaded — saving now would WIPE it. Reload first.'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},4000);} return; } save(); });
 
 /* ── load shared state from Firestore, then render; fail loud on read error ── */
 function ensureShape(s){ var d=defaults();
@@ -1404,7 +1395,7 @@ document.addEventListener('click',function(e){ var t=(e.target&&e.target.closest
 window.addEventListener('beforeunload',function(e){ if(uiDirty){ e.preventDefault(); e.returnValue=''; return ''; } });
 setTimeout(function(){ uiReady=true; },2500);   /* backstop: activate the guard even if the initial load errored */
 Store.get().then(function(s){ if(s) state=ensureShape(s); pruneCalendar(); hydrate(); uiReady=true; setDirty(false); lastSaved=clone(state); macStateLoaded=true; try{ macAutoPrefill(); }catch(e){} try{ xsAutoPrefill(); }catch(e){} })   /* drop ended events before first paint; lastSaved AFTER prune so the cleanup is silent, not logged as officer removals, and persists on the next real save */
-  .catch(function(){ hydrate(); lastSaved=clone(state); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state'; t.classList.add('show','err'); setTimeout(function(){t.classList.remove('show','err');},3200);} });
+  .catch(function(){ loadFailed=true; hydrate(); lastSaved=clone(state); var t=$('savedToast'); if(t){ t.textContent='⚠ Could not load board state — Save disabled; reload to retry'; t.classList.add('show','err'); }   /* toast STAYS: a failed load is not a 3-second event */ var b=$('saveTop'); if(b){ b.disabled=true; b.style.opacity=.4; } });
 </script>
 <script>
 /* Auto-update, same as the wall board — but the control panel can hold UNSAVED officer edits, and a

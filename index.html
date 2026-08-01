@@ -1599,9 +1599,10 @@
     function hydIsOOS(addr){
       var a=hydNorm(addr); if(!a) return false;
       for(var i=0;i<window.OOS_HYD.length;i++){ var o=window.OOS_HYD[i];
-        if(o && o.length>=4 && a.indexOf(o)>=0) return true; }
+        if(o && o.length>=4 && (/^\d/.test(o) ? a.indexOf(o)===0 : a.indexOf(o)>=0)) return true; }   /* SHARED MATCHER CONTRACT (same rule on MDT + control): numeric flags anchor at the start, street-name flags match anywhere */
       return false;
     }
+    window.HYD_ISOOS=hydIsOOS;                        /* the tender scan lives in another module — same verdicts, one matcher */
     /* onBoardState is declared ~800 lines BELOW this module (var — hoisted undefined here). The old
        try{onBoardState(...)}catch{} threw at init and SWALLOWED it, so the OOS subscription never
        registered: flagged plugs painted as ordinary blue/teal on the wall while the MDT (which
@@ -1611,7 +1612,7 @@
       if(typeof onBoardState!=="function"){ setTimeout(hookOOS,400); return; }
       onBoardState(function(ok,st){                              /* officer OOS list changes repaint the pins */
         var next=((st&&st.oosHydrants)||[]).map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
-        if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)){ window.OOS_HYD=next; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} }
+        if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)){ window.OOS_HYD=next; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} try{ if(window.TENDER_RECHECK) window.TENDER_RECHECK(); }catch(e){} }
       });
     })();
     function hydUpdate(){
@@ -1978,12 +1979,12 @@
   tick();setInterval(tick,1000);
 
   /* ── District weather — live NWS (now + next hours) ── */
-  var STATIONS=[ /* District 2 stations — lat/lon estimated from addresses; refine with exact geocode */
-    {id:121,addr:"2096 Talley Rd",lat:29.520,lon:-98.700},
-    {id:122,addr:"7045 Old Talley Rd",lat:29.495,lon:-98.702},
-    {id:123,addr:"10694 Marbach Rd",lat:29.418,lon:-98.740},
-    {id:124,addr:"14515 Omicron Dr",lat:29.462,lon:-98.752},
-    {id:125,addr:"5931 Roft Rd",lat:29.432,lon:-98.756}
+  var STATIONS=[ /* District 2 stations — GEOCODED (ArcGIS score 98-100), same set as the map emblems; the old estimates sampled weather up to ~8 km off-station */
+    {id:121,addr:"2096 Talley Rd",lat:29.454183,lon:-98.755111},
+    {id:122,addr:"7045 Old Talley Rd",lat:29.505141,lon:-98.782267},
+    {id:123,addr:"10694 Marbach Rd",lat:29.405115,lon:-98.701876},
+    {id:124,addr:"14515 Omicron Dr",lat:29.413373,lon:-98.785885},
+    {id:125,addr:"5931 Roft Rd",lat:29.49202,lon:-98.74346}
   ];
   var wxGridCache={};
   function stationHourly(st){
@@ -2080,7 +2081,7 @@
     var g=(per.windGust&&per.windGust.value!=null)?Math.round(per.windGust.value*((per.windGust.unitCode&&/km/.test(per.windGust.unitCode))?0.621371:1)):null;
     var m=String(per.windSpeed||"").match(/to (\d+)/); if(g==null&&m)g=parseInt(m[1],10);
     return {spd:spd,gust:g,dir:per.windDirection||""};}
-  function wxHr(iso){var h=new Date(iso).getHours();return ("0"+h).slice(-2)+":00";}   /* 24-hour */
+  function wxHr(iso){var s=String(iso),m=/T(\d{2}):/.exec(s);if(m&&!/[zZ]|[+\-]\d{2}:?\d{2}$/.test(s))return m[1]+":00";   /* zone-less (Open-Meteo backup, already Central-local): take the literal hour — parsing it would apply the DEVICE zone first */ try{return new Intl.DateTimeFormat("en-GB",{timeZone:"America/Chicago",hour12:false,hour:"2-digit"}).format(new Date(iso))+":00";}catch(e){var h=new Date(iso).getHours();return ("0"+h).slice(-2)+":00";}}
   function condRank(sf){sf=String(sf||"").toLowerCase();
     if(/thunder|tstorm/.test(sf))return 5;
     if(/rain|shower|drizzle|sleet|snow|ice/.test(sf))return 4;
@@ -2518,6 +2519,8 @@
     var lastKey=null, lastList=null;
     function notExpired(a){                                  /* exp: "YYYY-MM-DDTHH:MM" from control's picker; blank = never */
       if(!a.exp) return true;
+      var mm=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(a.exp));
+      if(mm){ var tt=ctEpoch(+mm[1],+mm[2]-1,+mm[3],+mm[4],+mm[5]); return !isFinite(tt) || Date.now()<=tt; }   /* CENTRAL wall-clock by contract, not device zone */
       var d=new Date(a.exp);
       if(isNaN(d.getTime())) return true;                    /* unparseable: keep — never silently drop an officer's post */
       return new Date() <= d;
@@ -2559,10 +2562,10 @@
     var DEFAULT_MED={ name:"Dr. Katherine Raczek", role:"Medical Director", phone:"(210) 527-6593" };
     var ALT_MED={ name:"Asst Chief Mark Montgomery", role:"Alternate (backup)", phone:"(210) 268-7591" };
     function esc(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-    function fmtEnd(iso){ try{ var d=new Date(iso); return d.toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:CT_ZONE})+" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}); }catch(e){ return ""; } }
+    function fmtEnd(iso){ try{ var m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(iso)); if(m){ var MO=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return MO[+m[2]-1]+" "+(+m[3])+" "+m[4]+":"+m[5]; }   /* picker strings are Central wall-clock by contract — render literally, never through the device zone */ var d=new Date(iso); return d.toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:CT_ZONE})+" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}); }catch(e){ return ""; } }
     function effective(med){
       if(!med||med.mode==="default") return {who:DEFAULT_MED, note:""};
-      if(med.end && new Date() > new Date(med.end)) return {who:DEFAULT_MED, note:"auto-reverted"};   /* window passed */
+      if(med.end && (function(){ var m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(med.end)); if(m){ var t=ctEpoch(+m[1],+m[2]-1,+m[3],+m[4],+m[5]); return isFinite(t) && Date.now()>t; } return new Date() > new Date(med.end); })()) return {who:DEFAULT_MED, note:"auto-reverted"};   /* window passed — CENTRAL wall-clock */
       if(med.mode==="alternate"||med.mode==="alt") return {who:ALT_MED, note:med.end?("until "+fmtEnd(med.end)):""};
       if(med.mode==="custom" && med.custom && med.custom.name)
         return {who:{name:med.custom.name, role:"Acting Medical Direction", phone:med.custom.phone||""}, note:med.end?("until "+fmtEnd(med.end)):""};
@@ -2842,7 +2845,7 @@
       if(!isFinite(m)||m<0) return ""; return m<60?(m+"m"):(Math.floor(m/60)+"h"+(m%60)+"m"); }catch(e){ return ""; } }
     function show(tileOn){ var tl=document.getElementById("callsTile"); if(tl) tl.hidden=false;   /* Active Calls stays on the board; tileOn only gates the tour tally */
       lastTileOn=!!tileOn; applyTallyVis(); }
-    /* advisory board, not CAD: rows age out after 10 min */
+    /* advisory board, not CAD: rows age out after 15 min */
     var ADVISORY_MIN=15;
     function classify(t){ t=String(t||"").toUpperCase();
       if(/GENERAL|BURNING RECOMMENDATION|BURN BAN/.test(t)) return "k-gen";   /* advisories, not runs — dropped from the run-type tally */
@@ -2905,9 +2908,13 @@
       var H=window.HYDB.h, near=false;
       for(var i=0;i<H.length;i++){ var h=H[i];
         var dy=(h[2]-c.lat)*TD_KY, dx=(h[3]-c.lng)*TD_KX;
-        if(dy*dy+dx*dx<=305*305){ near=true; break; } }
+        if(dy*dy+dx*dx>305*305) continue;
+        if(h[5]) continue;                                             /* private plug — not our supply (matches the MDT rule) */
+        if(h[4] && window.HYD_ISOOS && window.HYD_ISOOS(h[4])) continue; /* officer-flagged OOS must not suppress TENDER OPS */
+        near=true; break; }
       tenderCache[k] = near ? null : (cls==="k-fire" ? "need" : "if");
     }
+    window.TENDER_RECHECK=function(){ for(var k in tenderCache) delete tenderCache[k]; };   /* the hydrant module calls this when the officer OOS list changes — flag changes re-answer the water-supply question */
     function render(state, calls){
       var body=document.getElementById("callsBody"), pg=document.getElementById("callsPage");
       if(!body) return;
@@ -3322,10 +3329,11 @@
     var seenCalls=null;
     function noticeNewCalls(list){
       list=list||[];
-      var keyOf=function(c){ return c.cad_code||("id:"+(c&&c.id)); };
-      if(seenCalls===null){ seenCalls={}; list.forEach(function(c){ seenCalls[keyOf(c)]=1; }); return; }
-      var fresh=list.filter(function(c){ return !seenCalls[keyOf(c)]; });
-      list.forEach(function(c){ seenCalls[keyOf(c)]=1; });
+      var keyOf=function(c){ return String(c.address||"").toUpperCase().replace(/\s+/g," ").trim()+"|"+String(c.type||"").toUpperCase().replace(/\s+/g," ").trim(); };   /* incident identity: a re-tone carries a NEW cad_code but the same address+type — must not re-swing the wall */
+      if(seenCalls===null){ seenCalls={}; list.forEach(function(c){ seenCalls[keyOf(c)]=Date.now(); }); return; }
+      var SEEN_MS=6*3600*1000;                     /* a re-tone inside 6h is the same incident; past that it's a new run at a repeat address and deserves the swing */
+      var fresh=list.filter(function(c){ var t=seenCalls[keyOf(c)]; return !t || (Date.now()-t)>SEEN_MS; });
+      list.forEach(function(c){ seenCalls[keyOf(c)]=Date.now(); });
       if(!fresh.length) return;
       /* Newest only. Several calls can land between polls; focusing each in turn would queue a
          slideshow, and the governor would swallow all but the first anyway. */
@@ -3565,7 +3573,7 @@
       if((rt===3||wt===3)&&t<2) t=2;
       return t;
     }
-    function hhmm(iso){ try{ var d=new Date(iso); return ("0"+d.getHours()).slice(-2)+"00"; }catch(e){ return "\u2014"; } }   /* full 2400 style */
+    function hhmm(iso){ try{ return new Intl.DateTimeFormat("en-GB",{timeZone:"America/Chicago",hour12:false,hour:"2-digit"}).format(new Date(iso))+"00"; }catch(e){ return "\u2014"; } }   /* full 2400 style, CENTRAL */
     function rhCls(rh){ return rh==null?"" : rh>=40?"rh0" : rh>=30?"rh1" : rh>=25?"rh2" : "rh3"; }   /* matches fwTier RH breaks */
     function pills(){
       if(!hrs||!hrs.length) return "";

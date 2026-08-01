@@ -581,7 +581,7 @@ async function pinGate(env, ip, rawPin, json, errMsg) {
     try { await env.PINS.put(rlKey, String(fails + 1), { expirationTtl: 300 }); } catch (e) { /* never block on the counter */ }
   };
   const pin = String(rawPin || "").trim();
-  if (!/^\d{4,8}$/.test(pin)) { await bump(); return { res: deny() }; }
+  if (!/^\d{4,8}$/.test(pin)) return { res: deny() };   /* format-invalid (usually the EMPTY pin an idle board polls with) is denied but NOT counted — counting it lets a locked kiosk rate-limit the whole station NAT; brute-forcers must send format-valid pins, so the counter still guards the oracle */
   const rec = await env.PINS.get("pin:" + pin);
   if (!rec) { await bump(); return { res: deny() }; }
   let who = {};
@@ -865,7 +865,8 @@ export default {
                          " responses=" + JSON.stringify(al.responses ?? null) +
                          " units_responding=" + JSON.stringify(al.units_responding ?? null) +
                          " responding=" + JSON.stringify(al.responding ?? null));
-              trace.push("STEP 3b FULL alert (bounded 2000): " + JSON.stringify(al).slice(0, 2000));
+              if ((gate.who.tier || "") === "admin") trace.push("STEP 3b FULL alert (bounded 2000): " + JSON.stringify(al).slice(0, 2000));
+              else trace.push("STEP 3b full alert dump: admin PIN only (raw details carry the call narrative)");
             }
           } catch (e3) { trace.push("STEP 3b parse failed"); } }
         } else trace.push("STEP 3 alert detail: skipped (no alerts in window — board will show \u2018no active calls\u2019)");
@@ -925,6 +926,8 @@ export default {
             await env.PINS.put("archmeta:epoch", se);
             await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer", action: "SET metrics epoch to " + se });
           }
+          try { await env.PINS.delete("heatcache"); } catch (e) {}
+          try { await env.PINS.delete("uavcache:v1"); } catch (e) {}   /* a baseline change invalidates every derived cache */
         }
         const EPOCH = await env.PINS.get("archmeta:epoch");
         const epochMs = EPOCH ? Date.parse(EPOCH) : null;
@@ -940,10 +943,12 @@ export default {
             const v = await env.PINS.get(kk.name); if (!v) continue;
             let c; try { c = JSON.parse(v); } catch { continue; }
             const cls = clsOf(c.type); if (cls === "gen") continue;
+            const preEpochSeed = !!(epochMs && Date.parse(c.logged || c.started) < epochMs);   /* pre-baseline: still ARCHIVED below, never aggregated */
             const akey = "arch:" + (c.cad_code || c.id || "");
             if (!c.cad_code && !c.id) continue;
             if (await env.PINS.get(akey)) continue;             /* already archived by the live path */
             const mh = ctMonthHour(c.logged || c.started);
+            if (!preEpochSeed) {
             if (!aggs[mh.mon]) {
               let base = newAgg();
               const pv = await env.PINS.get("agg:" + mh.mon);
@@ -956,9 +961,10 @@ export default {
             let sAid = sOut ? aidDistrictOf(esdA, c.lng, c.lat) : "";
             if (sAid === "LOC?" && addrInfersOurs(c.address)) { sOut = false; sAid = ""; }
             aggApply(aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), out: sOut, aid: sAid, units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
+            }
             await env.PINS.put(akey, JSON.stringify({
               t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
-              u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "", ms: c.msf, ej: c.ejf, mt: c.mtf }));
+              u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "", ms: c.msf, ej: c.ejf, mt: c.mtf, gs: c.gs, gf: c.gf }));
           }
           for (const m in aggs) await env.PINS.put("agg:" + m, JSON.stringify(aggs[m]));
           await env.PINS.put("archmeta:seeded", new Date().toISOString());
@@ -991,6 +997,8 @@ export default {
           const oldA = await env.PINS.list({ prefix: "agg:", limit: 60 });
           for (const kk of oldA.keys) if (!aggs2[kk.name.slice(4)]) await env.PINS.delete(kk.name);
           for (const m in aggs2) await env.PINS.put("agg:" + m, JSON.stringify(aggs2[m]));
+          try { await env.PINS.delete("heatcache"); } catch (e) {}
+          try { await env.PINS.delete("uavcache:v1"); } catch (e) {}   /* derived caches must not outlive the rebuild that invalidated them */
           /* falls through to the normal listing so the caller sees the corrected months */
         }
         const listed = await env.PINS.list({ prefix: "agg:", limit: 60 });
@@ -1001,7 +1009,7 @@ export default {
         }
         if (EPOCH) { const epMon = ctMonthHour(EPOCH).mon; for (let i = months.length - 1; i >= 0; i--) if (months[i].m < epMon) months.splice(i, 1); }   /* epoch month itself stays: its pre-epoch hours were never aggregated */
         months.sort((a, b) => (a.m < b.m ? 1 : -1));
-        return json({ ok: true, months }, 200);
+        return json({ ok: true, months, epoch: EPOCH || null }, 200);
       } catch (e) { return json({ ok: false, error: "metrics read error" }, 502); }
     }
 
@@ -1014,6 +1022,8 @@ export default {
       try {
         const cached = await env.PINS.get("heatcache");
         if (cached) return json(JSON.parse(cached), 200);
+        const epH = await env.PINS.get("archmeta:epoch");
+        const epHms = epH ? Date.parse(epH) : null;      /* demand layer respects the reporting baseline */
         const cells = {}; let cur;
         do {
           const lst = await env.PINS.list({ prefix: "arch:", cursor: cur, limit: 1000 });
@@ -1021,6 +1031,8 @@ export default {
             const v = await env.PINS.get(kk.name); if (!v) continue;
             let c; try { c = JSON.parse(v); } catch { continue; }
             if (c.la == null || c.ln == null) continue;
+            if (c.gs) continue;                          /* geo-suspect: a flipped geocode must not seed a demand cell */
+            if (epHms && Date.parse(c.t) < epHms) continue;
             const key = (Math.round(c.la / 0.0045) * 0.0045).toFixed(4) + "," + (Math.round(c.ln / 0.0052) * 0.0052).toFixed(4);
             cells[key] = (cells[key] || 0) + 1;
           }
@@ -1277,6 +1289,8 @@ export default {
              first scrub exactly this way) */
           const calls = await scrub("call:", c => c.address, c => c.type, c => c.started || c.logged, c => c.units);
           const arch  = await scrub("arch:", c => c.ad, c => c.ty, c => c.t, c => c.u);
+          try { await env.PINS.delete("heatcache"); } catch (e) {}
+          try { await env.PINS.delete("uavcache:v1"); } catch (e) {}
           return json({ ok: true, cleaned: { calls, arch },
             next: arch ? "run /metrics?rebuild=1 to re-aggregate the months" : "aggregates unaffected" }, 200);
         } catch (e) { return json({ ok: false, error: "clean failed" }, 502); }
@@ -1523,8 +1537,17 @@ export default {
       let body;
       try { body = await req.json(); } catch { body = {}; }
       const pin = String(body.pin || "").trim();
-      const pinOk = /^\d{4,8}$/.test(pin) && (await env.PINS.get("pin:" + pin));
-      if (!pinOk) return json({ ok: false, error: "unauthorized" }, 401);
+      /* shared failed-attempt lockout — same rl:<ip> counter as /verify and /state; this route
+         was the last unthrottled brute-force oracle for a 4-digit PIN */
+      const rlKeyD = "rl:" + ip;
+      const failsD = parseInt((await env.PINS.get(rlKeyD)) || "0", 10);
+      if (failsD >= 8) return json({ ok: false, error: "rate-limited" }, 429);
+      const pinFmt = /^\d{4,8}$/.test(pin);
+      const pinOk = pinFmt && (await env.PINS.get("pin:" + pin));
+      if (!pinOk) {
+        if (pinFmt) { try { await env.PINS.put(rlKeyD, String(failsD + 1), { expirationTtl: 300 }); } catch (e) { /* never block on the counter */ } }   /* only FORMAT-VALID misses count — an idle board's empty-pin poll must not lock the station */
+        return json({ ok: false, error: "unauthorized" }, 401);
+      }
 
       /* Per-agency fetch: token + its own KV access-token cache. Isolated so one
          agency's failure never blacks out the other's calls. */
@@ -1867,18 +1890,25 @@ export default {
                                  notes: undefined,   /* narrative stays LIVE-ONLY — same PII stance as msf */
                                  chute: chute != null ? chute : null, chuteUnit: chuteUnit || "" }),
                                  { expirationTtl: 48 * 3600 });
-              if (c.cad_code && c.id && ("call:" + c.id) !== k) { try { await env.PINS.delete("call:" + c.id); } catch (e) {} }
+              if (c.cad_code && c.id && ("call:" + c.id) !== k) {
+                try { await env.PINS.delete("call:" + c.id); } catch (e) {}
+              }
               /* METRICS ARCHIVE — bounded writes: first sighting, new units attaching, or a chute
                  stamping. Announcements (gen class) are not runs and are never archived. */
               const isNewInc = !prev;
               const newUnits = merged.filter(u => prevUnits.indexOf(u) < 0);
               const chuteNew = (chute != null && prevChute == null);
-              if (isNewInc || newUnits.length || chuteNew) {
+              /* late cad_code: an archive row may still be filed under the alert id. Migrating it is
+                 delete-AFTER-write — the replacement row must exist before the stray dies, or a quiet
+                 poll would erase the incident's only archive row. */
+              const archStray = (c.cad_code && c.id && String(c.cad_code) !== String(c.id)) ? await env.PINS.get("arch:" + c.id) : null;
+              if (isNewInc || newUnits.length || chuteNew || archStray) {
                 const cls = clsOf(c.type);
                 if (cls !== "gen") {
                   await env.PINS.put("arch:" + (c.cad_code || c.id), JSON.stringify({
                     t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
-                    u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "", ms: c.msf, ej: c.ejf, mt: c.mtf }));
+                    u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "", ms: c.msf, ej: c.ejf, mt: c.mtf, gs: c.gs, gf: c.gf }));
+                  if (archStray) { try { await env.PINS.delete("arch:" + c.id); } catch (e) {} }   /* replacement written above — NOW the stray can go */
                   if (epochLive && Date.parse(c.logged) < Date.parse(epochLive)) { /* pre-epoch: raw-archived above, excluded from rollups */ } else {
                   const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
                   let out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */

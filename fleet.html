@@ -297,7 +297,7 @@ function render(){
     groups[g].forEach(function(u){
       var t=typeOf(u.cs);
       html+='<div class="unit-row" data-i="'+u._i+'">'
-        +'<div><input class="cs'+(u.cs.length>8?' sm':'')+'" value="'+esc(u.cs)+'" placeholder="&mdash;" maxlength="26" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
+        +'<div><input class="cs'+(String(u.cs||'').length>8?' sm':'')+'" value="'+esc(u.cs||'')+'" placeholder="&mdash;" maxlength="26" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
         +'<div class="mkrow">'+(u.yr?'<span class="yr">'+esc(u.yr)+'</span>':'')+'<input class="mk-in" value="'+esc(u.mk||'')+'" placeholder="make / model" maxlength="48" autocomplete="off"></div>'+'<input class="nt-in" value="'+esc(u.nt||'')+'" placeholder="Notes" maxlength="140" autocomplete="off">'
         +'<button class="fam '+(u.fam||'rb')+'" type="button" title="Tap to cycle lightbar style">'+barLabel(u.fam)+'</button>'
         +(u.cmd?'<span class="fam cmd" style="margin-left:4px">CMD</span>':'')
@@ -498,7 +498,7 @@ function load(){
   fetch(AUTH_URL+'/roster?pin='+encodeURIComponent(pin()))
     .then(function(r){ if(r.status===404) throw 'no-endpoint'; return r.json(); })
     .then(function(j){
-      if(!j.ok) throw 'denied';
+      if(!j.ok) throw (j.error==='rate-limited'?'ratelimited':'denied');   /* a shared-NAT lockout is not an invalid session */
       roster=j.roster&&Array.isArray(j.roster.units)?j.roster:{v:1,units:[]};
       /* A local draft only outranks the server copy when the draft is provably NEWER
          (it carries a dts stamp younger than the server's save stamp). A stale draft
@@ -518,6 +518,8 @@ function load(){
       seedIfEmpty();
     })
     .catch(function(err){
+      if(err==='ratelimited'){ var st2=document.getElementById('stat'); if(st2){ st2.textContent='⚠ RATE-LIMITED — too many PIN tries on this network; retry in ~5 min'; st2.className='stat bad'; } return; }   /* shared lockout: keep the session, say why (st2: the later `var stat` hoists over this branch) */
+      if(err==='denied'){ try{ sessionStorage.removeItem(SKEY); }catch(e){} document.getElementById('gate').hidden=false; try{ gateFail('Session expired — sign in again.'); }catch(e){} return; }   /* bad/expired PIN: re-gate, don't cry outage */
       if(err==='no-endpoint') document.getElementById('wkNote').hidden=false;
       /* FAIL LOUD — a silent fallback here masked a dead /roster read path for weeks: the page
          quietly showed drafts/seed while looking healthy. If the server copy can't load, say so. */
@@ -548,9 +550,10 @@ document.getElementById('save').addEventListener('click',function(){
     })
     .catch(function(err){
       if(err==='stale'){
+        try{ localStorage.setItem(DRAFT+':lost', JSON.stringify({units:roster.units, dts:Date.now()})); }catch(e){}   /* the edits they were told to re-apply must survive somewhere */
         try{ localStorage.removeItem(DRAFT); }catch(e){}
         dirty=false; document.getElementById('save').classList.remove('dirty');
-        stat.textContent='a NEWER roster was saved elsewhere — reloading it now; re-apply your edits'; stat.className='stat bad';
+        stat.textContent='a NEWER roster was saved elsewhere — reloading it now; re-apply your edits (a backup copy was also kept on this device)'; stat.className='stat bad';
         setTimeout(load,900); }
       else if(err==='no-endpoint'){ document.getElementById('wkNote').hidden=false; stat.textContent='kept as local draft (worker missing /roster)'; stat.className='stat bad'; }
       else{ stat.textContent=String(err); stat.className='stat bad'; }
@@ -576,9 +579,12 @@ function unlock(){
   var go=document.getElementById('gGo'); go.disabled=true;
   fetch(AUTH_URL+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({pin:p,scope:'control'})})
-    .then(function(r){ return r.json(); })
-    .then(function(j){
+    .then(function(r){ return r.json().catch(function(){ return null; }).then(function(j){ return {st:r.status, j:j}; }); })
+    .then(function(rr){
+      var j=rr.j;
       go.disabled=false;
+      if(rr.st===429){ gateFail('Too many tries — locked for 5 minutes.'); return; }
+      if(!j){ gateFail('Server error ('+rr.st+') — try again.'); return; }   /* a 5xx error page is an OUTAGE, not a wrong PIN */
       if(j.ok&&j.tier!=='board'){
         try{ sessionStorage.setItem(SKEY,JSON.stringify({pin:p,name:j.name})); }catch(e){}
         document.getElementById('gate').hidden=true; load();

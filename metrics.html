@@ -80,7 +80,7 @@
 
   <div class="card">
     <h2>Call Volume &amp; Mix</h2>
-    <p class="hint">Permanent archive — grows from 2026-07-23 forward (seeded with the trailing 48h). Announcements/burn-ban notices excluded. <b>Department metrics count in-district calls only</b> (official ESD 2/6 borders); cross-border responses given are tallied separately below and never dilute the stats.</p>
+    <p class="hint" id="volHint">Permanent archive. Announcements/burn-ban notices excluded. <b>Department metrics count in-district calls only</b> (official ESD 2/6 borders); cross-border responses given are tallied separately below and never dilute the stats.</p>
     <div id="volMonths"></div>
     <div class="hint" id="xborder" style="margin-top:6px"></div>
     <div class="hint" id="xrecv" style="margin-top:4px"></div>
@@ -241,7 +241,7 @@
     $('sftChutes').innerHTML=SFT.map(function(s){
       var cs=all.chutes.filter(function(c){return c[2]===s[0];}).map(function(c){return c[1];});
       var p90=pct(0.9,cs);
-      return '<div class="hb '+(p90==null?'na':(p90<=80?'pass':'fail'))+'"><b style="color:'+(p90==null?'var(--dim)':s[1])+'">'+(p90==null?'—':fmt(p90))+'</b><span>'+s[0]+' turnout 90th (n='+cs.length+')</span></div>';}).join('');
+      return '<div class="hb na"><b style="color:'+(p90==null?'var(--dim)':s[1])+'">'+(p90==null?'—':fmt(p90))+'</b><span>'+s[0]+' turnout 90th, all call types (n='+cs.length+')</span></div>';}).join('');   /* NEUTRAL: mixed EMS+fire samples — pass/fail vs the 80s fire-only bar was a false grade; the EMS/fire verdicts live in the debrief bullets */
 
     /* debrief bullets */
     var b=[];
@@ -250,7 +250,7 @@
     if(f90!=null) b.push((f90<=80?'✅':'⚠️')+' Fire turnout 90th pct '+fmt(f90)+' vs 80s standard'+(f90<=80?' — passing.':' — over; night bunker-up time is the usual driver.'));
     if(peak>=0) b.push('⏰ Peak demand lands in the '+peak+':00 hour — check apparatus availability and move-up posture there first.');
     if(units.length) b.push('🚒 '+units[0]+' is the workhorse ('+all.byUnit[units[0]]+' responses) — watch hours, maintenance, and crew fatigue.');
-    var mut=all.byCls.mutual||0; if(mut) b.push('🤝 '+mut+' mutual-aid run'+(mut===1?'':'s')+' archived — track the give/get balance for renewal talks.');
+    var mut=all.byCls.mutual||0; if(mut) b.push('🤝 '+mut+' MUTUAL AIDE tone'+(mut===1?'':'s')+' archived (out-of-county tone-outs — distinct from the cross-border \u201caid given\u201d count in Call Volume above).');
     var sfts=Object.keys(all.bySft); if(sfts.length>1){ var busy=sfts.sort(function(x,y){return all.bySft[y]-all.bySft[x];})[0];
       b.push('👥 '+busy+' Shift is carrying the most runs ('+all.bySft[busy]+') — luck of the tours early on; a persistent spread is a workload-equity conversation.'); }
     b.push('💧 ESD 6 water gap (2026 dept hydrant db): 14% of structures lack hydrant coverage — concentrated in the Alanwood/Campbellton, Peaceful/Redfern and Red Gate/Loma Verde pockets — while growth runs ≈1,500 structures/yr; tender program + developer main extensions are the levers.');
@@ -262,6 +262,8 @@
     fetch(AUTH+'/metrics?pin='+encodeURIComponent(pin))
       .then(function(r){return r.json();})
       .then(function(j){ if(!j||!j.ok){ $('stamp').innerHTML='<span class="err">⚠ Metrics unavailable — '+esc((j&&j.error)||'fetch failed')+'</span>'; return; }
+        try{ if(j.epoch){ var ed=new Date(j.epoch); var es=ed.toLocaleString('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+          var vh=$('volHint'); if(vh) vh.innerHTML='Permanent archive. <b>Reporting baseline: '+es+' Central</b> — earlier shakedown data is retained off the books. Announcements/burn-ban notices excluded. <b>Department metrics count in-district calls only</b> (official ESD 2/6 borders); cross-border responses given are tallied separately below and never dilute the stats.'; } }catch(e){}
         render(j.months||[]); })
       .catch(function(){ $('stamp').innerHTML='<span class="err">⚠ Metrics service unreachable</span>'; });
   }

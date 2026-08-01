@@ -159,7 +159,7 @@
   #pipErr { position: absolute; top: 22px; left: 8px; right: 8px; font-size: 10.5px; color: #F85149; font-weight: 500;
             text-shadow: 0 0 4px #000, 0 0 4px #000; z-index: 5; display: none; }
   #pipSize { position: absolute; top: 4px; right: 6px; z-index: 6; background: rgba(13,17,23,.85);
-             border: 1px solid #FF6B35; color: #FF6B35; border-radius: 8px; padding: 8px 14px; font-size: 15px; }
+             border: 1px solid #FF6B35; color: #FF6B35; border-radius: 8px; padding: 13px 16px; font-size: 15px; }   /* >=40px gloved floor, like every other control */
 
   /* bottom-left controls */
   #ctrls { position: fixed; left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); z-index: 800; display: flex; gap: 8px; }
@@ -198,7 +198,7 @@
   .leaflet-control-layers-separator { border-top-color: #30363D; }
 
   /* feed-down banner — fail LOUD */
-  #feedDown { position: fixed; top: 0; left: 0; right: 0; z-index: 1200; display: none; background: #F85149;
+  #feedDown { position: fixed; top: 0; left: 0; right: 0; z-index: 2000;   /* above full-screen PiP (1500): the feed-down banner outranks everything */ display: none; background: #F85149;
               color: #0D1117; font-weight: 700; text-align: center; letter-spacing: 1px; font-size: 15px;
               padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left)); }
   /* leaflet corner controls (layers, attribution) step around the home indicator / island too */
@@ -255,7 +255,7 @@
 
   /* ── PIN gate — station PIN, verified against /dispatch (the feed this screen lives on) ── */
   let PIN = sessionStorage.getItem("mdtPin") || "";
-  function showGate(msg) { $("gate").style.display = "flex"; $("gerr").textContent = msg || ""; sessionStorage.removeItem("mdtPin"); }
+  function showGate(msg) { $("gate").style.display = "flex"; $("gerr").textContent = msg || ""; sessionStorage.removeItem("mdtPin"); PIN = ""; }   /* clear the in-memory PIN too — loadDrones/tourLoad keep ticking and must NOT burn the rate limiter with a dead PIN */
   async function unlock() {
     const p = $("pin").value.trim();
     if (!/^\d{4,8}$/.test(p)) { $("gerr").textContent = "Enter the station PIN"; return; }
@@ -268,7 +268,7 @@
       if (!j) { $("gerr").textContent = "Feed error — try again"; return; }
       PIN = p; sessionStorage.setItem("mdtPin", p);
       $("gate").style.display = "none";
-      boot();
+      if (booted) loadDispatch(); else boot();      /* mid-shift re-auth: boot() is once-only, so restart the poll loop directly */
     } catch (e) { $("gerr").textContent = "Worker unreachable — check signal"; }
   }
   $("go").addEventListener("click", unlock);
@@ -344,7 +344,7 @@
       L.polyline(c.ring.map(p => [p[1], p[0]]),
         { color: "#FFFFFF", weight: 2, opacity: .45, dashArray: "7 7", interactive: false }).addTo(map);
     }).catch(() => {});
-    fetch("district-bounds.json").then(r => r.json()).then(b => {
+    fetch("district-bounds.json").then(r => { if (!r.ok) throw 0; return r.json(); }).then(b => {
       ["esd2", "esd6"].forEach(k => (b[k] || []).forEach(ring =>
         L.polygon(ring.map(p => [p[1], p[0]]), { color: "#FF6B35", weight: 1.5, fill: false, opacity: .55 }).addTo(map)));
     }).catch(() => {});
@@ -399,7 +399,7 @@
                 AVENUE: "AVE", HIGHWAY: "HWY", CIRCLE: "CIR", COURT: "CT", PLACE: "PL", COVE: "CV", BEND: "BND",
                 CROSSING: "XING", EXPRESSWAY: "EXPY" }[m]))
     .replace(/[^A-Z0-9]/g, "");
-  const hydIsOOS = (a) => { a = hydNorm(a); return !!a && oosHyd.some(o => o && o.length >= 4 && a.indexOf(o) >= 0); };
+  const hydIsOOS = (a) => { a = hydNorm(a); return !!a && oosHyd.some(o => o && o.length >= 4 && (/^\d/.test(o) ? a.startsWith(o) : a.indexOf(o) >= 0)); };   /* SHARED MATCHER CONTRACT (same rule on wall + control): a numeric flag ("123 Main St") anchors at the address start so it can never kill 5123 Main St; a street-name flag ("Talley Rd" during a main break) still matches every plug on the street */
   function hydUpdate() {
     if (!map) return;
     if (map.getZoom() < HYD_Z || !HYDB) { hydLayer.clearLayers(); hydPainted = ""; return; }
@@ -498,6 +498,7 @@
   }
   let tourAt = 0, tourBusy = false;
   function tourLoad() {
+    if (!PIN) return;                                /* gated: same rate-limiter protection */
     if (!tourLayer || !map || !map.hasLayer(tourLayer)) return;   /* overlay off -> not even a fetch */
     if (tourBusy || Date.now() - tourAt < 4 * 60000) return;
     tourBusy = true;
@@ -650,7 +651,7 @@
       else { chip.style.display = ""; chip.className = "chip bad";
         chip.innerHTML = divs.length + " ON DIVERSION<span class='sub'>" + divs.slice(0, 4).map(d => esc(d.name) + " — " + esc(d.status)).join(" · ") + "</span>"; }
       const next = (st.oosHydrants || []).map(x => hydNorm(x && x.addr != null ? x.addr : x)).filter(Boolean);
-      if (JSON.stringify(next) !== JSON.stringify(oosHyd)) { oosHyd = next; hydPainted = ""; hydUpdate(); oosRepaint(); }
+      if (JSON.stringify(next) !== JSON.stringify(oosHyd)) { oosHyd = next; hydPainted = ""; hydUpdate(); oosRepaint(); for (const k in tenderCache) delete tenderCache[k]; }   /* flag changes re-answer the water-supply question */
     }).catch(() => {
       if (++stateFails >= 2) { const chip = $("hospChip"); chip.style.display = ""; chip.className = "chip bad"; chip.textContent = "DIVERSION STATUS UNKNOWN — verify via MEDCOM"; }
     });
@@ -739,7 +740,10 @@
     const lim = m * m;
     for (const h of HYDB.h) {
       const dy = (h[2] - lat) * TD_KY, dx = (h[3] - lng) * TD_KX;
-      if (dy * dy + dx * dx <= lim) return true;
+      if (dy * dy + dx * dx > lim) continue;       /* distance first — the exclusions below only run on in-radius hits, keeping the 48k scan cheap */
+      if (h[5]) continue;                          /* private plug — not the department's supply for a tender decision */
+      if (h[4] && hydIsOOS(h[4])) continue;        /* officer-flagged OOS — a dead plug must NOT suppress the TENDER OPS chip */
+      return true;
     }
     return false;
   }
@@ -839,11 +843,14 @@
   let dispTimer = null;
   function scheduleDispatch() { clearTimeout(dispTimer); dispTimer = setTimeout(loadDispatch, lastTop.length ? 6000 : 15000); }
   function loadDispatch() {
+    if (!PIN) return;                                /* gated (incl. the visibilitychange wake): no PIN, no poll */
     fetch(WORKER + "/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: PIN }) })
-      .then(r => { if (r.status === 401) { showGate("PIN expired — sign in again"); throw 0; } return r.json(); })
+      .then(r => { if (r.status === 401) { showGate("PIN expired — sign in again"); throw { gated: 1 }; }
+                   if (r.status === 429) { $("feedDown").textContent = "RATE-LIMITED — too many PIN tries on this network; retry ~5 min"; }   /* name the cause: a shared-NAT lockout is not a feed outage */
+                   return r.json(); })
       .then(j => {
         if (!j || !j.ok) throw 0;
-        dispatchFails = 0; $("feedDown").style.display = "none";
+        dispatchFails = 0; $("feedDown").style.display = "none"; $("feedDown").textContent = "DISPATCH FEED DOWN — RELY ON RADIO";   /* reset any rate-limit wording */
         /* general alerts / dispatcher broadcasts age out at 5 min — they are a heads-up, not a run,
            and the cab screen should not carry them as long as a working call (real calls keep 15) */
         const isGen = (c) => GEN_RE.test(String(c.type || ""));
@@ -856,6 +863,7 @@
 
         /* map pins — the DASHBOARD's call-drop treatment verbatim: fresh call gets the radius-8
            flashing pin + sonar + governed focus; settled calls the radius-7 solid pin. */
+        if (!callLayer) return;                     /* map failed to boot: the call band above still works — a dead MAP must not trip the FEED DOWN banner */
         callLayer.clearLayers();
         const nowMs = Date.now();
         live.forEach(c => {
@@ -882,7 +890,8 @@
         });
       })
       .then(() => scheduleDispatch())
-      .catch(() => {
+      .catch((err) => {
+        if (err && err.gated) return;               /* gated: STOP polling — hammering /dispatch with a dead PIN would trip the rate limiter; unlock() restarts the loop */
         if (++dispatchFails >= 2) $("feedDown").style.display = "block";   /* never a silent stale board */
         scheduleDispatch();
       });
@@ -909,6 +918,7 @@
             : err && err.name === "NotSupportedError" ? "format not supported on this device"
             : "play failed: " + (err && err.name || "unknown")); }); };
   function loadDrones() {
+    if (!PIN) return;                                /* gated: no PIN, no poll — protects the shared rate limiter */
     fetch(WORKER + "/drones?pin=" + encodeURIComponent(PIN)).then(r => r.ok ? r.json() : null).then(j => {
       const d = j && j.ok && (j.drones || []).find(x => x.video_url);
       const pip = $("dronePip"), v = $("droneVid");
@@ -974,7 +984,7 @@
 
   /* any tap on the PiP nudges a blocked video back to playing (harmless alongside the controls) */
   $("dronePip").addEventListener("click", () => {
-    const v = $("droneVid"); if (v && v.paused) pipPlay(v);
+    const v = $("droneVid"); if (v && v.paused && (v.src || pipHls)) pipPlay(v);   /* iframe mode: video has no src — play() would reject and stamp a false sticky error */
   });
 
   /* PiP size cycle: corner -> SPLIT SCREEN -> full -> corner. Split squeezes the map (and the
@@ -989,13 +999,18 @@
     try { map.invalidateSize(); } catch (e) {}
     setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 250);   /* again once the CSS settles */
   }
-  $("pipSize").addEventListener("click", () => { pipSizeIdx = (pipSizeIdx + 1) % PIP_SIZES.length; pipApply(); });
+  $("pipSize").addEventListener("click", (e) => { e.stopPropagation(); pipSizeIdx = (pipSizeIdx + 1) % PIP_SIZES.length; pipApply(); });   /* don't bubble into the PiP tap-to-play handler */
 
   /* ── boot ── */
   let booted = false;
   function boot() {
     if (booted) return; booted = true;
-    initMap();
+    try { initMap(); } catch (e) {                  /* Leaflet missing/failed: the cab must SEE that the map died */
+      const d = document.createElement("div");
+      d.style.cssText = "position:fixed;top:44px;left:0;right:0;z-index:1900;background:#B85C00;color:#fff;font-weight:700;text-align:center;padding:10px;font-size:16px";   /* below feedDown (2000/top:0) — both must be readable at once */
+      d.textContent = "MAP FAILED TO LOAD — reload the page; calls still list below";
+      document.body.appendChild(d);
+    }
     loadDispatch();                                   /* self-schedules: 6 s with live calls, 15 s idle */
     document.addEventListener("visibilitychange", () => {   /* phone screen wakes -> current board NOW, not at the next tick */
       if (document.visibilityState === "visible" && !document.hidden) loadDispatch();
