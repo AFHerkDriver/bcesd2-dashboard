@@ -724,6 +724,9 @@
   .al-body{min-width:0;flex:1 1 auto}
   .al-band .al-ev{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.7vmin,26px);letter-spacing:1.5px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .al-sub{font-size:clamp(10px,1vmin,15px);color:var(--dim);letter-spacing:.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .al-sub .als-i{display:inline}
+  .al-sub.scrolling{text-overflow:clip}
+  .al-sub.scrolling .als-i{display:inline-flex;white-space:nowrap;will-change:transform;animation:tickscroll var(--tickdur,20s) linear infinite}   /* long alert details glide like the announcements ticker instead of clipping */
   .al-src{flex:0 0 auto;align-self:flex-start;margin-top:2px;font-size:clamp(9px,.95vmin,14px);color:var(--dim);white-space:nowrap}
   .al-band.al-redflag{border-color:rgba(255,59,48,.5);background:linear-gradient(135deg,rgba(255,59,48,.20),rgba(180,0,0,.10))}
   .al-band.al-redflag .al-ev{color:#FF3B30}
@@ -2143,6 +2146,23 @@
      never lost to a carousel bug. \u2500\u2500 */
   var NWSCarousel=(function(){
     var rot=null, bands=[], idx=0;
+    function armSubScroll(slot){                       /* overflowing sub-lines scroll like the announcements ticker — measured in the VISIBLE slot, never the hidden source lane */
+      try{
+        var subs=slot.querySelectorAll(".al-sub .als-i");
+        for(var i=0;i<subs.length;i++)(function(inner){
+          var sub=inner.parentNode;
+          setTimeout(function(){   /* setTimeout, NOT rAF: rAF never fires in a backgrounded tab, and a phone returning to the page deserves a scrolling line too */
+            var cw=sub.clientWidth, tw=sub.scrollWidth;   /* measure the PARENT: inline spans report scrollWidth 0 */
+            if(tw>cw+4){
+              sub.classList.add("scrolling");
+              inner.style.setProperty("--tick-from", cw+"px");
+              inner.style.setProperty("--tick-to", (-tw)+"px");
+              inner.style.setProperty("--tickdur", Math.max(10,(cw+tw)/60)+"s");
+            }
+          },50);
+        })(subs[i]);
+      }catch(e){}
+    }
     function isWarn(cls){ return /al-warn|al-cat|al-redflag|al-heat-danger|al-link|sev-error/.test(cls||""); }
     function collect(){
       var out=[];
@@ -2157,6 +2177,7 @@
       if(idx>=bands.length) idx=0;
       var b=bands[idx];
       slot.innerHTML=b.html + (bands.length>1?('<div class="nb-page">'+(idx+1)+" / "+bands.length+'</div>'):'');
+      armSubScroll(slot);
       if(bands.length>1){ rot=setTimeout(function(){ idx=(idx+1)%bands.length; show(slot); }, b.warn?15000:5000); }
     }
     function refresh(){
@@ -2176,7 +2197,7 @@
         var flood=document.getElementById("floodBand"), fw=document.getElementById("fwBody");
         var lowerBusy=(flood && !flood.hidden) || (fw && fw.querySelector(".fwp, .fw-flag"));
         if(lowerBusy){ if(idx>=bands.length) idx=0; show(slot); }
-        else { slot.innerHTML=bands.map(function(b){ return b.html; }).join(""); }
+        else { slot.innerHTML=bands.map(function(b){ return b.html; }).join(""); armSubScroll(slot); }
       }catch(e){ if(src) src.hidden=false; slot.hidden=true; }            /* fail-loud fallback: show the raw stack */
     }
     return { refresh:refresh };
@@ -3837,7 +3858,7 @@
       var area=a.area?(alEsc(a.area)+" \u00b7 "):"";
       var what=a.summary?(alEsc(String(a.summary).slice(0,140))+" \u00b7 "):"";   /* the WHAT line \u2014 a "Special Weather Statement" title says nothing; the NWS headline/first sentence does */
       var t=a.sent?new Date(a.sent):null, src=(t&&!isNaN(t.getTime()))?t.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}):"";   /* time only \u2014 the banner already lives in the NWS section, the label was redundant */
-      return '<div class="al-band '+m.cls+'"><span class="al-icon">'+m.icon+'</span><div class="al-body"><div class="al-ev">'+label+'</div><div class="al-sub">'+what+area+until+'</div></div>'+(src?('<span class="al-src">'+src+'</span>'):'')+'</div>';
+      return '<div class="al-band '+m.cls+'"><span class="al-icon">'+m.icon+'</span><div class="al-body"><div class="al-ev">'+label+'</div><div class="al-sub"><span class="als-i">'+what+area+until+'</span></div></div>'+(src?('<span class="al-src">'+src+'</span>'):'')+'</div>';
     }
     /* Render EVERY band into the (hidden) source lane; the NWS carousel shows one at a time, warnings
        first + longer dwell. No internal pagination \u2014 the carousel owns rotation across alerts+heat+link. */
