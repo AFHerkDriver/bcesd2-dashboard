@@ -151,7 +151,10 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 1;
+const WORKER_VERSION = 2;
+
+/* Demand-cell key — ~500 m grid at 29.4N. ONE formula shared by the live bump and the rebuild. */
+function heatKey(la, ln) { return (Math.round(la / 0.0045) * 0.0045).toFixed(4) + "," + (Math.round(ln / 0.0052) * 0.0052).toFixed(4); }
 
 /* Distinct-type inventory key: whitespace-collapsed uppercase; dated burning recs collapse to one row */
 function typeKey(ty) {
@@ -931,7 +934,7 @@ export default {
             await env.PINS.put("archmeta:epoch", se);
             await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer", action: "SET metrics epoch to " + se });
           }
-          try { await env.PINS.delete("heatcache"); } catch (e) {}
+          try { await env.PINS.delete("heatcells"); } catch (e) {}   /* baseline changed: /heat says "run rebuild" instead of serving stale cells */
           try { await env.PINS.delete("uavcache:v1"); } catch (e) {}   /* a baseline change invalidates every derived cache */
         }
         const EPOCH = await env.PINS.get("archmeta:epoch");
@@ -979,30 +982,56 @@ export default {
            the new definitions instead of only new calls. Archive rows are the ground truth. */
         if (url.searchParams.get("rebuild") === "1") {
           if ((gate.who.tier || "") !== "admin") return json({ ok: false, error: "admin only" }, 403);
+          /* RESUMABLE — the archive outgrows the ~1000-KV-op request budget within months, so the
+             scan runs in batches of ~600 rows. A partial pass returns { partial:true, cursor };
+             call again with &cursor=... until it finalizes. Partial state rides in rebuildtmp
+             (1h TTL). The same pass regenerates the heatcells demand rollup. */
           const esdR = await esdData();
-          const aggs2 = {}; let scanned = 0, cur2;
+          let rbst = { aggs: {}, cells: {}, scanned: 0 };
+          const curIn = url.searchParams.get("cursor") || null;
+          if (curIn) {
+            const tmp = await env.PINS.get("rebuildtmp");
+            if (tmp) { try { rbst = JSON.parse(tmp); } catch (e) {} }
+            for (const m in rbst.aggs) {   /* re-arm shapes after the JSON round-trip */
+              rbst.aggs[m] = Object.assign(newAgg(), rbst.aggs[m]);
+              if (!Array.isArray(rbst.aggs[m].byHour) || rbst.aggs[m].byHour.length !== 24) rbst.aggs[m].byHour = new Array(24).fill(0);
+              if (!Array.isArray(rbst.aggs[m].chutes)) rbst.aggs[m].chutes = [];
+            }
+            if (!rbst.cells) rbst.cells = {};
+          }
+          let cur2 = curIn, batch = 0, listDone = false;
           do {
-            const lst = await env.PINS.list({ prefix: "arch:", cursor: cur2, limit: 1000 });
+            const lst = await env.PINS.list({ prefix: "arch:", cursor: cur2 || undefined, limit: 150 });
             for (const kk of lst.keys) {
               const v = await env.PINS.get(kk.name); if (!v) continue;
+              batch++;
               let c; try { c = JSON.parse(v); } catch { continue; }
-              scanned++;
-              const cls = clsOf(c.ty); if (cls === "gen") continue;
-              if (epochMs && Date.parse(c.t) < epochMs) continue;   /* pre-epoch: archived but off the books */
+              rbst.scanned++;
+              const cls = clsOf(c.ty);
+              const pre = !!(epochMs && Date.parse(c.t) < epochMs);   /* pre-epoch: archived but off the books */
+              if (!pre && cls !== "gen" && !c.gs && c.la != null && c.ln != null) { const hk = heatKey(c.la, c.ln); rbst.cells[hk] = (rbst.cells[hk] || 0) + 1; }
+              if (cls === "gen" || pre) continue;
               const mh = ctMonthHour(c.t);
-              if (!aggs2[mh.mon]) aggs2[mh.mon] = newAgg();
+              if (!rbst.aggs[mh.mon]) rbst.aggs[mh.mon] = newAgg();
               let o = !inOurs(esdR, c.ln, c.la);
               let oAid = o ? aidDistrictOf(esdR, c.ln, c.la) : "";
               if (oAid === "LOC?" && addrInfersOurs(c.ad)) { o = false; oAid = ""; }
-              aggApply(aggs2[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.t), out: o,
+              aggApply(rbst.aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.t), out: o,
                 aid: oAid, units: c.u || [], chute: (c.ch >= 1 ? c.ch : null) });
             }
-            cur2 = lst.list_complete ? null : lst.cursor;
-          } while (cur2);
+            listDone = lst.list_complete;
+            cur2 = listDone ? null : lst.cursor;
+          } while (cur2 && batch < 600);
+          if (cur2 && !listDone) {
+            await env.PINS.put("rebuildtmp", JSON.stringify(rbst), { expirationTtl: 3600 });
+            return json({ ok: true, partial: true, cursor: cur2, scanned: rbst.scanned,
+                          next: "/metrics?rebuild=1&cursor=" + encodeURIComponent(cur2) }, 200);
+          }
           const oldA = await env.PINS.list({ prefix: "agg:", limit: 60 });
-          for (const kk of oldA.keys) if (!aggs2[kk.name.slice(4)]) await env.PINS.delete(kk.name);
-          for (const m in aggs2) await env.PINS.put("agg:" + m, JSON.stringify(aggs2[m]));
-          try { await env.PINS.delete("heatcache"); } catch (e) {}
+          for (const kk of oldA.keys) if (!rbst.aggs[kk.name.slice(4)]) await env.PINS.delete(kk.name);
+          for (const m in rbst.aggs) await env.PINS.put("agg:" + m, JSON.stringify(rbst.aggs[m]));
+          await env.PINS.put("heatcells", JSON.stringify({ v: 1, cells: rbst.cells, updated: new Date().toISOString() }));   /* demand rollup regenerated in the same pass */
+          try { await env.PINS.delete("rebuildtmp"); } catch (e) {}
           try { await env.PINS.delete("uavcache:v1"); } catch (e) {}   /* derived caches must not outlive the rebuild that invalidated them */
           /* falls through to the normal listing so the caller sees the corrected months */
         }
@@ -1025,29 +1054,15 @@ export default {
       const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
       if (gate.res) return gate.res;
       try {
-        const cached = await env.PINS.get("heatcache");
-        if (cached) return json(JSON.parse(cached), 200);
-        const epH = await env.PINS.get("archmeta:epoch");
-        const epHms = epH ? Date.parse(epH) : null;      /* demand layer respects the reporting baseline */
-        const cells = {}; let cur;
-        do {
-          const lst = await env.PINS.list({ prefix: "arch:", cursor: cur, limit: 1000 });
-          for (const kk of lst.keys) {
-            const v = await env.PINS.get(kk.name); if (!v) continue;
-            let c; try { c = JSON.parse(v); } catch { continue; }
-            if (c.la == null || c.ln == null) continue;
-            if (c.gs) continue;                          /* geo-suspect: a flipped geocode must not seed a demand cell */
-            if (epHms && Date.parse(c.t) < epHms) continue;
-            const key = (Math.round(c.la / 0.0045) * 0.0045).toFixed(4) + "," + (Math.round(c.ln / 0.0052) * 0.0052).toFixed(4);
-            cells[key] = (cells[key] || 0) + 1;
-          }
-          cur = lst.list_complete ? null : lst.cursor;
-        } while (cur);
-        const top = Object.entries(cells).sort((a, b) => b[1] - a[1]).slice(0, 800)
+        /* Reads the maintained rollup — ONE KV get, immune to archive growth. The old
+           full-archive scan here was a scheduled outage: one awaited get per row against a
+           ~1000-op request budget. Live bumps happen in /dispatch; rebuild regenerates. */
+        const rawH = await env.PINS.get("heatcells");
+        let hc = null; try { hc = rawH ? JSON.parse(rawH) : null; } catch (e) {}
+        if (!hc || !hc.cells) return json({ ok: true, cells: [], updated: null, note: "no demand rollup yet — run /metrics?rebuild=1 once to build it from history" }, 200);
+        const top = Object.entries(hc.cells).sort((a, b) => b[1] - a[1]).slice(0, 800)
           .map(([k, n]) => { const p = k.split(","); return [+p[0], +p[1], n]; });
-        const out = { ok: true, cells: top, updated: new Date().toISOString() };
-        await env.PINS.put("heatcache", JSON.stringify(out), { expirationTtl: 6 * 3600 });
-        return json(out, 200);
+        return json({ ok: true, cells: top, updated: hc.updated || null }, 200);
       } catch (e) { return json({ ok: false, error: "heat error" }, 502); }
     }
 
@@ -1294,7 +1309,7 @@ export default {
              first scrub exactly this way) */
           const calls = await scrub("call:", c => c.address, c => c.type, c => c.started || c.logged, c => c.units);
           const arch  = await scrub("arch:", c => c.ad, c => c.ty, c => c.t, c => c.u);
-          try { await env.PINS.delete("heatcache"); } catch (e) {}
+          try { await env.PINS.delete("heatcells"); } catch (e) {}   /* history scrubbed: force an honest rebuild instead of stale cells */
           try { await env.PINS.delete("uavcache:v1"); } catch (e) {}
           return json({ ok: true, cleaned: { calls, arch },
             next: arch ? "run /metrics?rebuild=1 to re-aggregate the months" : "aggregates unaffected" }, 200);
@@ -1791,6 +1806,7 @@ export default {
            Log failures never break the live feed. */
         const aggDelta = {};   /* month -> events; flushed once per poll so rollup writes stay bounded */
         const newTypes = [];   /* first-sighted call types this poll -> merged into the typelog inventory below */
+        const heatNew = [];    /* new post-epoch incidents with trusted coords -> demand-cell rollup below (kills the /heat full-archive scan) */
         const esdAll = await esdData();
         const epochLive = await env.PINS.get("archmeta:epoch");   /* metrics epoch — one read per poll, gates the rollup flush below */
         /* GEO-SUSPECT stamp (gs:1) — A911 flips highway N/S addresses (the observed 281 flip: a
@@ -1914,6 +1930,7 @@ export default {
                     t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
                     u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "", ms: c.msf, ej: c.ejf, mt: c.mtf, gs: c.gs, gf: c.gf }));
                   if (archStray) { try { await env.PINS.delete("arch:" + c.id); } catch (e) {} }   /* replacement written above — NOW the stray can go */
+                  if (isNewInc && !c.gs && c.lat != null && c.lng != null && !(epochLive && Date.parse(c.logged) < Date.parse(epochLive))) heatNew.push([c.lat, c.lng]);   /* demand cell: first sighting only, trusted coords, on the books */
                   if (epochLive && Date.parse(c.logged) < Date.parse(epochLive)) { /* pre-epoch: raw-archived above, excluded from rollups */ } else {
                   const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
                   let out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */
@@ -1942,6 +1959,17 @@ export default {
             await env.PINS.put(key, JSON.stringify(agg));
           } catch (e) { /* never break the feed for metrics */ }
         }
+        /* DEMAND ROLLUP — heatcells doc bumped once per poll with new incidents; /heat reads it
+           in one KV get instead of scanning the whole archive (which outgrows the per-request
+           op budget within months). Rebuild regenerates it from history in the same pass. */
+        if (heatNew.length) { try {
+          let hc = { v: 1, cells: {}, updated: null };
+          const rawH = await env.PINS.get("heatcells");
+          if (rawH) { try { const ph = JSON.parse(rawH); if (ph && ph.cells) hc = ph; } catch (e) {} }
+          for (const p of heatNew) { const hk = heatKey(p[0], p[1]); hc.cells[hk] = (hc.cells[hk] || 0) + 1; }
+          hc.updated = new Date().toISOString();
+          await env.PINS.put("heatcells", JSON.stringify(hc));
+        } catch (e) { /* the demand rollup must never break the feed */ } }
         /* TYPE INVENTORY — every distinct CAD call type ever sighted, with count/first/last.
            One KV doc, merged once per poll only when a new incident appeared. Admin reads /types. */
         if (newTypes.length) { try {
