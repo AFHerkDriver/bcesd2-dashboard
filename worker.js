@@ -1301,6 +1301,84 @@ export default {
       } catch { return json({ ok:false, error:"log read error" }, 502); }
     }
 
+    /* NOTE: this block must stay ABOVE the global POST-only guard below — fleet.html LOADS the
+       roster with a GET. It sat below the guard from birth, so every load 405'd and the page
+       silently fell back to local drafts/seed (looked fine until a save cleared the draft). */
+    /* ── Fleet GPS roster (fleet.html) ──────────────────────────────────────
+       The Samsara AVL unit table: dept reg (###-##) → radio callsign, icon family,
+       home station, 3-way visibility (always / oncall / off). Lives in KV under
+       "avlroster" so edits are live on every board with no deploy. Reads allow any
+       valid PIN (boards will consume the roster via /avl later); writes get the
+       same board-tier wall as /state. */
+    if (url.pathname === "/roster") {
+      if (req.method === "GET") {
+        const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+        if (gate.res) return gate.res;
+        const raw = await env.PINS.get("avlroster");
+        let roster = null; try { roster = raw ? JSON.parse(raw) : null; } catch (e) { /* fall through to empty */ }
+        return json({ ok: true, roster: roster || { v: 1, units: [] } }, 200);
+      }
+      if (req.method === "POST") {
+        let body; try { body = await req.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
+        const gate = await pinGate(env, ip, String(body.pin || ""), json);
+        if (gate.res) return gate.res;
+        if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "display-only" }, 403);
+        /* {restore:true} swaps the automatic backup back in (and banks the current copy),
+           so any bad save is one call from undone */
+        if (body.restore) {
+          const bak = await env.PINS.get("avlroster:bak");
+          if (!bak) return json({ ok: false, error: "no backup yet" }, 404);
+          const cur = await env.PINS.get("avlroster");
+          if (cur) await env.PINS.put("avlroster:bak", cur);
+          await env.PINS.put("avlroster", bak);
+          await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
+                                 action: "RESTORED fleet GPS roster from backup" });
+          return json({ ok: true, restored: true }, 200);
+        }
+        const roster = body.roster;
+        if (!roster || !Array.isArray(roster.units) || roster.units.length > 200)
+          return json({ ok: false, error: "bad roster" }, 400);
+        const seen = new Set(), units = [];
+        for (const u of roster.units) {
+          const reg = String(u.reg || "").trim().toUpperCase();
+          const cs  = String(u.cs  || "").trim().toUpperCase();
+          const rsv = u.rsv ? 1 : 0;
+          if (!/^[0-9][0-9A-Z-]{0,9}$/.test(reg)) return json({ ok: false, error: "bad reg: " + reg }, 400);   /* exactly as the fleet master lists it: 31925, 21323-G, 6459, 802 */
+          const csParts = cs === "" ? [] : cs.split("/");                                                       /* shared rigs: MOF123/UAV121 — any part matches dispatch */
+          if (!(rsv && cs === "") &&
+              !(csParts.length && csParts.length <= 3 && csParts.every(s => /^[A-Z][A-Z0-9]{1,7}$/.test(s))))   /* reserve rigs may be nameless */
+            return json({ ok: false, error: "bad callsign: " + cs }, 400);
+          if (seen.has(reg)) return json({ ok: false, error: "duplicate reg: " + reg }, 400);
+          seen.add(reg);
+          const st = String(u.st || "").trim();
+          if (!/^$|^\d{2,4}(\/\d{2,4}){0,2}$/.test(st)) return json({ ok: false, error: "bad station: " + st }, 400);   /* slash list ok: hides idle at ANY listed station */
+          units.push({ reg, cs, st,
+                       vis: ["always", "oncall", "off"].includes(u.vis) ? u.vis : "oncall",
+                       fam: ["app", "rb", "amber"].includes(u.fam) ? u.fam : "rb",
+                       cmd: u.cmd ? 1 : 0, fmo: u.fmo ? 1 : 0, mk: String(u.mk || "").slice(0, 48),
+                       yr: String(u.yr || "").replace(/\D/g, "").slice(0, 4), rsv,
+                       nt: String(u.nt || "").slice(0, 140) });   /* free-text notes — pump size, quirks, assignments */
+        }
+        const prev = await env.PINS.get("avlroster");
+        /* OPTIMISTIC CONCURRENCY — the missing half of the stale-draft defense. The client-side
+           dts/at check only runs at page LOAD; a tab left open for days happily posts last week's
+           roster over today's (observed live 2026-07-28 — an earlier save was silently reverted).
+           Every save must now prove it was based on the CURRENT server copy: the client echoes the
+           `at` stamp it loaded (baseAt); a mismatch = someone saved since = 409, nothing written. */
+        let prevAt = 0; try { prevAt = prev ? (JSON.parse(prev).at || 0) : 0; } catch (e) {}
+        if (prevAt && (parseInt(body.baseAt, 10) || 0) !== prevAt)
+          return json({ ok: false, error: "stale — a newer roster was saved after this page loaded", at: prevAt }, 409);
+        if (prev) await env.PINS.put("avlroster:bak", prev);   /* every save banks the previous copy — one-step undo */
+        const at = Date.now();
+        await env.PINS.put("avlroster", JSON.stringify({ v: 1, sv: parseInt(roster.sv, 10) || 1, at, units }));   /* sv = fleet-seed version absorbed; at = save stamp so stale drafts can't outrank this copy */
+        await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
+                               action: "updated fleet GPS roster (" + units.length + " units)" });
+        return json({ ok: true, n: units.length, at }, 200);
+      }
+      return json({ ok: false, error: "method" }, 405);
+    }
+
+
     if (req.method !== "POST")    return json({ ok: false, error: "POST only" }, 405);
 
     if (url.pathname === "/verify") {
@@ -1741,80 +1819,6 @@ export default {
       await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
                              action: String(body.action || "updated board state").slice(0, 200) });
       return json({ ok: true }, 200);
-    }
-
-    /* ── Fleet GPS roster (fleet.html) ──────────────────────────────────────
-       The Samsara AVL unit table: dept reg (###-##) → radio callsign, icon family,
-       home station, 3-way visibility (always / oncall / off). Lives in KV under
-       "avlroster" so edits are live on every board with no deploy. Reads allow any
-       valid PIN (boards will consume the roster via /avl later); writes get the
-       same board-tier wall as /state. */
-    if (url.pathname === "/roster") {
-      if (req.method === "GET") {
-        const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
-        if (gate.res) return gate.res;
-        const raw = await env.PINS.get("avlroster");
-        let roster = null; try { roster = raw ? JSON.parse(raw) : null; } catch (e) { /* fall through to empty */ }
-        return json({ ok: true, roster: roster || { v: 1, units: [] } }, 200);
-      }
-      if (req.method === "POST") {
-        let body; try { body = await req.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
-        const gate = await pinGate(env, ip, String(body.pin || ""), json);
-        if (gate.res) return gate.res;
-        if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "display-only" }, 403);
-        /* {restore:true} swaps the automatic backup back in (and banks the current copy),
-           so any bad save is one call from undone */
-        if (body.restore) {
-          const bak = await env.PINS.get("avlroster:bak");
-          if (!bak) return json({ ok: false, error: "no backup yet" }, 404);
-          const cur = await env.PINS.get("avlroster");
-          if (cur) await env.PINS.put("avlroster:bak", cur);
-          await env.PINS.put("avlroster", bak);
-          await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
-                                 action: "RESTORED fleet GPS roster from backup" });
-          return json({ ok: true, restored: true }, 200);
-        }
-        const roster = body.roster;
-        if (!roster || !Array.isArray(roster.units) || roster.units.length > 200)
-          return json({ ok: false, error: "bad roster" }, 400);
-        const seen = new Set(), units = [];
-        for (const u of roster.units) {
-          const reg = String(u.reg || "").trim().toUpperCase();
-          const cs  = String(u.cs  || "").trim().toUpperCase();
-          const rsv = u.rsv ? 1 : 0;
-          if (!/^[0-9][0-9A-Z-]{0,9}$/.test(reg)) return json({ ok: false, error: "bad reg: " + reg }, 400);   /* exactly as the fleet master lists it: 31925, 21323-G, 6459, 802 */
-          const csParts = cs === "" ? [] : cs.split("/");                                                       /* shared rigs: MOF123/UAV121 — any part matches dispatch */
-          if (!(rsv && cs === "") &&
-              !(csParts.length && csParts.length <= 3 && csParts.every(s => /^[A-Z][A-Z0-9]{1,7}$/.test(s))))   /* reserve rigs may be nameless */
-            return json({ ok: false, error: "bad callsign: " + cs }, 400);
-          if (seen.has(reg)) return json({ ok: false, error: "duplicate reg: " + reg }, 400);
-          seen.add(reg);
-          const st = String(u.st || "").trim();
-          if (!/^$|^\d{2,4}(\/\d{2,4}){0,2}$/.test(st)) return json({ ok: false, error: "bad station: " + st }, 400);   /* slash list ok: hides idle at ANY listed station */
-          units.push({ reg, cs, st,
-                       vis: ["always", "oncall", "off"].includes(u.vis) ? u.vis : "oncall",
-                       fam: ["app", "rb", "amber"].includes(u.fam) ? u.fam : "rb",
-                       cmd: u.cmd ? 1 : 0, fmo: u.fmo ? 1 : 0, mk: String(u.mk || "").slice(0, 48),
-                       yr: String(u.yr || "").replace(/\D/g, "").slice(0, 4), rsv,
-                       nt: String(u.nt || "").slice(0, 140) });   /* free-text notes — pump size, quirks, assignments */
-        }
-        const prev = await env.PINS.get("avlroster");
-        /* OPTIMISTIC CONCURRENCY — the missing half of the stale-draft defense. The client-side
-           dts/at check only runs at page LOAD; a tab left open for days happily posts last week's
-           roster over today's (observed live 2026-07-28 — an earlier save was silently reverted).
-           Every save must now prove it was based on the CURRENT server copy: the client echoes the
-           `at` stamp it loaded (baseAt); a mismatch = someone saved since = 409, nothing written. */
-        let prevAt = 0; try { prevAt = prev ? (JSON.parse(prev).at || 0) : 0; } catch (e) {}
-        if (prevAt && (parseInt(body.baseAt, 10) || 0) !== prevAt)
-          return json({ ok: false, error: "stale — a newer roster was saved after this page loaded", at: prevAt }, 409);
-        if (prev) await env.PINS.put("avlroster:bak", prev);   /* every save banks the previous copy — one-step undo */
-        const at = Date.now();
-        await env.PINS.put("avlroster", JSON.stringify({ v: 1, sv: parseInt(roster.sv, 10) || 1, at, units }));   /* sv = fleet-seed version absorbed; at = save stamp so stale drafts can't outrank this copy */
-        await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer",
-                               action: "updated fleet GPS roster (" + units.length + " units)" });
-        return json({ ok: true, n: units.length, at }, 200);
-      }
-      return json({ ok: false, error: "method" }, 405);
     }
 
     /* Clear access-log entries. Admin only. Body {names:[...]} deletes only those people (a name in
