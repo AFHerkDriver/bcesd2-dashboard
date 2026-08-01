@@ -200,7 +200,7 @@
 
   <div class="savebar">
     <button class="btn primary" id="save">SAVE ROSTER</button>
-    <div class="stat" id="stat"></div>
+    <div class="stat" id="stat"></div>
   </div>
 </div>
 
@@ -519,8 +519,16 @@ function load(){
     })
     .catch(function(err){
       if(err==='no-endpoint') document.getElementById('wkNote').hidden=false;
+      /* FAIL LOUD — a silent fallback here masked a dead /roster read path for weeks: the page
+         quietly showed drafts/seed while looking healthy. If the server copy can't load, say so. */
+      var stat=document.getElementById('stat');
       var d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT)||'null'); }catch(e){}
-      if(d&&Array.isArray(d.units)&&(d.dts||0)>Date.now()-48*3600*1000){ roster=d; mergeSeed(); return; }   /* offline fallback only for a RECENT draft — an ancient one must not resurrect */
+      if(d&&Array.isArray(d.units)&&(d.dts||0)>Date.now()-48*3600*1000){
+        roster=d;
+        if(stat) stat.textContent='⚠ SERVER ROSTER UNREACHABLE ('+err+') — showing this device\'s local draft, NOT the saved fleet';
+        mergeSeed(); return;
+      }
+      if(stat) stat.textContent='⚠ SERVER ROSTER UNREACHABLE ('+err+') — showing factory defaults, NOT the saved fleet. Do not save over it.';
       seedIfEmpty();
     });
 }
