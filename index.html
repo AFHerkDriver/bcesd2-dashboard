@@ -943,6 +943,8 @@
   .tchip.on .tcn{color:var(--green)}
   .tchip.err{border-color:var(--amber);background:rgba(255,193,7,.10)}
   .tchip.err .tcn{color:var(--amber)}
+  .tchip.dk{border-color:#21262D;background:var(--bg);opacity:.6}     /* scheduled downtime: deliberately dark — down per plan, not broken */
+  .tchip.dk .tcn{color:#6E7681}
   .tchip.oos{border-color:var(--red);background:rgba(255,59,48,.14)}
   .tchip.oos .tcn{color:var(--red)}
   .trow{display:flex;align-items:center;gap:10px;border-left:3px solid var(--border);border-radius:6px;background:var(--panel2);padding:clamp(3px,.4vmin,7px) clamp(8px,.9vmin,14px)}
@@ -2341,7 +2343,19 @@
         var day = dayLookup(days, d);
         if(!day){ render({ ok:true, u121:false, u124:false }); return; }
         var dec = decodeDay(day);
-        render({ ok:true, u121:dec.u121up, u124:dec.u124up });
+        /* SCHEDULED OOS — the crew app's day.oos:[{unit,from,to,reason}] windows (Central wall-clock).
+           A unit inside its window shows DARK on the Unit Status tile: deliberately down per the
+           schedule — not broken (red stays reserved for officer-set OOS), not staffed-green. */
+        var hm; try{ hm=new Intl.DateTimeFormat("en-GB",{timeZone:"America/Chicago",hour12:false,hour:"2-digit",minute:"2-digit"}).format(new Date()); }catch(e){ hm=""; }
+        function inWin(fr,to){ if(!hm) return false; if(!fr&&!to) return true; fr=fr||"00:00"; to=to||"24:00";
+          return fr<=to ? (hm>=fr&&hm<to) : (hm>=fr||hm<to); }   /* overnight windows wrap */
+        var o121=false,o124=false;
+        (Array.isArray(day.oos)?day.oos:[]).forEach(function(e){
+          var u=String((e&&e.unit)||"").trim().toUpperCase();
+          if(u==="UAV121"&&inWin(e.from,e.to)) o121=true;
+          if(u==="UAV124"&&inWin(e.from,e.to)) o124=true;
+        });
+        render({ ok:true, u121:dec.u121up, u124:dec.u124up, o121:o121, o124:o124 });
       }).catch(function(){ render({ ok:false }); });           /* network/other → amber unknown */
     }
     load(); setInterval(load, UAV_REFRESH);
@@ -3384,8 +3398,8 @@
       if(!body) return;
       var items=[], s=window.UAV_STATE;                            /* collect {label, cls} for every visible pill, then sort A–Z */
       var maOn=!!(window.MA121_UNTIL && window.MA121_UNTIL>Date.now() && !(stSt&&stSt.macAck===window.MA121_UNTIL));   /* MAC121 dispatched -> auto-on 6h; once the officer ACKS this dispatch in control (macAck), their saved staffing/expiry governs instead — shorten, extend, or stand down */
-      items.push({label:"UAV121", cls: !s?"":(!s.ok?"err":(s.u121?"on":""))});
-      items.push({label:"UAV124", cls: !s?"":(!s.ok?"err":(s.u124?"on":""))});
+      items.push({label:"UAV121", cls: !s?"":(!s.ok?"err":(s.o121?"dk":(s.u121?"on":"")))});   /* scheduled OOS window -> dark, even if staffed */
+      items.push({label:"UAV124", cls: !s?"":(!s.ok?"err":(s.o124?"dk":(s.u124?"on":"")))});
       if(stOk===false){
         body.className="teams-body err";
         /* apparatus unknown on read-fail: hiding them would read as "all in service" — a false all-clear */
