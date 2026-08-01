@@ -586,9 +586,13 @@
       padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));
       padding-bottom:max(10px,env(safe-area-inset-bottom))}
     header{flex-wrap:wrap;row-gap:8px}
-    .id{flex:1;text-align:center}   /* phone: title centers between shield and burn chip */
+    /* phone header — two deliberate rows: [shield · centered title] then [BURN BAN · clock · ON DUTY].
+       .id takes the rest of row one, which FORCES the chips+clock onto their own balanced strip. */
+    .id{flex:1 1 calc(100% - 78px);text-align:center;min-width:0}
     .id h1{font-size:22px}
-    .clock{flex:1;text-align:center}   /* phone: clock centers, ON DUTY holds the right edge */
+    .hchip{order:3}
+    .clock{order:3;flex:1 1 auto;text-align:center;margin-left:0}
+    .clock .date{font-size:11px;white-space:nowrap}
     .clock .time{font-size:30px}
     .hchip{min-width:82px;max-width:150px;flex:0 1 auto;padding:4px 10px}   /* phone: chips keep natural size — the ON DUTY pill was stretching to fill the row */
     .hchip .lbl{font-size:7px}
