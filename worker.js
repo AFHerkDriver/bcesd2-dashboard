@@ -148,6 +148,12 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
                     when units attach or a chute stamps — bounded writes, not one per poll.
    agg:<YYYY-MM>    monthly rollup the metrics page reads: run count, class mix, hour-of-day bands,
                     station + apparatus workload, chute samples [cls,seconds]. Central-time months. */
+/* Distinct-type inventory key: whitespace-collapsed uppercase; dated burning recs collapse to one row */
+function typeKey(ty) {
+  let k = String(ty || "").toUpperCase().replace(/s+/g, " ").trim();
+  if (k.startsWith("BURNING RECOMMENDATION")) k = "BURNING RECOMMENDATION (DAILY)";
+  return k;
+}
 function clsOf(t) { t = String(t || "").toUpperCase();
   /* announcements, not runs. CAD OUTAGE / DISREGARD: the county's manual status + cancellation
      pages during a CAD outage (observed 2026-07-26) — dispatcher traffic, never workload. */
@@ -1421,6 +1427,38 @@ export default {
       } catch (e) { return json({ ok: false, error: "hydrant log read error" }, 502); }
     }
 
+    /* ── GET /types?pin — ADMIN: the distinct call-type inventory. First call seeds itself from the
+       permanent archive (every run since Jul 21), then the live merge keeps it current — including
+       announcement types the archive never stores. Stays above the POST-only guard. ── */
+    if (req.method === "GET" && url.pathname === "/types") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
+      if ((gate.who.tier || "") !== "admin") return json({ ok: false, error: "admin only" }, 403);
+      try {
+        let tl = null; const rawTl = await env.PINS.get("typelog");
+        if (rawTl) { try { tl = JSON.parse(rawTl); } catch (e) {} }
+        if (!tl) {
+          tl = {}; let cur;
+          do {
+            const lst = await env.PINS.list({ prefix: "arch:", cursor: cur, limit: 1000 });
+            for (const kk of lst.keys) {
+              const v = await env.PINS.get(kk.name); if (!v) continue;
+              let c; try { c = JSON.parse(v); } catch { continue; }
+              const k = typeKey(c.ty); if (!k) continue;
+              if (!tl[k]) tl[k] = { n: 0, first: c.t };
+              tl[k].n++;
+              if (String(c.t || "") < String(tl[k].first || "~")) tl[k].first = c.t;
+              if (String(c.t || "") > String(tl[k].last  || ""))  tl[k].last  = c.t;
+            }
+            cur = lst.list_complete ? null : lst.cursor;
+          } while (cur);
+          await env.PINS.put("typelog", JSON.stringify(tl));
+        }
+        const types = Object.keys(tl).map(k => ({ ty: k, ...tl[k] })).sort((a, b) => b.n - a.n);
+        return json({ ok: true, count: types.length, types }, 200);
+      } catch (e) { return json({ ok: false, error: "types read error" }, 502); }
+    }
+
     if (req.method !== "POST")    return json({ ok: false, error: "POST only" }, 405);
 
     if (url.pathname === "/verify") {
@@ -1715,6 +1753,7 @@ export default {
            attachments. Every call here came from a SUCCESSFUL detail fetch, so no write-from-failed-read.
            Log failures never break the live feed. */
         const aggDelta = {};   /* month -> events; flushed once per poll so rollup writes stay bounded */
+        const newTypes = [];   /* first-sighted call types this poll -> merged into the typelog inventory below */
         const esdAll = await esdData();
         const epochLive = await env.PINS.get("archmeta:epoch");   /* metrics epoch — one read per poll, gates the rollup flush below */
         /* GEO-SUSPECT stamp (gs:1) — A911 flips highway N/S addresses (the observed 281 flip: a
@@ -1784,6 +1823,7 @@ export default {
             if (prev) { try { const pj = JSON.parse(prev); origLogged = pj.logged || ""; prevUnits = Array.isArray(pj.units) ? pj.units : [];
               if (pj.chute >= 1) { prevChute = pj.chute; prevChuteUnit = pj.chuteUnit || ""; } } catch (e) {} }
             c.logged = origLogged || new Date().toISOString();
+            if (!prev && c.type) newTypes.push({ ty: c.type, t: c.logged });   /* first sighting -> distinct-type inventory */
             /* CHUTE TIME — stamped HERE because this row is one-per-incident and units are unioned on
                every sighting, so the before/after-apparatus transition is only visible at write time.
                First sighting with no real apparatus starts the clock (logged); the first sighting that
@@ -1858,6 +1898,18 @@ export default {
             await env.PINS.put(key, JSON.stringify(agg));
           } catch (e) { /* never break the feed for metrics */ }
         }
+        /* TYPE INVENTORY — every distinct CAD call type ever sighted, with count/first/last.
+           One KV doc, merged once per poll only when a new incident appeared. Admin reads /types. */
+        if (newTypes.length) { try {
+          let tl = {}; const rawTl = await env.PINS.get("typelog");
+          if (rawTl) { try { tl = JSON.parse(rawTl); } catch (e) {} }
+          for (const nt of newTypes) {
+            const k = typeKey(nt.ty); if (!k) continue;
+            if (!tl[k]) tl[k] = { n: 0, first: nt.t };
+            tl[k].n++; tl[k].last = nt.t;
+          }
+          await env.PINS.put("typelog", JSON.stringify(tl));
+        } catch (e) { /* inventory must never break the feed */ } }
         /* remove the stale log rows for absorbed duplicate ids so the tally isn't padded by copies */
         for (const id of absorbed) { try { await env.PINS.delete("call:" + id); } catch (e) { /* best-effort */ } }
         return json({ ok: true, feed: feedSource, calls }, 200);

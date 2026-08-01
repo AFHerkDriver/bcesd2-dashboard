@@ -326,6 +326,12 @@
       <div id="chuteBody" class="chute-body">Loading&hellip;</div>
     </div>
 
+    <div class="card" id="typesCard" style="display:none">
+      <h2>Call Types Seen</h2>
+      <div class="hint">Every distinct CAD call type the relay has ever sighted — runs since Jul 21 from the permanent archive, announcements from Aug 1 onward. Count, first and last seen. Admin eyes only.</div>
+      <div id="typesBody" class="chute-body">Loading&hellip;</div>
+    </div>
+
     <!-- Announcements (top ticker) — collapsible, count in header -->
     <div class="card fold clps" id="cardAnn">
       <h2>Announcements <span class="tag live">TICKER</span> <span class="fold-sum" id="annFoldSum"></span></h2>
@@ -498,7 +504,7 @@
   function $g(id){ return document.getElementById(id); }
   function msg(txt, cls){ var m=$g('gateMsg'); if(m){ m.textContent=txt||''; m.className='gate-msg'+(cls?(' '+cls):''); } }
   function unlock(name, tier, pin){
-    if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadChuteStats(pin); }   /* access log + chute gee-whiz are yours alone — admin PIN only */
+    if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadChuteStats(pin); loadTypeLog(pin); }   /* access log + chute gee-whiz are yours alone — admin PIN only */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
     /* Diagnostics card is OWNER-only — same identity gate as the token reminder */
     try{ if(String(name||'').trim().toLowerCase()==='capt sanchez' && window.wireDiag) window.wireDiag(pin); }catch(e){}
@@ -626,6 +632,20 @@
   /* Chute gee-whiz: pull the 48h log, keep calls the worker stamped with a chute, and show the
      numbers that matter — average, median, NFPA-style 90th percentile, fastest — plus a per-station
      breakdown keyed by the FIRST responding apparatus. Quietly hides when nothing is measurable yet. */
+  function loadTypeLog(pin){
+    var card=$g('typesCard'), body=$g('typesBody'); if(!card||!body) return;
+    fetch(AUTH_URL+'/types?pin='+encodeURIComponent(pin))
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(j){
+        if(!j||!j.ok||!Array.isArray(j.types)) return;             /* stay hidden on failure — inventory, not safety */
+        card.style.display='block';
+        if(!j.types.length){ body.textContent='Nothing sighted yet.'; return; }
+        var d=function(x){ if(!x) return '—'; try{ return new Date(x).toLocaleDateString('en-US',{timeZone:'America/Chicago',month:'numeric',day:'numeric'}); }catch(e){ return '—'; } };
+        var esc=function(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+        body.innerHTML='<table class="chute-tbl"><tr><th>Type</th><th>N</th><th>First</th><th>Last</th></tr>'+
+          j.types.map(function(t){ return '<tr><td>'+esc(t.ty)+'</td><td class="num">'+t.n+'</td><td>'+d(t.first)+'</td><td>'+d(t.last)+'</td></tr>'; }).join('')+'</table>';
+      }).catch(function(){});
+  }
   function loadChuteStats(pin){
     var card=$g('chuteCard'), body=$g('chuteBody'); if(!card||!body) return;
     fetch(AUTH_URL+'/calls?pin='+encodeURIComponent(pin))
