@@ -104,8 +104,12 @@
   .micro.app.scene .m2, .micro.app.scene .m3 { animation: mbreath 4.4s ease-in-out infinite; }
   .micro.app.scene .m1, .micro.app.scene .m4 { animation: mbreath 4.4s ease-in-out infinite -2.2s; }
   .micro:not(.resp):not(.scene):not(.cmd) i { filter: brightness(.55); }   /* idle rigs (available, MX): lights banked down — only active states earn full color */
-  .micro.mx .mb { background: rgb(255,176,46); }             /* maintenance: steady AMBER|RED, never animates */
-  .micro.mx .mr { background: rgb(255,42,30); }
+  /* MAINTENANCE bar: RED|AMBER|center|AMBER|RED — apparatus geometry, amber inners, never animates */
+  .micro.mx { width: 20px; background: rgb(198,204,214); }
+  .micro.mx .m1 { left: 0;   width: 26%; background: rgb(255,42,30); }
+  .micro.mx .m2 { left: 26%; width: 16%; background: rgb(255,176,46); }
+  .micro.mx .m3 { left: 58%; width: 16%; background: rgb(255,176,46); }
+  .micro.mx .m4 { left: 74%; width: 26%; background: rgb(255,42,30); }
   @keyframes mflash  { 0%, 46% { filter: brightness(2.3) saturate(1.35); } 50%, 100% { filter: brightness(.32) saturate(1.15); } }   /* OFF = deep dark red/blue — the flash pops against its own dark half, not the map */
   .micro.resp .mb { animation: mflash .5s linear infinite; }
   .micro.resp .mr { animation: mflash .5s linear infinite -.25s; }
@@ -180,7 +184,7 @@
   </div>
 </div>
 
-<div class="sub" style="margin:22px 0 8px">DISTRICT FRAME &mdash; far zoom: MICRO markers (the lightbar alone). RED|BLUE|BLUE|RED 4-segment chip = apparatus criss-cross in miniature; RED|BLUE = normal bar; steady AMBER|RED = maintenance (MX); steady red|blue = available. Zoom past ~z13 and they become the full badges above.</div>
+<div class="sub" style="margin:22px 0 8px">DISTRICT FRAME &mdash; far zoom: MICRO markers (the lightbar alone). RED|BLUE|BLUE|RED 4-segment chip = apparatus criss-cross in miniature; RED|BLUE = normal bar; steady RED|AMBER|AMBER|RED = maintenance (MX); steady red|blue = available. Zoom past ~z13 and they become the full badges above.</div>
 <div class="stage2">
   <div class="pin" style="left:54%;top:38%"><span class="micro app resp"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
   <div class="pin" style="left:76%;top:64%"><span class="micro app resp"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
@@ -188,7 +192,7 @@
   <div class="pin" style="left:40%;top:26%"><span class="micro app scene"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
   <div class="pin" style="left:44%;top:29%"><span class="micro app cmd"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
   <div class="pin" style="left:63%;top:80%"><span class="micro"><i class="mb"></i><i class="mr"></i></span></div>
-  <div class="pin" style="left:22%;top:74%"><span class="micro mx"><i class="mb"></i><i class="mr"></i></span></div>
+  <div class="pin" style="left:22%;top:74%"><span class="micro mx"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
 </div>
 
 <div class="note"><div class="note">
