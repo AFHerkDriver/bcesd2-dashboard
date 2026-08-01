@@ -1112,6 +1112,7 @@
             <div class="alert-lane" id="alertLane"></div>
             <div class="heat-band" id="heatBand" hidden></div>
             <div class="heat-band" id="linkBand" hidden></div>
+            <div class="heat-band" id="satBand" hidden></div>
           </div>
           <div class="fw-body" id="fwBody"></div>
           <div class="floodband" id="floodBand" hidden>
@@ -1234,7 +1235,7 @@
     /* Optional overlays: Wind Flow (windy-style particles — also auto-on during red flag) and Call
        Demand (archive density, lazy-loaded on first enable). Both OFF by default — wall stays clean. */
     var windOverlay=L.layerGroup(), heatLayer=L.layerGroup(), tenderOverlay=L.layerGroup();
-    L.control.layers({"Dark":dark,"Positron":positron,"Satellite":satellite},   /* both lists alphabetical — same as the MDT */
+    var layersCtl=L.control.layers({"Dark":dark,"Positron":positron,"Satellite":satellite},   /* both lists alphabetical — same as the MDT */
       {"Call Demand":heatLayer,"Tender Zones":tenderOverlay,"Wind Flow":windOverlay},{collapsed:true,position:"bottomright"}).addTo(map);
     /* Follow the sun LIVE: satellite from sunrise to sunset, dark at night. The initial pick above
        only ran at page load — and the wall hard-reloads at 04:07, so it loaded dark and stayed dark
@@ -1268,6 +1269,98 @@
     var operatorIcon=L.icon({iconUrl:"operator-marker.png",iconRetinaUrl:"operator-marker@2x.png",iconSize:[40,40],iconAnchor:[20,20]});
     function isOperatorStream(d){ return !(d && d.poiLat!=null && d.poiLng!=null); }   /* GPS but no target = operator phone */
     var layer=L.layerGroup().addTo(map);
+    /* ── ROAD CLOSURES / CONSTRUCTION — layers-control toggle, OFF by default; polls only while
+       enabled (2 min). Orange = live lane incident, gray = construction/closure zone. ── */
+    var rwWallLayer=L.layerGroup(); var rwWallTimer=null;
+    function rwWallLoad(){
+      var pin=window.BOARD_PIN?window.BOARD_PIN():""; if(!pin) return;
+      fetch("https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/roadwork?pin="+encodeURIComponent(pin))
+        .then(function(r){return r.json();}).then(function(j){
+          if(!j||!j.ok) return;
+          rwWallLayer.clearLayers();
+          (j.items||[]).forEach(function(it){
+            var col=it.k==="incident"?"#FF8C42":"#8B949E";
+            L.circleMarker([it.la,it.ln],{radius:6,color:"#0D1117",weight:2,fillColor:col,fillOpacity:.95})
+              .bindPopup('<b>'+String(it.ty).replace(/[<>&]/g,"").toUpperCase()+'</b><br>'+String(it.tx).replace(/[<>&]/g,""),{maxWidth:250})
+              .addTo(rwWallLayer);
+          });
+        }).catch(function(){});
+    }
+    map.on("overlayadd",function(e){ if(e.layer===rwWallLayer){ rwWallLoad(); rwWallTimer=setInterval(rwWallLoad,120000); } });
+    map.on("overlayremove",function(e){ if(e.layer===rwWallLayer){ clearInterval(rwWallTimer); } });
+    layersCtl.addOverlay(rwWallLayer,"Road Closures");
+
+    /* ── MEDEVAC / ROTORCRAFT — red = HEMS watchlist bird, gray = other rotorcraft. Always on
+       (markers only exist while aircraft are actually in the box). ── */
+    var heloWallLayer=L.layerGroup().addTo(map);
+    function wallHelos(){
+      var pin=window.BOARD_PIN?window.BOARD_PIN():""; if(!pin) return;
+      fetch("https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/helos?pin="+encodeURIComponent(pin))
+        .then(function(r){return r.json();}).then(function(j){
+          if(!j||!j.ok) return;
+          heloWallLayer.clearLayers();
+          (j.helos||[]).forEach(function(h){
+            var col=h.med?"#FF3B30":"#8B949E";
+            var ic=L.divIcon({className:"",iconSize:[24,24],iconAnchor:[12,12],
+              html:'<div style="transform:rotate('+(h.trk||0)+'deg);font-size:17px;line-height:24px;text-align:center;text-shadow:0 0 4px #000;color:'+col+'">&#10548;</div>'});
+            L.marker([h.la,h.ln],{icon:ic,keyboard:false,zIndexOffset:600})
+              .bindTooltip(String(h.op||h.reg||h.hex).replace(/[<>&]/g,"")+(h.alt!=null?(" · "+h.alt+" ft"):""),{direction:"top",offset:[0,-10]})
+              .addTo(heloWallLayer);
+          });
+        }).catch(function(){});
+    }
+    wallHelos(); setInterval(wallHelos,15000);
+
+    /* ── POWER OUTAGES (CPS via worker) — amber highlights; auto-ON while any outage exists in the
+       box, auto-OFF when clear, and always available from the layers control. ── */
+    var outWallLayer=L.layerGroup(); var outWallHad=false;
+    function wallOutages(){
+      var pin=window.BOARD_PIN?window.BOARD_PIN():""; if(!pin) return;
+      fetch("https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/outages?pin="+encodeURIComponent(pin))
+        .then(function(r){return r.json();}).then(function(j){
+          if(!j||!j.ok) return;
+          outWallLayer.clearLayers();
+          (j.points||[]).forEach(function(p){
+            var rr=Math.min(900,150+(p.cust||p.n||1)*12);
+            L.circle([p.la,p.ln],{radius:rr,color:"#FFC107",weight:1.5,opacity:.7,fillColor:"#FFC107",fillOpacity:.18})
+              .bindPopup('<b>POWER OUTAGE</b>'+(p.cust!=null?('<br>'+(p.mask?'&lt;5':p.cust)+' customers out'):'')+(p.cause?('<br>'+String(p.cause).replace(/[<>&]/g,'')):''),{maxWidth:220})
+              .addTo(outWallLayer);
+          });
+          var has=(j.points||[]).length>0;
+          if(has&&!outWallHad){ outWallLayer.addTo(map); }          /* first outage: surface the layer */
+          if(!has&&outWallHad){ try{ map.removeLayer(outWallLayer); }catch(e){} }
+          outWallHad=has;
+        }).catch(function(){});
+    }
+    wallOutages(); setInterval(wallOutages,180000);
+    layersCtl.addOverlay(outWallLayer,"Power Outages");
+
+    /* ── DISTRICT TRAFFIC CAMERAS — toggleable overlay (OFF by default): the 22 verified
+       in-district/border TxDOT cameras. Popup shows the latest snapshot via the worker relay;
+       the MDT carries the live-video experience. ── */
+    var camWallLayer=L.layerGroup();
+    fetch("cameras.json").then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(j){
+      var ic=L.divIcon({className:"",html:'<div style="font-size:14px;text-shadow:0 0 3px #000">&#128249;</div>',iconSize:[16,16],iconAnchor:[8,8]});
+      j.cams.forEach(function(c){
+        L.marker([c.la,c.ln],{icon:ic,keyboard:false,zIndexOffset:-400})
+          .bindPopup('<div style="min-width:200px"><b>'+String(c.id).replace(/[<>&]/g,"")+'</b><br><span class="cam-slot" data-cam="'+String(c.id).replace(/[<>&"]/g,"")+'">loading snapshot\u2026</span></div>',{maxWidth:340})
+          .addTo(camWallLayer);
+      });
+      layersCtl.addOverlay(camWallLayer,"Cameras");
+    }).catch(function(){});
+    map.on("popupopen",function(ev){
+      try{
+        var slot=ev.popup.getElement().querySelector(".cam-slot"); if(!slot) return;
+        var id=slot.getAttribute("data-cam");
+        var pin=window.BOARD_PIN?window.BOARD_PIN():"";
+        fetch("https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/camsnap?pin="+encodeURIComponent(pin)+"&id="+encodeURIComponent(id))
+          .then(function(r){return r.json();}).then(function(j){
+            if(!j||!j.ok||!j.jpeg) throw 0;
+            slot.innerHTML='<img style="max-width:320px;border-radius:8px" src="data:image/jpeg;base64,'+j.jpeg+'"><br><span style="color:var(--dim);font-size:10px">'+String(j.ts||"").replace(/[<>&]/g,"")+"</span>";
+          }).catch(function(){ slot.textContent="snapshot unavailable"; });
+      }catch(e){}
+    });
+
     /* ── BC2FD station emblems — fixed, persistent layer (independent of the drone layer, never cleared).
        Geocoded (ArcGIS, score 98-100). Sits beneath the drone/POI markers. ── */
     var STATIONS=[
@@ -2172,7 +2265,7 @@
     function isWarn(cls){ return /al-warn|al-cat|al-redflag|al-heat-danger|al-link|sev-error/.test(cls||""); }
     function collect(){
       var out=[];
-      ["alertLane","heatBand","linkBand"].forEach(function(id){
+      ["alertLane","heatBand","linkBand","satBand"].forEach(function(id){
         var src=document.getElementById(id); if(!src||src.hidden) return;
         var list=src.querySelectorAll(".al-band");
         for(var i=0;i<list.length;i++){ out.push({html:list[i].outerHTML, warn:isWarn(list[i].className)}); }
@@ -3379,6 +3472,17 @@
       }catch(e){}
     }
     function load(){
+      /* satellite hotspot band — fed by the same /dispatch response the tally uses */
+      function satBandFill(hs){
+        var el=document.getElementById("satBand"); if(!el) return;
+        var had=!el.hidden;
+        if(!hs||!hs.length){ if(had){ el.hidden=true; el.innerHTML=""; try{NWSCarousel.refresh();}catch(e){} } return; }
+        var latest=hs[hs.length-1];
+        var tt=String(latest.t||"").padStart(4,"0"); tt=tt.slice(0,2)+":"+tt.slice(2);
+        el.hidden=false;
+        el.innerHTML='<div class="al-band al-warn"><span class="al-icon">&#128752;</span><div class="al-body"><div class="al-ev">SATELLITE HOT SPOT IN DISTRICT</div><div class="al-sub"><span class="als-i">'+hs.length+' detection'+(hs.length===1?"":"s")+" inside ESD borders · latest "+tt+" UTC · VIIRS · verify on the ground</span></div></div>";
+        try{NWSCarousel.refresh();}catch(e){}
+      }
       bcFetch(URL_,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:window.BOARD_PIN?window.BOARD_PIN():""})})
         .then(function(r){
           if(r.status===501||r.status===404){ render("off"); return null; }   /* feature off, not a failure */
@@ -3392,6 +3496,7 @@
         .then(function(j){
           if(j===null) return;
           if(!j.ok || !Array.isArray(j.calls)) { errDetail=(j&&j.error)||"bad response"; render("err"); return; }
+          try{ satBandFill(j.hotspots||[]); }catch(e){}
           everConfigured=true; errDetail="";
           var incidents=dedupeCalls(j.calls);   /* one card per incident, not one per re-page */
           render("ok", incidents);

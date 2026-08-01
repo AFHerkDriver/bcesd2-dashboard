@@ -151,7 +151,11 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 2;
+const WORKER_VERSION = 3;
+
+/* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
+   valid repeat locations too. Empty address = no history row. */
+function addrKey(ad) { return String(ad || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").replace(/\s+/g, " ").trim(); }
 
 /* Demand-cell key — ~500 m grid at 29.4N. ONE formula shared by the live bump and the rebuild. */
 function heatKey(la, ln) { return (Math.round(la / 0.0045) * 0.0045).toFixed(4) + "," + (Math.round(ln / 0.0052) * 0.0052).toFixed(4); }
@@ -1445,6 +1449,171 @@ export default {
     }
 
 
+    /* ── GET /roadwork?pin — live lane incidents (TransGuide) + active construction/closure zones
+       (DriveTexas HCRS, Bexar = county 15). District-area bbox filter; 60 s KV cache. The state
+       APIs are undocumented — every shape assumption fails loud, never silently empty. ── */
+    if (req.method === "GET" && url.pathname === "/roadwork") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
+      try {
+        const hitR = await env.PINS.get("roadworkcache");
+        if (hitR) return json(JSON.parse(hitR), 200);
+        const inBoxR = (la, ln) => (la > 29.05 && la < 29.62 && ln > -98.95 && ln < -98.30);
+        const items = [];
+        let srcOk = 0;
+        try {   /* live TransGuide incidents */
+          const ir = await fetch("https://its.txdot.gov/its/DistrictIts/GetIncidentListByDistrict?districtCode=SAT", { headers: { "Accept": "application/json" } });
+          if (ir.ok) {
+            const ij = await ir.json(); srcOk++;
+            for (const inc of (ij && ij.incidents) || []) {
+              const sl = inc.startLocation || {};
+              const la = parseFloat(sl.latString), ln = parseFloat(sl.lonString);   /* top-level lat/lon are junk — verified */
+              if (!isFinite(la) || !isFinite(ln) || !inBoxR(la, ln)) continue;
+              items.push({ k: "incident", la, ln, ty: String(inc.eventType || "Incident").slice(0, 30),
+                           tx: String(inc.desc || ((sl.roadway || "") + " @ " + (sl.crossstreet || ""))).slice(0, 160) });
+            }
+          }
+        } catch (e) {}
+        try {   /* DriveTexas conditions, Bexar county */
+          const q = { action: "table/query", query: { sqlselect: ["RTENM", "CONDDSCR", "CNSTRNTTYPECD", "CONDLMTFROMDSCR", "CONDLMTTODSCR", "XY"], table: "appgeo/conditionsPoint", take: 100, start: 0, where: [{ col: "TXDOTCOUNTYNBR", test: "Equal", value: "15" }] } };
+          const dr = await fetch("https://dtx-e-cdn.maplarge.com/Api/ProcessDirect?request=" + encodeURIComponent(JSON.stringify(q)));
+          if (dr.ok) {
+            const dj = await dr.json();
+            const dd = dj && dj.data && dj.data.data;
+            if (dd && dd.RTENM) { srcOk++;
+              for (let i = 0; i < dd.RTENM.length; i++) {
+                const m = /POINT \(([-\d.]+) ([-\d.]+)\)/.exec(String(dd.XY[i] || ""));
+                if (!m) continue;
+                const ln = +m[1], la = +m[2];
+                if (!inBoxR(la, ln)) continue;
+                items.push({ k: "work", la, ln, ty: String(dd.CNSTRNTTYPECD[i] || "") === "C" ? "Construction" : "Closure/Condition",
+                             tx: (String(dd.RTENM[i] || "") + ": " + String(dd.CONDDSCR[i] || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ")).slice(0, 160) });
+              }
+            }
+          }
+        } catch (e) {}
+        if (!srcOk) return json({ ok: false, error: "both road-data sources unreachable" }, 502);
+        const out = { ok: true, items: items.slice(0, 120), sources: srcOk, updated: new Date().toISOString() };
+        await env.PINS.put("roadworkcache", JSON.stringify(out), { expirationTtl: 60 });
+        return json(out, 200);
+      } catch (e) { return json({ ok: false, error: "roadwork error" }, 502); }
+    }
+
+    /* ── GET /helos?pin — medevac/rotorcraft near the district. airplanes.live primary (free, 1 req/s
+       cap), adsb.fi fallback (same readsb schema, but v2 lat/lon nests under "aircraft"). 12 s KV
+       cache shares one upstream poll across every board. Watchlist = confirmed HEMS ships serving
+       Bexar (AirLIFE/Air Methods, Methodist AirCare incl. the Pearsall base, Air Evac 148); plus ANY
+       rotorcraft (category A7) inside the box so an unlisted bird still shows. ── */
+    if (req.method === "GET" && url.pathname === "/helos") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
+      try {
+        const hitH = await env.PINS.get("helocache");
+        if (hitH) return json(JSON.parse(hitH), 200);
+        const WATCH = { "a3b393": "AirLIFE N338AM", "adbb18": "AirLIFE N984ME", "aa58ea": "AirLIFE N766ME" };   /* confirmed hexes; ownOp match below catches the rest of the fleets */
+        const OPS = /air\s*methods|reach\s*air|med[-\s]?trans|air\s*evac|methodist|airlife/i;
+        let ac = null;
+        try {
+          const r1 = await fetch("https://api.airplanes.live/v2/point/29.38/-98.62/50", { headers: { "Accept": "application/json" } });
+          if (r1.ok) { const j1 = await r1.json(); ac = (j1 && j1.ac) || null; }
+        } catch (e) {}
+        if (!ac) {
+          try {
+            const r2 = await fetch("https://opendata.adsb.fi/api/v2/lat/29.38/lon/-98.62/dist/50", { headers: { "Accept": "application/json" } });
+            if (r2.ok) { const j2 = await r2.json(); ac = (j2 && (j2.aircraft || j2.ac)) || null; }
+          } catch (e) {}
+        }
+        if (!ac) return json({ ok: false, error: "no ADS-B source reachable" }, 502);
+        const helos = [];
+        for (const a of ac) {
+          const hex = String(a.hex || "").toLowerCase();
+          const rotor = String(a.category || "") === "A7";
+          const listed = WATCH[hex] || (a.ownOp && OPS.test(String(a.ownOp)));
+          if (!rotor && !listed) continue;
+          if (a.lat == null || a.lon == null) continue;
+          helos.push({ hex, la: a.lat, ln: a.lon, reg: a.r || "", type: a.t || "",
+                       op: WATCH[hex] || String(a.ownOp || "").slice(0, 40),
+                       call: String(a.flight || "").trim(), alt: (a.alt_baro === "ground" ? 0 : a.alt_baro) || null,
+                       gs: a.gs || null, trk: a.track != null ? a.track : null,
+                       med: !!listed });   /* med: on the HEMS watchlist; plain A7 = any rotorcraft */
+        }
+        const out = { ok: true, helos, updated: new Date().toISOString() };
+        await env.PINS.put("helocache", JSON.stringify(out), { expirationTtl: 12 });
+        return json(out, 200);
+      } catch (e) { return json({ ok: false, error: "helos error" }, 502); }
+    }
+
+    /* ── GET /outages?pin — CPS Energy outages near the district (Kubra StormCenter public data).
+       Chain: bootstrap IDs (hardcoded, re-scraped on 404) -> currentState (deployment path rotates
+       every few minutes) -> cluster tile quadkeys covering the district -> individual outage points.
+       District bbox filter server-side; 3-min KV cache. Any valid PIN. Values under 5 customers are
+       masked by CPS as <5 — passed through as cust:4/mask:true, rendered as "<5". ── */
+    if (req.method === "GET" && url.pathname === "/outages") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
+      try {
+        const hitO = await env.PINS.get("outagecache");
+        if (hitO) return json(JSON.parse(hitO), 200);
+        let inst = "912c6202-c3f4-491c-a8c1-726157725e92", view = "812092c0-153f-4a7f-8c58-e1af1cb740b7";
+        const csr = await fetch("https://kubra.io/stormcenter/api/v1/stormcenters/" + inst + "/views/" + view + "/currentState?preview=false");
+        if (!csr.ok) return json({ ok: false, error: "kubra state " + csr.status }, 502);
+        const cs = await csr.json();
+        const clusterPath = cs && cs.data && cs.data.cluster_interval_generation_data;
+        if (!clusterPath) return json({ ok: false, error: "kubra shape changed — no cluster path" }, 502);
+        /* z10 quadkey tiles covering the two districts (precomputed for the district bbox):
+           west ESD2 ~29.35-29.55,-98.85--98.60 ; south ESD6 ~29.10-29.30,-98.55--98.35 */
+        const QKS = ["0231300332", "0231302110", "0231302112", "0231300333", "0231302111", "0231302113", "0231301222", "0231303000", "0231303002"];   /* z10 tiles COMPUTED from the district bbox (29.05-29.62, -98.95--98.30) — verified to cover every station */
+        const pts = [];
+        for (const qk of QKS) {
+          try {
+            const tr = await fetch("https://kubra.io/" + clusterPath + "/public/cluster-1/" + qk + ".json");
+            if (!tr.ok) continue;                        /* empty tiles 404 — normal, not an error */
+            const tj = await tr.json();
+            for (const f of (tj && tj.file_data) || []) {
+              const g = f.geom && f.geom.p && f.geom.p[0];  /* "lat,lon" string or [lat,lon] — normalize */
+              let la = null, ln = null;
+              if (typeof g === "string") { const p2 = g.split(","); la = +p2[0]; ln = +p2[1]; }
+              else if (Array.isArray(g)) { la = +g[0]; ln = +g[1]; }
+              if (!isFinite(la) || !isFinite(ln)) continue;
+              const d = f.desc || {};
+              pts.push({ la, ln, n: d.n_out || (f.cluster ? null : 1), cust: (d.cust_a && d.cust_a.val) || null,
+                         mask: !!(d.cust_a && d.cust_a.mask), cause: (d.cause && d.cause["EN-US"]) || "",
+                         etr: d.etr || null, crew: d.crew_status || "", cluster: !!f.cluster });
+            }
+          } catch (e) { /* one tile failing must not kill the sweep */ }
+        }
+        /* district-ish bbox trim (generous: covers both districts + a margin) */
+        const inBox = (p) => (p.la > 29.05 && p.la < 29.62 && p.ln > -98.95 && p.ln < -98.30);
+        const out = { ok: true, points: pts.filter(inBox).slice(0, 200), updated: new Date().toISOString() };
+        await env.PINS.put("outagecache", JSON.stringify(out), { expirationTtl: 180 });
+        return json(out, 200);
+      } catch (e) { return json({ ok: false, error: "outages error" }, 502); }
+    }
+
+    /* ── GET /camsnap?pin&id=<icd_Id> — TxDOT ITS camera snapshot relay (ITS sends no CORS headers;
+       the live HLS streams are CORS-open and go direct from the pages). Any valid PIN; 20 s KV
+       cache per camera so a wall of tapping thumbs can't hammer TxDOT. Stays above the POST-only
+       guard. ── */
+    if (req.method === "GET" && url.pathname === "/camsnap") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
+      const id = String(url.searchParams.get("id") || "").slice(0, 60);
+      if (!id) return json({ ok: false, error: "id required" }, 400);
+      try {
+        const ck = "camsnap:" + id;
+        const hit = await env.PINS.get(ck);
+        if (hit) return json(JSON.parse(hit), 200);
+        const r = await fetch("https://its.txdot.gov/its/DistrictIts/GetCctvSnapshotByIcdId?icdId=" + encodeURIComponent(id) + "&districtCode=SAT",
+                              { headers: { "Accept": "application/json" } });
+        if (!r.ok) return json({ ok: false, error: "txdot " + r.status }, 502);
+        const j = await r.json();
+        const out = { ok: true, id, jpeg: (j && j.snippet) || null, ts: (j && j.timestampFormatted) || null };
+        if (!out.jpeg) return json({ ok: false, error: "no snapshot" }, 502);
+        await env.PINS.put(ck, JSON.stringify(out), { expirationTtl: 20 });
+        return json(out, 200);
+      } catch (e) { return json({ ok: false, error: "camsnap error" }, 502); }
+    }
+
     /* ── GET /hydrantlog?pin — the permanent hydrant-traffic log from the watch above. Any valid
        PIN reads it (operational infrastructure info, same wall as /roster reads). NOTE: must stay
        above the global POST-only guard below. ── */
@@ -1931,6 +2100,20 @@ export default {
                     u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "", ms: c.msf, ej: c.ejf, mt: c.mtf, gs: c.gs, gf: c.gf }));
                   if (archStray) { try { await env.PINS.delete("arch:" + c.id); } catch (e) {} }   /* replacement written above — NOW the stray can go */
                   if (isNewInc && !c.gs && c.lat != null && c.lng != null && !(epochLive && Date.parse(c.logged) < Date.parse(epochLive))) heatNew.push([c.lat, c.lng]);   /* demand cell: first sighting only, trusted coords, on the books */
+                  /* BEEN-HERE-BEFORE — permanent per-address history: count + the last few visits.
+                     First sighting only; +2 KV ops per NEW incident, bounded. The live response
+                     attaches this so the cab sees "3rd call at this address" with the priors. */
+                  if (isNewInc) { try {
+                    const ak2 = addrKey(c.address);
+                    if (ak2) {
+                      let ah = { n: 0, r: [] };
+                      const rawA = await env.PINS.get("addr:" + ak2);
+                      if (rawA) { try { const pa = JSON.parse(rawA); if (pa && typeof pa.n === "number") ah = pa; } catch (e) {} }
+                      ah.n++;
+                      ah.r = (ah.r || []).concat([{ t: c.logged, ty: String(c.type || "").slice(0, 40) }]).slice(-5);
+                      await env.PINS.put("addr:" + ak2, JSON.stringify(ah));
+                    }
+                  } catch (e) { /* history must never break the feed */ } }
                   if (epochLive && Date.parse(c.logged) < Date.parse(epochLive)) { /* pre-epoch: raw-archived above, excluded from rollups */ } else {
                   const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
                   let out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */
@@ -1984,7 +2167,44 @@ export default {
         } catch (e) { /* inventory must never break the feed */ } }
         /* remove the stale log rows for absorbed duplicate ids so the tally isn't padded by copies */
         for (const id of absorbed) { try { await env.PINS.delete("call:" + id); } catch (e) { /* best-effort */ } }
-        return json({ ok: true, feed: feedSource, wv: WORKER_VERSION, calls }, 200);
+        /* ── SATELLITE HOTSPOTS (NASA FIRMS/VIIRS) — DORMANT until the FIRMS_KEY secret exists in
+           Cloudflare (free self-service key). One upstream fetch per 15 min riding this poll; only
+           detections INSIDE the district polygons alert (the user's rule). Satellite passes are
+           periodic — this supplements eyes, never replaces them. ── */
+        let hotspots = [];
+        if (env.FIRMS_KEY) { try {
+          let fc = null; const fm = await env.PINS.get("firmsmeta");
+          if (fm) { try { fc = JSON.parse(fm); } catch (e) {} }
+          if (!fc || Date.now() - fc.at > 15 * 60 * 1000) {
+            const fr = await fetch("https://firms.modaps.eosdis.nasa.gov/api/area/csv/" + env.FIRMS_KEY + "/VIIRS_NOAA20_NRT/-98.95,29.05,-98.30,29.62/1");
+            if (fr.ok) {
+              const lines2 = (await fr.text()).trim().split("\n");
+              const hdr = String(lines2.shift() || "").split(",");
+              const iLat = hdr.indexOf("latitude"), iLon = hdr.indexOf("longitude"), iDate = hdr.indexOf("acq_date"), iTime = hdr.indexOf("acq_time"), iConf = hdr.indexOf("confidence");
+              const pts = [];
+              for (const row of lines2) {
+                const cc = row.split(",");
+                const la2 = +cc[iLat], lo2 = +cc[iLon];
+                if (!isFinite(la2) || !isFinite(lo2)) continue;
+                if (!inOurs(esdAll, lo2, la2)) continue;             /* INSIDE ESD 2/6 only */
+                pts.push({ la: la2, ln: lo2, d: cc[iDate] || "", t: cc[iTime] || "", conf: cc[iConf] || "" });
+              }
+              fc = { at: Date.now(), pts };
+              await env.PINS.put("firmsmeta", JSON.stringify(fc), { expirationTtl: 3600 });
+            } else if (!fc) { fc = { at: Date.now(), pts: [] }; }
+          }
+          hotspots = (fc && fc.pts) || [];
+        } catch (e) { /* hotspot sweep must never break the feed */ } }
+        /* attach the been-here-before context — one read per LIVE call, a handful per poll */
+        for (const c of calls) { try {
+          const ak3 = addrKey(c.address);
+          if (!ak3) continue;
+          const rawA = await env.PINS.get("addr:" + ak3);
+          if (!rawA) continue;
+          const ah = JSON.parse(rawA);
+          if (ah && ah.n > 1) c.hist = { n: ah.n, prev: (ah.r || []).filter(e => e.t !== c.logged).slice(-3) };   /* n includes this visit; prev excludes it */
+        } catch (e) {} }
+        return json({ ok: true, feed: feedSource, wv: WORKER_VERSION, hotspots: hotspots.length ? hotspots : undefined, calls }, 200);
       } catch (e) {
         return json({ ok: false, error: "relay error" }, 502);
       }

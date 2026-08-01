@@ -91,6 +91,16 @@
   .ccard .utag { border: 1px solid #8B949E; border-radius: 6px; padding: 1px 9px; color: #E6EDF3; font-size: 13px; }
   .ccard .utag.app { border-color: #3FB950; color: #3FB950; background: rgba(63,185,80,.12); font-weight: 500; }
   .ccard .aptc { color: #FFC107; font-weight: 700; font-size: 15px; }
+  .ccard .histc { color: #C9A2FF; font-size: 12.5px; margin-top: 2px; }   /* been-here-before: quiet purple — context, not alarm */
+  .cambtn { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 9px 13px; border-radius: 9px;
+            border: 1px solid #2DD4BF; color: #2DD4BF; background: rgba(45,212,191,.08); font-size: 13px; font-weight: 600; }
+  #camView { position: fixed; inset: 0; z-index: 1600; background: rgba(13,17,23,.97); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
+  #camView.on { display: flex; }
+  #camView video, #camView img { max-width: 96vw; max-height: 78vh; border: 2px solid #2DD4BF; border-radius: 10px; background: #000; }
+  #camTitle { color: #2DD4BF; font-weight: 700; font-size: 15px; text-align: center; padding: 0 12px; }
+  #camMsg { color: #FFC107; font-size: 13px; min-height: 18px; }
+  #camClose { padding: 12px 26px; border-radius: 10px; border: 1px solid #F85149; color: #F85149; background: rgba(248,81,73,.1); font-size: 16px; font-weight: 700; }
+  .ccard .histc b { color: #E2CCFF; }
   /* cleaned CAD notes — the radio log */
   .nthead { margin-top: 7px; border-top: 1px solid rgba(48,54,61,.6); padding-top: 5px; cursor: pointer;
             font-size: 11px; letter-spacing: 1px; color: #8B949E; }
@@ -198,6 +208,9 @@
   .leaflet-control-layers-separator { border-top-color: #30363D; }
 
   /* feed-down banner — fail LOUD */
+  #satStrip { position: fixed; top: 0; left: 0; right: 0; z-index: 1990; background: #B02A20; color: #fff;
+              font-weight: 700; text-align: center; padding: 9px; font-size: 14px; }
+  #satStrip[hidden] { display: none; }
   #feedDown { position: fixed; top: 0; left: 0; right: 0; z-index: 2000;   /* above full-screen PiP (1500): the feed-down banner outranks everything */ display: none; background: #F85149;
               color: #0D1117; font-weight: 700; text-align: center; letter-spacing: 1px; font-size: 15px;
               padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left)); }
@@ -231,6 +244,8 @@
 </div>
 
 <div id="feedDown">DISPATCH FEED DOWN — RELY ON RADIO</div>
+<div id="satStrip" hidden>&#128752; SATELLITE HOT SPOT IN DISTRICT — TAP TO VIEW</div>
+<div id="camView"><div id="camTitle"></div><video id="camVid" playsinline muted autoplay></video><img id="camImg" alt="" hidden><div id="camMsg"></div><button id="camClose" type="button">CLOSE</button></div>
 <div id="map"></div>
 <div id="callBandWrap">
   <div id="callBand"></div>
@@ -241,6 +256,7 @@
 </div>
 <div id="dronePip"><span class="lbl" id="droneLbl"></span><span id="pipErr"></span><button id="pipSize" title="Resize">&#10530;</button><video id="droneVid" muted autoplay playsinline controls></video><iframe id="droneFrame" scrolling="no" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>
 <div id="ctrls">
+  <button class="navbtn" id="rwBtn" type="button">&#128679; Roads</button>
   <button id="refit" title="Frame the district">&#8982; District</button>
 </div>
 
@@ -775,6 +791,9 @@
     return "https://maps.apple.com/?daddr=" + encodeURIComponent(String(c.address || "") + ", Bexar County, TX") + "&dirflg=d";
   }
   function ageMin(c) { const t = Date.parse(c.logged || c.started || ""); return isNaN(t) ? 999 : (Date.now() - t) / 60000; }
+  function ord(n) { return n + (["th", "st", "nd", "rd"][((n % 100) - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th"); }
+  function shortTy(t) { return String(t || "").split(" - ")[0]; }                 /* MED - FALL -> MED: the chip is context, not a report */
+  function mdShort(iso) { try { return new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", month: "numeric", day: "numeric" }).format(new Date(iso)); } catch (e) { return ""; } }
   /* ── call band rendering. PHONE with two calls: only ONE card expands at a time — the other
      collapses to a slim colored bar (type + address); tapping the bar swaps which is expanded, so
      the map is never buried under two full cards on a pocket screen. Tablet/MDT show both full. */
@@ -801,12 +820,20 @@
     return '<div class="ccard"' + attrs + ' style="border-color:' + col + '">' +
             '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
             '<div class="ad">' + esc(c.address) + (c.apt ? ' <span class="aptc">APT ' + esc(c.apt) + '</span>' : '') + '</div>' +
+            ((c.hist && c.hist.n > 1) ? ('<div class="histc">&#8617; <b>' + ord(c.hist.n) + ' call at this address</b>' +
+              ((c.hist.prev || []).length ? (' &middot; prior: ' + c.hist.prev.map(function (p) { return esc(shortTy(p.ty)) + ' ' + mdShort(p.t); }).join(', ')) : '') + '</div>') : '') +
             (td === "need" ? '<div><span class="tdops">TENDER OPS</span></div>'
            : td === "if" ? '<div><span class="tdops if">TENDER IF FIRE</span></div>' : '') +
             ((when || c.cross || c.mapc) ? '<div class="meta">' +
               (when ? '<span><b>' + when + '</b> &middot; ' + age + '</span>' : "") +
               (c.cross ? '<span>X: ' + esc(c.cross) + "</span>" : "") +
               (c.mapc ? '<span>MAP <b>' + esc(c.mapc) + "</b></span>" : "") + "</div>" : "") +
+            (() => {                                       /* nearest district camera — eyes on scene before arrival */
+              if (slim || c.lat == null || c.lng == null || c.gs) return "";
+              const n = camNearest(c.lat, c.lng);
+              if (!n) return "";
+              return '<button class="cambtn" data-cam="' + esc(n.cam.id) + '" type="button">&#128249; NEAREST CAMERA &middot; ' + n.mi.toFixed(1) + ' mi</button>';
+            })() +
             (() => {                                       /* channel + assigned units get their OWN line, units as visible tags */
               const us = (c.units || []).filter(isApp).length ? (c.units || []).filter(isApp) : (c.units || []);
               const inner = (c.channel ? "<b>" + esc(c.channel) + "</b>" : "") + us.map(u => '<span class="utag' + (isApp(u) ? " app" : "") + '">' + esc(u) + "</span>").join("");   /* GREEN = a real rig attached (assigned or self-assigned) — trucks are rolling; gray box code = toned, no rig yet */
@@ -840,7 +867,7 @@
   /* adaptive cadence: 6 s while a call is on the band — an attaching rig should go green in
      seconds, not at the bottom of a 15 s tick — 15 s idle so overnight costs stay where they were.
      Self-scheduling timeout, not setInterval, so the rate follows the band's state each cycle. */
-  let dispTimer = null;
+  let dispTimer = null, lastHotspots = [];
   function scheduleDispatch() { clearTimeout(dispTimer); dispTimer = setTimeout(loadDispatch, lastTop.length ? 6000 : 15000); }
   function loadDispatch() {
     if (!PIN) return;                                /* gated (incl. the visibilitychange wake): no PIN, no poll */
@@ -851,6 +878,8 @@
       .then(j => {
         if (!j || !j.ok) throw 0;
         dispatchFails = 0; $("feedDown").style.display = "none"; $("feedDown").textContent = "DISPATCH FEED DOWN — RELY ON RADIO";   /* reset any rate-limit wording */
+        lastHotspots = (j.hotspots || []);
+        $("satStrip").hidden = !lastHotspots.length;
         /* general alerts / dispatcher broadcasts age out at 5 min — they are a heads-up, not a run,
            and the cab screen should not carry them as long as a working call (real calls keep 15) */
         const isGen = (c) => GEN_RE.test(String(c.type || ""));
@@ -968,6 +997,8 @@
   /* tap a call card -> focus the map on that run (nav buttons keep their own click) */
   $("callBand").addEventListener("click", (e) => {
     if (e.target.closest(".navbtn")) return;
+    const cb = e.target.closest(".cambtn");
+    if (cb) { const c0 = CAMDB && CAMDB.cams.find(x => x.id === cb.dataset.cam); if (c0) camOpen(c0); return; }
     const card = e.target.closest(".ccard");
     if (!card) return;
     if (card.classList.contains("slim")) { expandedId = card.dataset.id; renderBand(); }   /* tap a slim bar -> it becomes the expanded card */
@@ -1001,6 +1032,154 @@
   }
   $("pipSize").addEventListener("click", (e) => { e.stopPropagation(); pipSizeIdx = (pipSizeIdx + 1) % PIP_SIZES.length; pipApply(); });   /* don't bubble into the PiP tap-to-play handler */
 
+  /* ── ROAD CLOSURES / CONSTRUCTION — user-toggled layer (OFF by default): live TransGuide lane
+     incidents (orange) + DriveTexas construction zones (gray). Fetched on toggle-on, then every
+     2 min while on. ── */
+  let rwLayer = null, rwOn = false, rwTimer = null;
+  function rwLoad() {
+    if (!PIN || !map || !rwOn) return;
+    fetch(WORKER + "/roadwork?pin=" + encodeURIComponent(PIN)).then(r => r.json()).then(j => {
+      if (!j || !j.ok || !rwOn) return;
+      rwLayer.clearLayers();
+      (j.items || []).forEach(it => {
+        const col = it.k === "incident" ? "#FF8C42" : "#8B949E";
+        L.circleMarker([it.la, it.ln], { radius: 7, color: "#0D1117", weight: 2, fillColor: col, fillOpacity: .95 })
+          .bindPopup('<div class="hyd-pop"><b>' + esc(it.ty).toUpperCase() + '</b><br>' + esc(it.tx) + '</div>', { maxWidth: 260 })
+          .addTo(rwLayer);
+      });
+    }).catch(() => {});
+  }
+  function rwToggle() {
+    rwOn = !rwOn;
+    $("rwBtn").style.borderColor = rwOn ? "#FF8C42" : "";
+    $("rwBtn").style.color = rwOn ? "#FF8C42" : "";
+    if (rwOn) { if (!rwLayer) rwLayer = L.layerGroup(); rwLayer.addTo(map); rwLoad(); rwTimer = setInterval(rwLoad, 120000); }
+    else { clearInterval(rwTimer); try { map.removeLayer(rwLayer); } catch (e) {} }
+  }
+
+  /* ── MEDEVAC / ROTORCRAFT — HEMS watchlist + any rotorcraft in the box. 15 s poll while the page
+     is open; marker rotates with track; popup carries op/alt/speed and an ETA to the newest call.
+     PLACEHOLDER icon (user is supplying the real helo art). ── */
+  let heloLayer = null;
+  function loadHelos() {
+    if (!PIN || !map) return;
+    fetch(WORKER + "/helos?pin=" + encodeURIComponent(PIN)).then(r => r.json()).then(j => {
+      if (!j || !j.ok) return;
+      if (!heloLayer) heloLayer = L.layerGroup().addTo(map);
+      heloLayer.clearLayers();
+      const tgt = lastTop.length && lastTop[0].lat != null && !lastTop[0].gs ? lastTop[0] : null;
+      (j.helos || []).forEach(h => {
+        const col = h.med ? "#FF3B30" : "#8B949E";
+        const rot = h.trk != null ? h.trk : 0;
+        const ic = L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 13],
+          html: '<div style="transform:rotate(' + rot + 'deg);font-size:19px;line-height:26px;text-align:center;text-shadow:0 0 4px #000;color:' + col + '">&#10548;</div>' });   /* placeholder arrow-in-heading; swap for the dept helo icon */
+        let eta = "";
+        if (tgt && h.gs > 20) {
+          const dy = (h.la - tgt.lat) * 60, dx = (h.ln - tgt.lng) * 52.5;   /* nm at 29.4N */
+          const nm = Math.sqrt(dy * dy + dx * dx);
+          eta = ' &middot; <b>' + Math.round(nm / h.gs * 60) + ' min</b> to newest call';
+        }
+        L.marker([h.la, h.ln], { icon: ic, keyboard: false, zIndexOffset: 600 })
+          .bindPopup('<div class="hyd-pop"><b>' + esc(h.op || h.reg || h.hex) + '</b>' +
+            (h.call ? ('<br>callsign ' + esc(h.call)) : '') + (h.reg ? ('<br>' + esc(h.reg) + (h.type ? (' (' + esc(h.type) + ')') : '')) : '') +
+            (h.alt != null ? ('<br>' + h.alt + ' ft &middot; ' + Math.round(h.gs || 0) + ' kt') : '') + eta + '</div>', { maxWidth: 240 })
+          .addTo(heloLayer);
+      });
+    }).catch(() => {});
+  }
+
+  /* ── POWER OUTAGES (CPS via worker) — amber area highlights sized by customers out. Polled every
+     3 min; layer only carries markers while outages exist, so the map stays clean on a good day. ── */
+  let outageLayer = null;
+  function loadOutages() {
+    if (!PIN || !map) return;
+    fetch(WORKER + "/outages?pin=" + encodeURIComponent(PIN)).then(r => r.json()).then(j => {
+      if (!j || !j.ok) return;                       /* outage layer is context — quiet on failure, the wall diagnostics catch outages of the feed itself */
+      if (!outageLayer) { outageLayer = L.layerGroup().addTo(map); }
+      outageLayer.clearLayers();
+      (j.points || []).forEach(p => {
+        const r = Math.min(900, 150 + (p.cust || p.n || 1) * 12);   /* highlight area scales with customers out */
+        L.circle([p.la, p.ln], { radius: r, color: "#FFC107", weight: 1.5, opacity: .7, fillColor: "#FFC107", fillOpacity: .18, interactive: true })
+          .bindPopup('<div class="hyd-pop"><b>POWER OUTAGE</b>' +
+            (p.cust != null ? ('<br>' + (p.mask ? '&lt;5' : p.cust) + ' customers out') : (p.n ? ('<br>' + p.n + ' outages (cluster)') : '')) +
+            (p.cause ? ('<br>cause: ' + esc(p.cause)) : '') +
+            (p.crew ? ('<br>crew: ' + esc(p.crew)) : '') +
+            (p.etr ? ('<br>est. restore: ' + esc(String(p.etr).replace('T', ' ').slice(0, 16))) : '') + '</div>', { maxWidth: 240 })
+          .addTo(outageLayer);
+      });
+    }).catch(() => {});
+  }
+
+  /* ── DISTRICT TRAFFIC CAMERAS — the 22 verified in-district/border TxDOT cameras (cameras.json).
+     Pins on the map; tap = live HLS (CORS-open) with a 6 s timeout falling back to the worker
+     snapshot relay. Call cards grow a NEAREST CAMERA button when one sits within 2.5 mi. ── */
+  let CAMDB = null, camLayer = null, camHls = null;
+  fetch("cameras.json").then(r => { if (!r.ok) throw 0; return r.json(); }).then(j => {
+    CAMDB = j;
+    if (!map) return;
+    camLayer = L.layerGroup();
+    const camIcon = L.divIcon({ className: "", html: '<div style="font-size:15px;text-shadow:0 0 3px #000">&#128249;</div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+    j.cams.forEach(c => {
+      L.marker([c.la, c.ln], { icon: camIcon, keyboard: false, zIndexOffset: -400 })
+        .on("click", () => camOpen(c)).addTo(camLayer);
+    });
+    camLayer.addTo(map);
+  }).catch(() => {});
+  function camNearest(lat, lng) {
+    if (!CAMDB) return null;
+    let best = null, bd = Infinity;
+    for (const c of CAMDB.cams) {
+      const dy = (c.la - lat) * 110574, dx = (c.ln - lng) * 96900, d = Math.sqrt(dy * dy + dx * dx);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return (best && bd <= 4023) ? { cam: best, mi: (bd / 1609.34) } : null;   /* 2.5 mi cap — beyond that it isn't "eyes on scene" */
+  }
+  function camStop() {
+    try { if (camHls) { camHls.destroy(); camHls = null; } } catch (e) {}
+    const v = $("camVid"); try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {}
+  }
+  function camSnapshot(c) {
+    $("camMsg").textContent = "live stream unavailable — still photo:";
+    fetch(WORKER + "/camsnap?pin=" + encodeURIComponent(PIN) + "&id=" + encodeURIComponent(c.id))
+      .then(r => r.json()).then(j => {
+        if (!j || !j.ok || !j.jpeg) throw 0;
+        $("camVid").hidden = true;
+        const im = $("camImg"); im.hidden = false; im.src = "data:image/jpeg;base64," + j.jpeg;
+        $("camMsg").textContent = "still photo " + (j.ts || "") + " — stream offline";
+      }).catch(() => { $("camMsg").textContent = "CAMERA UNAVAILABLE — stream and snapshot both failed"; });
+  }
+  function camOpen(c) {
+    camStop();
+    $("camView").classList.add("on");
+    $("camTitle").textContent = c.id;
+    $("camMsg").textContent = "connecting\u2026";
+    const v = $("camVid"); v.hidden = false; $("camImg").hidden = true;
+    if (!c.hls) { camSnapshot(c); return; }
+    const u = CAMDB.hlsBase.replace("{ID}", c.hls);
+    const to = setTimeout(() => { camStop(); camSnapshot(c); }, 6000);   /* offline cameras HANG the playlist — verified; time out hard */
+    try {
+      if (window.Hls && Hls.isSupported()) {
+        camHls = new Hls({ manifestLoadingTimeOut: 5000, levelLoadingTimeOut: 5000, fragLoadingTimeOut: 6000 });
+        camHls.loadSource(u); camHls.attachMedia(v);
+        camHls.on(Hls.Events.FRAG_LOADED, () => { clearTimeout(to); $("camMsg").textContent = "LIVE"; });
+        camHls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) { clearTimeout(to); camStop(); camSnapshot(c); } });
+      } else if (v.canPlayType("application/vnd.apple.mpegurl")) {
+        v.src = u;
+        v.addEventListener("playing", () => { clearTimeout(to); $("camMsg").textContent = "LIVE"; }, { once: true });
+        v.addEventListener("error", () => { clearTimeout(to); camStop(); camSnapshot(c); }, { once: true });
+      } else { clearTimeout(to); camSnapshot(c); }
+    } catch (e) { clearTimeout(to); camStop(); camSnapshot(c); }
+  }
+  $("camClose").addEventListener("click", () => { camStop(); $("camView").classList.remove("on"); });
+  $("rwBtn").addEventListener("click", rwToggle);
+  $("satStrip").addEventListener("click", () => {
+    if (!lastHotspots.length || !map) return;
+    const h = lastHotspots[lastHotspots.length - 1];
+    try { map.setView([h.la, h.ln], 14); } catch (e) {}
+    L.circleMarker([h.la, h.ln], { radius: 12, color: "#FF3B30", weight: 3, fillColor: "#FF3B30", fillOpacity: .3 })
+      .bindPopup("<b>SATELLITE HOT SPOT</b><br>VIIRS detection " + String(h.d || "") + " " + String(h.t || "") + "Z<br>confidence: " + String(h.conf || "?") + "<br><b>verify on the ground</b>").addTo(map).openPopup();
+  });
+
   /* ── boot ── */
   let booted = false;
   function boot() {
@@ -1020,6 +1199,8 @@
     cxPins(); setInterval(cxPins, 5 * 60 * 1000);
     setInterval(tourLoad, 5 * 60 * 1000);   /* no-ops while the Tour Calls overlay is off; tourStart recomputed each pass so the 0700 reset lands */
     loadDrones(); setInterval(loadDrones, 20000);
+    loadOutages(); setInterval(loadOutages, 180000);
+    loadHelos(); setInterval(loadHelos, 15000);
   }
   if (PIN) { $("gate").style.display = "none"; boot(); }
   else setTimeout(() => $("pin").focus(), 60);

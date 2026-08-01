@@ -1,0 +1,160 @@
+{
+ "src": "TxDOT ITS (SAT) roster point-in-polygon vs district-bounds.json + DriveTexas HLS join, built 2026-08-01. ONLY cameras in-district or within 1 mile of the border.",
+ "hlsBase": "https://s71.us-east-1.skyvdn.com/rtplive/{ID}/playlist.m3u8",
+ "cams": [
+  {
+   "id": "LP 1604 at Culebra",
+   "la": 29.493631,
+   "ln": -98.703876,
+   "where": "esd2:border",
+   "hls": "TX_SAT_163"
+  },
+  {
+   "id": "LP 1604 at Military Dr W",
+   "la": 29.447445,
+   "ln": -98.711428,
+   "where": "esd2:border",
+   "hls": "TX_SAT_173"
+  },
+  {
+   "id": "LP 1604 at Potranco",
+   "la": 29.434738,
+   "ln": -98.712072,
+   "where": "esd2:border",
+   "hls": "TX_SAT_177"
+  },
+  {
+   "id": "LP 1604 at SH 151 (Lower Lvl)",
+   "la": 29.482941,
+   "ln": -98.71087,
+   "where": "esd2:border",
+   "hls": "TX_SAT_178"
+  },
+  {
+   "id": "LP 1604 at SH 151 (Upper Lvl)",
+   "la": 29.483988,
+   "ln": -98.708639,
+   "where": "esd2:border",
+   "hls": "TX_SAT_179"
+  },
+  {
+   "id": "LP 1604 at Valley Meadow",
+   "la": 29.475937,
+   "ln": -98.711149,
+   "where": "esd2:border",
+   "hls": "TX_SAT_183"
+  },
+  {
+   "id": "LP 1604 at Wiseman Blvd",
+   "la": 29.464933,
+   "ln": -98.711814,
+   "where": "esd2:border",
+   "hls": "TX_SAT_184"
+  },
+  {
+   "id": "US 90 at Lackland",
+   "la": 29.399992,
+   "ln": -98.641277,
+   "where": "esd2:border",
+   "hls": "TX_SAT_248"
+  },
+  {
+   "id": "US 90 at Leon Creek",
+   "la": 29.405736,
+   "ln": -98.61328,
+   "where": "esd2:border",
+   "hls": null
+  },
+  {
+   "id": "US 90 at LP 1604 N",
+   "la": 29.383409,
+   "ln": -98.701686,
+   "where": "esd2:border",
+   "hls": "TX_SAT_250"
+  },
+  {
+   "id": "US 90 at LP 1604 S",
+   "la": 29.381165,
+   "ln": -98.701686,
+   "where": "esd2:border",
+   "hls": "TX_SAT_251"
+  },
+  {
+   "id": "US 90 at LP 410",
+   "la": 29.397765,
+   "ln": -98.650286,
+   "where": "esd2:border",
+   "hls": "TX_SAT_252"
+  },
+  {
+   "id": "US 90 at Medio Creek",
+   "la": 29.387896,
+   "ln": -98.672976,
+   "where": "esd2:border",
+   "hls": "TX_SAT_253"
+  },
+  {
+   "id": "US 90 at Military Dr.",
+   "la": 29.402741,
+   "ln": -98.627685,
+   "where": "esd2:border",
+   "hls": "TX_SAT_254"
+  },
+  {
+   "id": "US 90 at SH 211",
+   "la": 29.373947,
+   "ln": -98.76563,
+   "where": "esd2:border",
+   "hls": "TX_SAT_257"
+  },
+  {
+   "id": "LP 1604 at Marbach",
+   "la": 29.40732,
+   "ln": -98.709497,
+   "where": "esd2:inside",
+   "hls": "TX_SAT_171"
+  },
+  {
+   "id": "LP 1604 at Medio Creek",
+   "la": 29.424646,
+   "ln": -98.711063,
+   "where": "esd2:inside",
+   "hls": "TX_SAT_172"
+  },
+  {
+   "id": "LP 1604 at Spurs Ranch Rd",
+   "la": 29.39601,
+   "ln": -98.702287,
+   "where": "esd2:inside",
+   "hls": "TX_SAT_181"
+  },
+  {
+   "id": "US 90 at Montgomery",
+   "la": 29.375799,
+   "ln": -98.739023,
+   "where": "esd2:inside",
+   "hls": "TX_SAT_255"
+  },
+  {
+   "id": "IH 37 at Braunig Lake",
+   "la": 29.24831,
+   "ln": -98.395078,
+   "where": "esd6:border",
+   "hls": "TX_SAT_136"
+  },
+  {
+   "id": "IH 37 South at LP 1604",
+   "la": 29.219938,
+   "ln": -98.414148,
+   "where": "esd6:border",
+   "hls": "TX_SAT_159"
+  },
+  {
+   "id": "LP 410 at Villamain",
+   "la": 29.321277,
+   "ln": -98.445289,
+   "where": "esd6:border",
+   "hls": "TX_SAT_216"
+  }
+ ]
+}
