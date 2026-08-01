@@ -15,7 +15,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const PAGES = ["index.html", "control.html", "mdt.html", "fleet.html", "metrics.html", "unit-demo.html"];
+const PAGES = ["index.html", "control.html", "mdt.html", "fleet.html", "metrics.html", "report.html", "unit-demo.html"];
 let failures = 0;
 const fail = (msg) => { failures++; console.error("FAIL  " + msg); };
 const ok = (msg) => console.log("ok    " + msg);
@@ -58,7 +58,7 @@ for (const f of PAGES.concat(["worker.js", "sw.js"])) {
 
 /* 4 — SW bump guard (CI compares the pushed commit to its parent; skipped when git is unavailable) */
 try {
-  const SHELL_PAGES = ["index.html", "control.html", "metrics.html", "mdt.html", "fleet.html"];
+  const SHELL_PAGES = ["index.html", "control.html", "metrics.html", "mdt.html", "fleet.html", "report.html"];
   const changed = execSync("git diff --name-only HEAD~1 HEAD", { cwd: ROOT }).toString().trim().split("\n").filter(Boolean);
   const pageChanged = changed.some((f) => SHELL_PAGES.includes(f));
   if (pageChanged) {

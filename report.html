@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>BC2FD - Monthly Command Report</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  button:active{transform:translateY(1px);filter:brightness(.85)}
+  :root{--bg:#0D1117;--panel:#161B22;--border:#30363D;--text:#E6EDF3;--dim:#8B949E;
+    --blue:#4A90D9;--green:#34C759;--amber:#FFC107;--red:#FF3B30;--accent:#FF6B35;--teal:#2DD4BF;color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:14px;
+    padding:14px 14px calc(30px + env(safe-area-inset-bottom));-webkit-text-size-adjust:100%}
+  .wrap{max-width:860px;margin:0 auto}
+  h1{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:2px;margin:6px 0 0}
+  .sub{color:var(--dim);font-size:11px;letter-spacing:1px;margin-bottom:12px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin:12px 0}
+  h2{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.6px;color:var(--blue);margin:0 0 6px}
+  .hint{color:var(--dim);font-size:11.5px;line-height:1.5;margin:0 0 10px}
+  .hero{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
+  .hb{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;text-align:center;flex:1 1 110px}
+  .hb b{display:block;font-size:24px;font-weight:500;color:var(--accent)}
+  .hb span{font-size:9.5px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase}
+  .bar{display:flex;align-items:center;gap:9px;margin:4px 0}
+  .bar .l{flex:0 0 118px;color:var(--dim);font-size:11.5px;text-align:right}
+  .bar .t{flex:1;background:rgba(255,255,255,.05);border-radius:5px;height:15px;overflow:hidden}
+  .bar .t i{display:block;height:100%;border-radius:5px;background:var(--accent)}
+  .bar .v{flex:0 0 78px;font-size:12px}
+  .hours{display:flex;align-items:flex-end;gap:2px;height:80px;margin-top:8px}
+  .hours .h{flex:1;background:var(--blue);opacity:.85;border-radius:3px 3px 0 0;min-height:2px}
+  .hours .h.pk{background:var(--accent)}
+  .hx{display:flex;gap:2px;font-size:8.5px;color:var(--dim);margin-top:3px}
+  .hx span{flex:1;text-align:center}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{color:var(--dim);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;text-align:left;font-weight:400;padding:4px 8px}
+  td{padding:4px 8px;border-top:1px solid rgba(48,54,61,.6)}
+  td.num{color:var(--teal)}
+  .cols{display:flex;gap:16px;flex-wrap:wrap}
+  .cols>div{flex:1 1 320px}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 2px}
+  select#mon{font:inherit;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:9px 12px;min-height:40px}
+  #printBtn{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;background:var(--accent);color:#0D1117;border:0;border-radius:9px;padding:10px 18px;min-height:40px;cursor:pointer}
+  .err{color:var(--amber)}
+  .baseline{border-left:3px solid var(--accent);padding:6px 10px;background:rgba(255,107,53,.07);border-radius:0 8px 8px 0;font-size:12px;line-height:1.55;margin:8px 0}
+  /* PIN gate — same wall as metrics.html */
+  #gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50}
+  .gcard{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:26px;width:min(340px,90vw);text-align:center}
+  .gcard h2{color:var(--text)}
+  .gcard input{width:100%;margin:12px 0;padding:12px;font:inherit;font-size:20px;text-align:center;letter-spacing:6px;
+    background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text)}
+  .gcard button{width:100%;padding:12px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;
+    background:var(--accent);color:#0D1117;border:0;border-radius:9px;cursor:pointer}
+  .gmsg{min-height:18px;font-size:12px;color:var(--dim);margin-top:8px}
+  .gmsg.bad{color:var(--red)}
+  #app{display:none}
+  /* ── PRINT: the chief-ready artifact — white paper, black ink, no controls ── */
+  @media print{
+    :root{color-scheme:light}
+    body{background:#fff;color:#1a1d21;font-size:11pt;padding:0}
+    .card{background:#fff;border:1px solid #ccc;break-inside:avoid}
+    h1{color:#1a1d21} h2{color:#B84A20}
+    .sub,.hint{color:#555}
+    .hb{background:#fff;border-color:#ccc} .hb b{color:#B84A20} .hb span{color:#555}
+    .bar .t{background:#eee} .bar .l{color:#555} .bar .v{color:#1a1d21}
+    .hours .h{background:#4A90D9} .hours .h.pk{background:#FF6B35} .hx{color:#555}
+    th{color:#555} td{border-top-color:#ddd} td.num{color:#0a766c}
+    .baseline{background:#FFF3ED;border-color:#FF6B35;color:#333}
+    .toolbar,#gate,#printBtn,select#mon{display:none!important}
+    a{color:inherit;text-decoration:none}
+  }
+</style>
+</head>
+<body>
+<div id="gate"><div class="gcard">
+  <h2 style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px">Monthly Command Report</h2>
+  <div class="sub">Officer access · PIN required</div>
+  <input id="gpin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
+  <button id="ggo" type="button">Unlock</button>
+  <div class="gmsg" id="gmsg"></div>
+</div></div>
+
+<div id="app"><div class="wrap">
+  <h1>BC2FD Monthly Command Report</h1>
+  <div class="sub">Bexar County Emergency Services District No. 2 &middot; Fire &amp; EMS &middot; <span id="genStamp"></span></div>
+
+  <div class="toolbar">
+    <select id="mon"></select>
+    <button id="printBtn" type="button">Print / Save PDF</button>
+    <span class="hint" id="stamp" style="margin:0">Loading&hellip;</span>
+  </div>
+
+  <div class="baseline" id="baseline" hidden></div>
+
+  <div class="card"><h2>Month at a Glance</h2><div class="hero" id="kpis"></div></div>
+
+  <div class="card"><h2>Incident Mix</h2><div id="mix"></div></div>
+
+  <div class="card"><h2>Responses by Hour of Day <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--dim);letter-spacing:0">(Central)</span></h2>
+    <div class="hours" id="hours"></div><div class="hx" id="hoursX"></div><p class="hint" id="hoursNote" style="margin-top:8px"></p></div>
+
+  <div class="card"><h2>Workload by Shift</h2><div class="hero" id="shifts"></div><p class="hint">48-hour tours, 07:00 Central changeover. Turnout figures are all call types together — the NFPA verdicts below split EMS from fire.</p></div>
+
+  <div class="cols">
+    <div class="card"><h2>Station Response Areas</h2><div id="stations"></div>
+      <p class="hint" style="margin-top:8px">Counted per responding unit's home station — multi-unit incidents appear under each station that turned out.</p></div>
+    <div class="card"><h2>Busiest Apparatus</h2><table id="units"></table></div>
+  </div>
+
+  <div class="cols">
+    <div class="card"><h2>Mutual Aid</h2><table id="aid"></table><p class="hint" id="aidNote" style="margin-top:8px"></p></div>
+    <div class="card"><h2>Turnout Times</h2><div class="hero" id="nfpa"></div><table id="chuteTbl"></table>
+      <p class="hint" style="margin-top:8px">Turnout = dispatch &rarr; first apparatus attaching in CAD (proxy, ~&plusmn;12s poll precision). NFPA 1710 90th-percentile benchmarks: 60s EMS &middot; 80s fire. Auto-assigned calls can't be measured.</p></div>
+  </div>
+
+  <p class="hint" style="margin-top:16px"><b>Method.</b> Captured automatically from Active911 CAD dispatches, de-duplicated, archived permanently. In/out-of-district attribution uses the official ESD 2/6 boundary polygons; cross-border responses count as mutual aid given and never dilute department stats. Announcements and burn-ban notices excluded. All times America/Chicago.</p>
+</div></div>
+
+<script>
+(function(){
+  'use strict';
+  var AUTH='https://bc2fd-dash-auth.usafsentinel-45e.workers.dev';
+  var $=function(id){return document.getElementById(id);};
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  var CLS_LABEL={med:'Medical',mvc:'Vehicle Crash / Rescue',alarm:'Fire Alarm',assist:'Public Assist',fire:'Fire',
+                 fuel:'Gas / Fuel / Odor',haz:'Hazmat',rescue:'Technical Rescue',mutual:'Mutual Aide (tone)',other:'Other'};
+  var MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var fmtT=function(s){ return Math.floor(s/60)+':'+('0'+Math.round(s%60)).slice(-2); };
+  function pct(p,arr){ if(!arr.length) return null; var a=arr.slice().sort(function(x,y){return x-y;});
+    return a[Math.min(a.length-1,Math.max(0,Math.ceil(a.length*p)-1))]; }
+  function med(arr){ if(!arr.length) return null; var a=arr.slice().sort(function(x,y){return x-y;});
+    return a.length%2?a[(a.length-1)/2]:(a[a.length/2-1]+a[a.length/2])/2; }
+  function ctToday(){ var p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return p; } /* YYYY-MM-DD */
+  function daysCovered(m){ /* completed month = its length; current month = days elapsed so far (Central) */
+    var y=+m.slice(0,4), mo=+m.slice(5,7);
+    var today=ctToday();
+    if(today.slice(0,7)===m) return Math.max(1,+today.slice(8,10));
+    return new Date(y,mo,0).getDate();
+  }
+  function monthTitle(m){ return MONTH_NAMES[+m.slice(5,7)-1]+' '+m.slice(0,4); }
+
+  var MONTHS=[];
+  function render(mKey){
+    var all=null;
+    for(var i=0;i<MONTHS.length;i++) if(MONTHS[i].m===mKey) all=MONTHS[i];
+    if(!all){ $('stamp').innerHTML='<span class="err">No data for that month</span>'; return; }
+    document.title='BC2FD Command Report — '+monthTitle(mKey);
+    $('genStamp').textContent=monthTitle(mKey)+' · generated '+new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',year:'numeric'}).format(new Date());
+    $('stamp').textContent='';
+
+    var days=daysCovered(mKey);
+    var chAll=(all.chutes||[]).map(function(c){return c[1];});
+    var inPct=all.n?Math.round(100*(all.n-(all.nOut||0))/all.n):0;
+    $('kpis').innerHTML=
+      '<div class="hb"><b>'+all.n+'</b><span>Total responses</span></div>'+
+      '<div class="hb"><b>'+(all.n/days).toFixed(1)+'</b><span>Per day ('+days+' days)</span></div>'+
+      '<div class="hb"><b>'+inPct+'%</b><span>In-district</span></div>'+
+      '<div class="hb"><b>'+(all.nOut||0)+'</b><span>Mutual aid given</span></div>'+
+      '<div class="hb"><b>'+(chAll.length?fmtT(med(chAll)):'—')+'</b><span>Median turnout</span></div>';
+
+    var clsKeys=Object.keys(all.byCls||{}).sort(function(a,b){return all.byCls[b]-all.byCls[a];});
+    var cmx=clsKeys.length?all.byCls[clsKeys[0]]:1;
+    $('mix').innerHTML=clsKeys.map(function(k){
+      var v=all.byCls[k];
+      return '<div class="bar"><span class="l">'+esc(CLS_LABEL[k]||k)+'</span><span class="t"><i style="width:'+Math.round(v/cmx*100)+'%"></i></span><span class="v">'+v+' · '+(100*v/all.n).toFixed(1)+'%</span></div>';
+    }).join('');
+
+    var hrs=(all.byHour&&all.byHour.length===24)?all.byHour:new Array(24).fill(0);
+    var hmx=Math.max.apply(null,hrs.concat([1])), peak=hrs.indexOf(hmx);
+    $('hours').innerHTML=hrs.map(function(v,h){
+      return '<div class="h'+(h===peak&&v?' pk':'')+'" style="height:'+Math.max(2,Math.round(v/hmx*100))+'%" title="'+('0'+h).slice(-2)+':00 — '+v+'"></div>';}).join('');
+    $('hoursX').innerHTML=hrs.map(function(_,h){ return '<span>'+(h%3===0?('0'+h).slice(-2):'')+'</span>'; }).join('');
+    var eve=hrs.slice(17,22).reduce(function(a,b){return a+b;},0);
+    $('hoursNote').innerHTML=all.n?('Peak hour: <b>'+('0'+peak).slice(-2)+':00</b> ('+hmx+' responses). The 17:00&ndash;22:00 block carries '+eve+' responses ('+Math.round(100*eve/all.n)+'% of the month in ~21% of the day).'):'';
+
+    var SFT=[['A','#FF3B30'],['B','#4A90D9'],['C','#34C759']];
+    $('shifts').innerHTML=SFT.map(function(s){
+      var n=(all.bySft&&all.bySft[s[0]])||0;
+      var cs=(all.chutes||[]).filter(function(c){return c[2]===s[0];}).map(function(c){return c[1];});
+      var p90=pct(0.9,cs);
+      return '<div class="hb"><b style="color:'+s[1]+'">'+n+'</b><span>'+s[0]+' Shift runs</span>'+
+             '<div style="margin-top:6px;font-size:12px;color:var(--text)">'+(p90==null?'—':fmtT(p90))+'<span style="color:var(--dim);font-size:9px;display:block">turnout 90th (n='+cs.length+')</span></div></div>';
+    }).join('');
+
+    var stas=Object.keys(all.bySta||{}).sort(function(a,b){return all.bySta[b]-all.bySta[a];});
+    var smx=stas.length?all.bySta[stas[0]]:1;
+    $('stations').innerHTML=stas.map(function(s){
+      return '<div class="bar"><span class="l">Station '+esc(s)+'</span><span class="t"><i style="width:'+Math.round(all.bySta[s]/smx*100)+'%"></i></span><span class="v">'+all.bySta[s]+'</span></div>';}).join('');
+
+    var units=Object.keys(all.byUnit||{}).sort(function(a,b){return all.byUnit[b]-all.byUnit[a];}).slice(0,10);
+    $('units').innerHTML='<tr><th>#</th><th>Unit</th><th>Responses</th></tr>'+units.map(function(u,i){
+      return '<tr><td>'+(i+1)+'</td><td><b>'+esc(u)+'</b></td><td class="num">'+all.byUnit[u]+'</td></tr>';}).join('');
+
+    var aidKeys=Object.keys(all.byAid||{}).sort(function(a,b){return all.byAid[b]-all.byAid[a];});
+    var aidRows=aidKeys.map(function(k){
+      var lbl=(k==='LOC?'||k==='SA/OTHER')?'Location unresolved':k;
+      return '<tr><td>'+esc(lbl)+'</td><td class="num">'+all.byAid[k]+'</td></tr>';}).join('');
+    $('aid').innerHTML='<tr><th>Given to</th><th>Runs</th></tr>'+(aidRows||'<tr><td colspan="2" style="color:var(--dim)">none this month</td></tr>');
+    var recvKeys=Object.keys(all.byRecv||{});
+    var recvN=recvKeys.reduce(function(a,k){return a+all.byRecv[k];},0);
+    $('aidNote').textContent=recvN?('Aid received: '+recvN+' outside unit response'+(recvN===1?'':'s')+' ('+recvKeys.join(', ')+').'):'Aid received: none recorded.';
+
+    var ems=[],fire=[];
+    (all.chutes||[]).forEach(function(c){ if(c[0]==='med') ems.push(c[1]); else if(c[0]==='fire'||c[0]==='struct'||c[0]==='brush') fire.push(c[1]); });
+    var e90=pct(0.9,ems), f90=pct(0.9,fire);
+    $('nfpa').innerHTML=
+      '<div class="hb"><b>'+(chAll.length?fmtT(med(chAll)):'—')+'</b><span>Median (all)</span></div>'+
+      '<div class="hb"><b style="color:'+(e90==null?'var(--dim)':(e90<=60?'var(--green)':'var(--amber)'))+'">'+(e90==null?'—':fmtT(e90))+'</b><span>EMS 90th vs 60s</span></div>'+
+      '<div class="hb"><b style="color:'+(f90==null?'var(--dim)':(f90<=80?'var(--green)':'var(--amber)'))+'">'+(f90==null?'—':fmtT(f90))+'</b><span>Fire 90th vs 80s</span></div>';
+    var byC={};
+    (all.chutes||[]).forEach(function(c){ (byC[c[0]]=byC[c[0]]||[]).push(c[1]); });
+    var chuteRows=Object.keys(byC).sort(function(a,b){return byC[b].length-byC[a].length;}).map(function(k){
+      return '<tr><td>'+esc(CLS_LABEL[k]||k)+'</td><td class="num">'+byC[k].length+'</td><td>'+fmtT(med(byC[k]))+'</td></tr>';}).join('');
+    $('chuteTbl').innerHTML='<tr><th>Type</th><th>Samples</th><th>Median</th></tr>'+(chuteRows||'<tr><td colspan="3" style="color:var(--dim)">no measurable turnouts yet</td></tr>');
+  }
+
+  function load(pin){
+    fetch(AUTH+'/metrics?pin='+encodeURIComponent(pin))
+      .then(function(r){return r.json();})
+      .then(function(j){
+        if(!j||!j.ok){ $('stamp').innerHTML='<span class="err">⚠ Metrics unavailable — '+esc((j&&j.error)||'fetch failed')+'</span>'; return; }
+        MONTHS=j.months||[];
+        if(!MONTHS.length){ $('stamp').innerHTML='<span class="err">No archived months yet — the report begins with the first post-baseline call.</span>'; return; }
+        if(j.epoch){ try{ var ed=new Date(j.epoch); $('baseline').hidden=false;
+          $('baseline').innerHTML='<b>Reporting baseline:</b> '+new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'long',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(ed)+' Central — earlier shakedown data is retained off the books.'; }catch(e){} }
+        var sel=$('mon');
+        sel.innerHTML=MONTHS.map(function(m){ return '<option value="'+esc(m.m)+'">'+esc(monthTitle(m.m))+' — '+m.n+' runs</option>'; }).join('');
+        sel.onchange=function(){ render(sel.value); };
+        render(MONTHS[0].m);                                   /* newest first from the worker */
+      })
+      .catch(function(){ $('stamp').innerHTML='<span class="err">⚠ Metrics service unreachable</span>'; });
+  }
+  function unlock(pin){ $('gate').style.display='none'; $('app').style.display='block'; load(pin); }
+  function submit(){
+    var pin=($('gpin').value||'').trim(); if(!pin) return;
+    $('gmsg').textContent='Checking…'; $('gmsg').className='gmsg';
+    fetch(AUTH+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin,scope:'control'})})
+      .then(function(r){return r.json();})
+      .then(function(j){ if(j&&j.ok&&j.tier!=='board'){ unlock(pin); } else { $('gmsg').textContent=(j&&j.tier==='board')?'That PIN is display-only':'Wrong PIN'; $('gmsg').className='gmsg bad'; } })
+      .catch(function(){ $('gmsg').textContent='Auth service unreachable — stays locked'; $('gmsg').className='gmsg bad'; });
+  }
+  $('ggo').addEventListener('click',submit);
+  $('gpin').addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); });
+  $('printBtn').addEventListener('click',function(){ window.print(); });
+})();
+</script>
+<script>
+/* Auto-update + offline shell — read-only page, silent reload always safe. */
+if('serviceWorker' in navigator){
+  var __reloading=false;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    if(__reloading)return; __reloading=true; location.reload();
+  });
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      setInterval(function(){ reg.update(); }, 10*60*1000);
+    }).catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
