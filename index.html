@@ -724,9 +724,9 @@
   .al-body{min-width:0;flex:1 1 auto}
   .al-band .al-ev{font-family:'Bebas Neue',sans-serif;font-size:clamp(15px,1.7vmin,26px);letter-spacing:1.5px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .al-sub{font-size:clamp(10px,1vmin,15px);color:var(--dim);letter-spacing:.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .al-sub .als-i{display:inline}
-  .al-sub.scrolling{text-overflow:clip}
-  .al-sub.scrolling .als-i{display:inline-flex;white-space:nowrap;will-change:transform;animation:tickscroll var(--tickdur,20s) linear infinite}   /* long alert details glide like the announcements ticker instead of clipping */
+  .al-sub .als-i,.al-ev .als-i{display:inline}
+  .al-sub.scrolling,.al-ev.scrolling{text-overflow:clip}
+  .al-sub.scrolling .als-i,.al-ev.scrolling .als-i{display:inline-flex;white-space:nowrap;will-change:transform;animation:tickscroll var(--tickdur,26s) linear infinite}   /* long alert lines glide like the announcements ticker instead of clipping — the standard for anything that does not fit a band */
   .al-src{flex:0 0 auto;align-self:flex-start;margin-top:2px;font-size:clamp(9px,.95vmin,14px);color:var(--dim);white-space:nowrap}
   .al-band.al-redflag{border-color:rgba(255,59,48,.5);background:linear-gradient(135deg,rgba(255,59,48,.20),rgba(180,0,0,.10))}
   .al-band.al-redflag .al-ev{color:#FF3B30}
@@ -2146,21 +2146,27 @@
      never lost to a carousel bug. \u2500\u2500 */
   var NWSCarousel=(function(){
     var rot=null, bands=[], idx=0;
-    function armSubScroll(slot){                       /* overflowing sub-lines scroll like the announcements ticker — measured in the VISIBLE slot, never the hidden source lane */
+    var TICK_PX=40;                                    /* px/sec — deliberately calmer than a read-once ticker; the STANDARD for any NWS band line that does not fit */
+    function armSubScroll(slot){                       /* ANY overflowing line in ANY band (title or sub, whatever module built it) scrolls announcement-style — measured in the VISIBLE slot, never the hidden source lane */
       try{
-        var subs=slot.querySelectorAll(".al-sub .als-i");
-        for(var i=0;i<subs.length;i++)(function(inner){
-          var sub=inner.parentNode;
+        var lines=slot.querySelectorAll(".al-ev, .al-sub");
+        for(var i=0;i<lines.length;i++)(function(sub){
+          var inner=sub.querySelector(".als-i");
+          if(!inner){                                      /* bands from other modules (heat, link, error) have bare text — wrap it so it can glide */
+            inner=document.createElement("span"); inner.className="als-i";
+            while(sub.firstChild) inner.appendChild(sub.firstChild);
+            sub.appendChild(inner);
+          }
           setTimeout(function(){   /* setTimeout, NOT rAF: rAF never fires in a backgrounded tab, and a phone returning to the page deserves a scrolling line too */
             var cw=sub.clientWidth, tw=sub.scrollWidth;   /* measure the PARENT: inline spans report scrollWidth 0 */
             if(tw>cw+4){
               sub.classList.add("scrolling");
               inner.style.setProperty("--tick-from", cw+"px");
               inner.style.setProperty("--tick-to", (-tw)+"px");
-              inner.style.setProperty("--tickdur", Math.max(10,(cw+tw)/60)+"s");
+              inner.style.setProperty("--tickdur", Math.max(12,(cw+tw)/TICK_PX)+"s");
             }
           },50);
-        })(subs[i]);
+        })(lines[i]);
       }catch(e){}
     }
     function isWarn(cls){ return /al-warn|al-cat|al-redflag|al-heat-danger|al-link|sev-error/.test(cls||""); }
