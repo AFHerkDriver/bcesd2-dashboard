@@ -90,8 +90,8 @@
   .micro { position: relative; display: inline-block; width: 16px; height: 7px; border-radius: 2px; background: rgb(198,204,214);
            overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 1px 3px rgba(0,0,0,.55); vertical-align: middle; }
   .micro i { position: absolute; top: 0; bottom: 0; width: 42%; }   /* halves stop short — the base shows through as the steady center break */
-  .micro .mb { left: 0;  background: rgb(255,42,30); }    /* normal bar: RED | BLUE, saturated — the washed look was dim base colors */
-  .micro .mr { right: 0; background: rgb(40,125,255); }
+  .micro .mb { left: 0;  background: rgb(40,125,255); }   /* normal bar: BLUE left | RED right */
+  .micro .mr { right: 0; background: rgb(255,42,30); }
   /* APPARATUS chip: four segments RED|BLUE|BLUE|RED — the criss-cross in miniature. 20 px wide so
      the segments survive at map scale; outers and inners trade exactly like the full badge. */
   .micro.app { width: 20px; background: rgb(198,204,214); }   /* base shows through the middle gap = the steady center module */
@@ -184,7 +184,7 @@
   </div>
 </div>
 
-<div class="sub" style="margin:22px 0 8px">DISTRICT FRAME &mdash; far zoom: MICRO markers (the lightbar alone). RED|BLUE|BLUE|RED 4-segment chip = apparatus criss-cross in miniature; RED|BLUE = normal bar; steady RED|AMBER|AMBER|RED = maintenance (MX); steady red|blue = available. Zoom past ~z13 and they become the full badges above.</div>
+<div class="sub" style="margin:22px 0 8px">DISTRICT FRAME &mdash; far zoom: MICRO markers (the lightbar alone). RED|BLUE|BLUE|RED 4-segment chip = apparatus criss-cross in miniature; BLUE|RED = normal bar; steady RED|AMBER|AMBER|RED = maintenance (MX); steady red|blue = available. Zoom past ~z13 and they become the full badges above.</div>
 <div class="stage2">
   <div class="pin" style="left:54%;top:38%"><span class="micro app resp"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
   <div class="pin" style="left:76%;top:64%"><span class="micro app resp"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
