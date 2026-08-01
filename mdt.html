@@ -327,7 +327,7 @@
     tourLayer = L.layerGroup();
     L.control.layers({ "Dark": dark, "Positron": positron, "Satellite": satellite },   /* both lists alphabetical — the panel reads as a menu, not an accretion log */
       { "Radar": radarOverlay, "Tender Zones": tenderOverlay, "Tour Calls": tourLayer, "Wind Flow": windOverlay },
-      { collapsed: true, position: "bottomright" }).addTo(map);
+      { collapsed: true, sortLayers: true, position: "bottomright" }).addTo(map);
     /* tour pins live at z-390: over labels/tender, UNDER the live call circles (z-400 overlay pane) —
        a finished run must never sit on top of an active one */
     map.createPane("tourPane"); map.getPane("tourPane").style.zIndex = 390; map.getPane("tourPane").style.pointerEvents = "auto";
@@ -1074,10 +1074,9 @@
       heloLayer.clearLayers();
       const tgt = lastTop.length && lastTop[0].lat != null && !lastTop[0].gs ? lastTop[0] : null;
       (j.helos || []).forEach(h => {
-        const col = h.med ? "#FF3B30" : "#8B949E";
         const rot = isFinite(+h.trk) ? +h.trk : 0;   /* style-attribute sink — numbers only */
-        const ic = L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 13],
-          html: '<div style="transform:rotate(' + rot + 'deg);font-size:19px;line-height:26px;text-align:center;text-shadow:0 0 4px #000;color:' + col + '">&#10548;</div>' });   /* placeholder arrow-in-heading; swap for the dept helo icon */
+        const ic = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15],
+          html: '<div style="transform:rotate(' + rot + 'deg);width:30px;height:30px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="' + (h.med ? "helo-med.png" : "helo-air.png") + '" srcset="' + (h.med ? "helo-med@2x.png" : "helo-air@2x.png") + ' 2x" width="28" style="display:block;margin:1px auto"></div>' });   /* dept badge icons: red cross = HEMS bird, gray = other rotorcraft; rotated to live heading */
         let eta = "";
         if (tgt && h.gs > 20) {
           const dy = (h.la - tgt.lat) * 60, dx = (h.ln - tgt.lng) * 52.5;   /* nm at 29.4N */

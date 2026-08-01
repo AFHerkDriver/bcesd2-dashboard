@@ -1236,7 +1236,7 @@
        Demand (archive density, lazy-loaded on first enable). Both OFF by default — wall stays clean. */
     var windOverlay=L.layerGroup(), heatLayer=L.layerGroup(), tenderOverlay=L.layerGroup();
     var layersCtl=L.control.layers({"Dark":dark,"Positron":positron,"Satellite":satellite},   /* both lists alphabetical — same as the MDT */
-      {"Call Demand":heatLayer,"Tender Zones":tenderOverlay,"Wind Flow":windOverlay},{collapsed:true,position:"bottomright"}).addTo(map);
+      {"Call Demand":heatLayer,"Tender Zones":tenderOverlay,"Wind Flow":windOverlay},{collapsed:true,position:"bottomright",sortLayers:true}).addTo(map);   /* alphabetical, ALWAYS — late addOverlay entries (Cameras, Power Outages, Road Closures) sort in, not append */
     /* Follow the sun LIVE: satellite from sunrise to sunset, dark at night. The initial pick above
        only ran at page load — and the wall hard-reloads at 04:07, so it loaded dark and stayed dark
        all day. A 5-min check swaps at dawn/dusk. An officer's manual pick from the layers control
@@ -1300,9 +1300,8 @@
           if(!j||!j.ok) return;
           heloWallLayer.clearLayers();
           (j.helos||[]).forEach(function(h){
-            var col=h.med?"#FF3B30":"#8B949E";
-            var ic=L.divIcon({className:"",iconSize:[24,24],iconAnchor:[12,12],
-              html:'<div style="transform:rotate('+(isFinite(+h.trk)?+h.trk:0)+'deg);font-size:17px;line-height:24px;text-align:center;text-shadow:0 0 4px #000;color:'+col+'">&#10548;</div>'});   /* style sink — numbers only */
+            var ic=L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
+              html:'<div style="transform:rotate('+(isFinite(+h.trk)?+h.trk:0)+'deg);width:26px;height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="'+(h.med?"helo-med.png":"helo-air.png")+'" srcset="'+(h.med?"helo-med@2x.png":"helo-air@2x.png")+' 2x" width="24" style="display:block;margin:1px auto"></div>'});   /* dept badge icons; rotated to live heading */
             L.marker([h.la,h.ln],{icon:ic,keyboard:false,zIndexOffset:600})
               .bindTooltip(String(h.op||h.reg||h.hex).replace(/[<>&"]/g,"")+(isFinite(+h.alt)?(" · "+(+h.alt)+" ft"):""),{direction:"top",offset:[0,-10]})
               .addTo(heloWallLayer);
