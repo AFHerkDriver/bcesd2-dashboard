@@ -1302,9 +1302,9 @@
           (j.helos||[]).forEach(function(h){
             var col=h.med?"#FF3B30":"#8B949E";
             var ic=L.divIcon({className:"",iconSize:[24,24],iconAnchor:[12,12],
-              html:'<div style="transform:rotate('+(h.trk||0)+'deg);font-size:17px;line-height:24px;text-align:center;text-shadow:0 0 4px #000;color:'+col+'">&#10548;</div>'});
+              html:'<div style="transform:rotate('+(isFinite(+h.trk)?+h.trk:0)+'deg);font-size:17px;line-height:24px;text-align:center;text-shadow:0 0 4px #000;color:'+col+'">&#10548;</div>'});   /* style sink — numbers only */
             L.marker([h.la,h.ln],{icon:ic,keyboard:false,zIndexOffset:600})
-              .bindTooltip(String(h.op||h.reg||h.hex).replace(/[<>&]/g,"")+(h.alt!=null?(" · "+h.alt+" ft"):""),{direction:"top",offset:[0,-10]})
+              .bindTooltip(String(h.op||h.reg||h.hex).replace(/[<>&"]/g,"")+(isFinite(+h.alt)?(" · "+(+h.alt)+" ft"):""),{direction:"top",offset:[0,-10]})
               .addTo(heloWallLayer);
           });
         }).catch(function(){});
@@ -1323,7 +1323,7 @@
           (j.points||[]).forEach(function(p){
             var rr=Math.min(900,150+(p.cust||p.n||1)*12);
             L.circle([p.la,p.ln],{radius:rr,color:"#FFC107",weight:1.5,opacity:.7,fillColor:"#FFC107",fillOpacity:.18})
-              .bindPopup('<b>POWER OUTAGE</b>'+(p.cust!=null?('<br>'+(p.mask?'&lt;5':p.cust)+' customers out'):'')+(p.cause?('<br>'+String(p.cause).replace(/[<>&]/g,'')):''),{maxWidth:220})
+              .bindPopup('<b>POWER OUTAGE</b>'+(p.cust!=null?('<br>'+(p.mask?'&lt;5':(+p.cust||0))+' customers out'):'')+(p.cause?('<br>'+String(p.cause).replace(/[<>&]/g,'')):''),{maxWidth:220})
               .addTo(outWallLayer);
           });
           var has=(j.points||[]).length>0;
@@ -1353,9 +1353,10 @@
         var slot=ev.popup.getElement().querySelector(".cam-slot"); if(!slot) return;
         var id=slot.getAttribute("data-cam");
         var pin=window.BOARD_PIN?window.BOARD_PIN():"";
+        if(!pin){ slot.textContent="board locked — snapshots load after sign-in"; return; }   /* a lock is not a camera failure */
         fetch("https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/camsnap?pin="+encodeURIComponent(pin)+"&id="+encodeURIComponent(id))
           .then(function(r){return r.json();}).then(function(j){
-            if(!j||!j.ok||!j.jpeg) throw 0;
+            if(!j||!j.ok||!j.jpeg||!/^[A-Za-z0-9+/=]+$/.test(j.jpeg)) throw 0;   /* base64 or nothing — this lands in a src attribute */
             slot.innerHTML='<img style="max-width:320px;border-radius:8px" src="data:image/jpeg;base64,'+j.jpeg+'"><br><span style="color:var(--dim);font-size:10px">'+String(j.ts||"").replace(/[<>&]/g,"")+"</span>";
           }).catch(function(){ slot.textContent="snapshot unavailable"; });
       }catch(e){}
@@ -3478,7 +3479,7 @@
         var had=!el.hidden;
         if(!hs||!hs.length){ if(had){ el.hidden=true; el.innerHTML=""; try{NWSCarousel.refresh();}catch(e){} } return; }
         var latest=hs[hs.length-1];
-        var tt=String(latest.t||"").padStart(4,"0"); tt=tt.slice(0,2)+":"+tt.slice(2);
+        var tt=String(latest.t||"").replace(/\D/g,"").padStart(4,"0").slice(0,4); tt=tt.slice(0,2)+":"+tt.slice(2);   /* digits only — raw CSV cell */
         el.hidden=false;
         el.innerHTML='<div class="al-band al-warn"><span class="al-icon">&#128752;</span><div class="al-body"><div class="al-ev">SATELLITE HOT SPOT IN DISTRICT</div><div class="al-sub"><span class="als-i">'+hs.length+' detection'+(hs.length===1?"":"s")+" inside ESD borders · latest "+tt+" UTC · VIIRS · verify on the ground</span></div></div>";
         try{NWSCarousel.refresh();}catch(e){}

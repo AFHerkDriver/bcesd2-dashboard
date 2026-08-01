@@ -151,11 +151,27 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 3;
+const WORKER_VERSION = 4;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
 function addrKey(ad) { return String(ad || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").replace(/\s+/g, " ").trim(); }
+
+let heloMem = { at: 0, out: null };   /* /helos in-isolate cache — see the route for why KV can't do this */
+
+/* Google-polyline decoder — Kubra outage tiles encode geom.p as polylines (verified live). */
+function plDecode(s) {
+  let i = 0, la = 0, ln = 0; const out = [];
+  while (i < s.length) {
+    let b, sh = 0, res = 0;
+    do { b = s.charCodeAt(i++) - 63; res |= (b & 0x1f) << sh; sh += 5; } while (b >= 0x20);
+    la += (res & 1) ? ~(res >> 1) : (res >> 1); sh = 0; res = 0;
+    do { b = s.charCodeAt(i++) - 63; res |= (b & 0x1f) << sh; sh += 5; } while (b >= 0x20);
+    ln += (res & 1) ? ~(res >> 1) : (res >> 1);
+    out.push([la / 1e5, ln / 1e5]);
+  }
+  return out;
+}
 
 /* Demand-cell key — ~500 m grid at 29.4N. ONE formula shared by the live bump and the rebuild. */
 function heatKey(la, ln) { return (Math.round(la / 0.0045) * 0.0045).toFixed(4) + "," + (Math.round(ln / 0.0052) * 0.0052).toFixed(4); }
@@ -1469,7 +1485,7 @@ export default {
               const sl = inc.startLocation || {};
               const la = parseFloat(sl.latString), ln = parseFloat(sl.lonString);   /* top-level lat/lon are junk — verified */
               if (!isFinite(la) || !isFinite(ln) || !inBoxR(la, ln)) continue;
-              items.push({ k: "incident", la, ln, ty: String(inc.eventType || "Incident").slice(0, 30),
+              items.push({ k: /construction/i.test(String(inc.eventType || "")) ? "work" : "incident", la, ln, ty: String(inc.eventType || "Incident").slice(0, 30),   /* TransGuide carries long-running construction rows too — verified; they must not paint as live incidents */
                            tx: String(inc.desc || ((sl.roadway || "") + " @ " + (sl.crossstreet || ""))).slice(0, 160) });
             }
           }
@@ -1508,8 +1524,7 @@ export default {
       const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
       if (gate.res) return gate.res;
       try {
-        const hitH = await env.PINS.get("helocache");
-        if (hitH) return json(JSON.parse(hitH), 200);
+        if (heloMem.out && Date.now() - heloMem.at < 12000) return json(heloMem.out, 200);   /* in-isolate 12 s cache — KV's 60 s TTL floor makes it useless here (a put under 60 s THROWS; that bug once 502'd this whole route) */
         const WATCH = { "a3b393": "AirLIFE N338AM", "adbb18": "AirLIFE N984ME", "aa58ea": "AirLIFE N766ME" };   /* confirmed hexes; ownOp match below catches the rest of the fleets */
         const OPS = /air\s*methods|reach\s*air|med[-\s]?trans|air\s*evac|methodist|airlife/i;
         let ac = null;
@@ -1531,20 +1546,22 @@ export default {
           const listed = WATCH[hex] || (a.ownOp && OPS.test(String(a.ownOp)));
           if (!rotor && !listed) continue;
           if (a.lat == null || a.lon == null) continue;
-          helos.push({ hex, la: a.lat, ln: a.lon, reg: a.r || "", type: a.t || "",
+          const nla = +a.lat, nln = +a.lon;
+          if (!isFinite(nla) || !isFinite(nln)) continue;
+          helos.push({ hex: hex.replace(/[^a-f0-9]/g, ""), la: nla, ln: nln, reg: String(a.r || "").slice(0, 12), type: String(a.t || "").slice(0, 8),
                        op: WATCH[hex] || String(a.ownOp || "").slice(0, 40),
-                       call: String(a.flight || "").trim(), alt: (a.alt_baro === "ground" ? 0 : a.alt_baro) || null,
-                       gs: a.gs || null, trk: a.track != null ? a.track : null,
+                       call: String(a.flight || "").trim().slice(0, 12), alt: (a.alt_baro === "ground") ? 0 : (isFinite(+a.alt_baro) ? +a.alt_baro : null),
+                       gs: isFinite(+a.gs) ? +a.gs : null, trk: isFinite(+a.track) ? +a.track : null,   /* NUMERIC COERCION AT THE SOURCE — these land in client innerHTML/style sinks */
                        med: !!listed });   /* med: on the HEMS watchlist; plain A7 = any rotorcraft */
         }
         const out = { ok: true, helos, updated: new Date().toISOString() };
-        await env.PINS.put("helocache", JSON.stringify(out), { expirationTtl: 12 });
+        heloMem = { at: Date.now(), out };
         return json(out, 200);
       } catch (e) { return json({ ok: false, error: "helos error" }, 502); }
     }
 
     /* ── GET /outages?pin — CPS Energy outages near the district (Kubra StormCenter public data).
-       Chain: bootstrap IDs (hardcoded, re-scraped on 404) -> currentState (deployment path rotates
+       Chain: bootstrap IDs (hardcoded; if Kubra ever rotates them this route fails LOUD with 502) -> currentState (deployment path rotates
        every few minutes) -> cluster tile quadkeys covering the district -> individual outage points.
        District bbox filter server-side; 3-min KV cache. Any valid PIN. Values under 5 customers are
        masked by CPS as <5 — passed through as cust:4/mask:true, rendered as "<5". ── */
@@ -1566,19 +1583,21 @@ export default {
         const pts = [];
         for (const qk of QKS) {
           try {
-            const tr = await fetch("https://kubra.io/" + clusterPath + "/public/cluster-1/" + qk + ".json");
+            const qkh = qk.slice(-3).split("").reverse().join("");   /* verified live: {qkh} = last 3 quadkey digits REVERSED */
+            const tr = await fetch("https://kubra.io/" + clusterPath.replace("{qkh}", qkh) + "/public/cluster-1/" + qk + ".json");
             if (!tr.ok) continue;                        /* empty tiles 404 — normal, not an error */
             const tj = await tr.json();
             for (const f of (tj && tj.file_data) || []) {
-              const g = f.geom && f.geom.p && f.geom.p[0];  /* "lat,lon" string or [lat,lon] — normalize */
+              const g = f.geom && f.geom.p && f.geom.p[0];  /* Google polyline (verified live) */
               let la = null, ln = null;
-              if (typeof g === "string") { const p2 = g.split(","); la = +p2[0]; ln = +p2[1]; }
+              if (typeof g === "string") { try { const pp = plDecode(g); if (pp.length) { la = pp[0][0]; ln = pp[0][1]; } } catch (e) {} }
               else if (Array.isArray(g)) { la = +g[0]; ln = +g[1]; }
               if (!isFinite(la) || !isFinite(ln)) continue;
               const d = f.desc || {};
-              pts.push({ la, ln, n: d.n_out || (f.cluster ? null : 1), cust: (d.cust_a && d.cust_a.val) || null,
-                         mask: !!(d.cust_a && d.cust_a.mask), cause: (d.cause && d.cause["EN-US"]) || "",
-                         etr: d.etr || null, crew: d.crew_status || "", cluster: !!f.cluster });
+              const isCl = !!d.cluster;                      /* cluster flag lives in desc, not the row */
+              pts.push({ la, ln, n: isFinite(+d.n_out) ? +d.n_out : (isCl ? null : 1), cust: (d.cust_a && isFinite(+d.cust_a.val)) ? +d.cust_a.val : null,
+                         mask: !!(d.cust_a && d.cust_a.mask), cause: String((d.cause && d.cause["EN-US"]) || "").slice(0, 60),
+                         etr: String(d.etr || "").slice(0, 30) || null, crew: String(d.crew_status || "").slice(0, 30), cluster: isCl });
             }
           } catch (e) { /* one tile failing must not kill the sweep */ }
         }
@@ -1607,9 +1626,9 @@ export default {
                               { headers: { "Accept": "application/json" } });
         if (!r.ok) return json({ ok: false, error: "txdot " + r.status }, 502);
         const j = await r.json();
-        const out = { ok: true, id, jpeg: (j && j.snippet) || null, ts: (j && j.timestampFormatted) || null };
+        const out = { ok: true, id, jpeg: (j && typeof j.snippet === "string" && /^[A-Za-z0-9+/=]+$/.test(j.snippet)) ? j.snippet : null, ts: String((j && j.timestampFormatted) || "").slice(0, 40) };   /* base64-validated — this string lands inside a src attribute on the boards */
         if (!out.jpeg) return json({ ok: false, error: "no snapshot" }, 502);
-        await env.PINS.put(ck, JSON.stringify(out), { expirationTtl: 20 });
+        await env.PINS.put(ck, JSON.stringify(out), { expirationTtl: 60 });   /* KV TTL floor is 60 — anything lower THROWS (learned the hard way) */
         return json(out, 200);
       } catch (e) { return json({ ok: false, error: "camsnap error" }, 502); }
     }
@@ -2101,6 +2120,8 @@ export default {
                   if (archStray) { try { await env.PINS.delete("arch:" + c.id); } catch (e) {} }   /* replacement written above — NOW the stray can go */
                   if (isNewInc && !c.gs && c.lat != null && c.lng != null && !(epochLive && Date.parse(c.logged) < Date.parse(epochLive))) heatNew.push([c.lat, c.lng]);   /* demand cell: first sighting only, trusted coords, on the books */
                   /* BEEN-HERE-BEFORE — permanent per-address history: count + the last few visits.
+                     KNOWN LIMIT: two pollers racing the same first sighting can double-count (KV has
+                     no CAS) — rare, self-evident in the r[] list, accepted over a lock's complexity.
                      First sighting only; +2 KV ops per NEW incident, bounded. The live response
                      attaches this so the cab sees "3rd call at this address" with the priors. */
                   if (isNewInc) { try {
@@ -2172,12 +2193,14 @@ export default {
            detections INSIDE the district polygons alert (the user's rule). Satellite passes are
            periodic — this supplements eyes, never replaces them. ── */
         let hotspots = [];
-        if (env.FIRMS_KEY) { try {
+        if (env.FIRMS_KEY && esdAll && esdAll.ours) { try {   /* FAIL CLOSED: no district borders loaded = no sweep — inOurs defaults unknown->true, which would alert on the whole bbox */
           let fc = null; const fm = await env.PINS.get("firmsmeta");
           if (fm) { try { fc = JSON.parse(fm); } catch (e) {} }
           if (!fc || Date.now() - fc.at > 15 * 60 * 1000) {
-            const fr = await fetch("https://firms.modaps.eosdis.nasa.gov/api/area/csv/" + env.FIRMS_KEY + "/VIIRS_NOAA20_NRT/-98.95,29.05,-98.30,29.62/1");
-            if (fr.ok) {
+            const acF = new AbortController(); const toF = setTimeout(() => acF.abort(), 4000);   /* NASA outages must never slow a dispatch poll */
+            let fr = null; try { fr = await fetch("https://firms.modaps.eosdis.nasa.gov/api/area/csv/" + env.FIRMS_KEY + "/VIIRS_NOAA20_NRT/-98.95,29.05,-98.30,29.62/1", { signal: acF.signal }); } catch (e) { fr = null; }
+            clearTimeout(toF);
+            if (fr && fr.ok) {
               const lines2 = (await fr.text()).trim().split("\n");
               const hdr = String(lines2.shift() || "").split(",");
               const iLat = hdr.indexOf("latitude"), iLon = hdr.indexOf("longitude"), iDate = hdr.indexOf("acq_date"), iTime = hdr.indexOf("acq_time"), iConf = hdr.indexOf("confidence");
@@ -2191,7 +2214,7 @@ export default {
               }
               fc = { at: Date.now(), pts };
               await env.PINS.put("firmsmeta", JSON.stringify(fc), { expirationTtl: 3600 });
-            } else if (!fc) { fc = { at: Date.now(), pts: [] }; }
+            } else { fc = { at: Date.now(), pts: (fc && fc.pts) || [] }; await env.PINS.put("firmsmeta", JSON.stringify(fc), { expirationTtl: 3600 }); }   /* failure stamps the clock too — retry at the 15-min cadence, not every poll */
           }
           hotspots = (fc && fc.pts) || [];
         } catch (e) { /* hotspot sweep must never break the feed */ } }
