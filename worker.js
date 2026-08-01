@@ -150,7 +150,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
                     station + apparatus workload, chute samples [cls,seconds]. Central-time months. */
 /* Distinct-type inventory key: whitespace-collapsed uppercase; dated burning recs collapse to one row */
 function typeKey(ty) {
-  let k = String(ty || "").toUpperCase().replace(/s+/g, " ").trim();
+  let k = String(ty || "").toUpperCase().replace(/\s+/g, " ").trim();
   if (k.startsWith("BURNING RECOMMENDATION")) k = "BURNING RECOMMENDATION (DAILY)";
   return k;
 }
@@ -350,14 +350,17 @@ function stationsOf(units) {
    suicidal standby, not a UAV mission. The note flag (ms) is stamped at ingestion — the raw
    narrative is never stored. */
 const UAV_RULES = [
+  { k: "mutual",  label: "Mutual Aid (fire/missing/water)", pat: "MUTUAL" },   /* gated at read time by the mt flag: only fire / search / water-rescue aid counts */
   { k: "missing", label: "Missing Person / Assist LE", pat: "MISSING|LOST\\s+PERSON|\\bSEARCH\\b|ASSIST.*(LAW|POLICE|SHERIFF|CONSTAB|OFFICER|\\bLE\\b)" },
   { k: "smoke",   label: "Smoke Investigation",        pat: "SMOKE" },
   { k: "brush",   label: "Brush / Grass / Wildland",   pat: "BRUSH|GRASS|WILDLAND|WOODS|FOREST" },
   { k: "struct",  label: "Structure Fire",             pat: "STRUC" },
   { k: "explosion", label: "Explosion",                pat: "EXPLOS" },
+  { k: "fire",    label: "Fire (non-vehicle)",       pat: "^(?!.*(ALARM|VEHICLE|\\bVEH\\b|\\bCAR\\b|\\bAUTO\\b)).*FIRE" },   /* dept ask 2026-08-01: every fire type flies EXCEPT vehicle fires; alarm activations stay out (activation, not confirmed fire) */
   { k: "hazmat",  label: "Hazmat",                     pat: "\\bHAZ" },
   { k: "water",   label: "Water Rescue",               pat: "WATER\\s*RESCUE|DROWN|SWIFT\\s*WATER|\\bBOAT\\b|LOW\\s*WATER\\s*RESCUE" },
   { k: "rescue",  label: "Rescue (other)",             pat: "RESCUE" },
+  { k: "mvc",     label: "MVC (ejection / missing)",  pat: "MVC|MVA|COLLISION|CRASH|ACCIDENT" },   /* AFTER rescue so MVC - VEHICLE RESCUE keeps its unconditional rescue bucket; gated at read time by ej/ms flags */
 ];
 const _uavRes = UAV_RULES.map(r => ({ k: r.k, re: new RegExp(r.pat, "i") }));
 function uavRuleOf(ty) { ty = String(ty || ""); for (const r of _uavRes) if (r.re.test(ty)) return r.k; return ""; }
@@ -955,7 +958,7 @@ export default {
             aggApply(aggs[mh.mon], { kind: "new", cls, hour: mh.hour, sft: sftOf(c.logged || c.started), out: sOut, aid: sAid, units: c.units || [], chute: (c.chute >= 1 ? c.chute : null) });
             await env.PINS.put(akey, JSON.stringify({
               t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
-              u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "", ms: c.msf }));
+              u: c.units || [], ch: (c.chute >= 1 ? c.chute : null), cu: c.chuteUnit || "", cc: c.channel || "", ms: c.msf, ej: c.ejf, mt: c.mtf }));
           }
           for (const m in aggs) await env.PINS.put("agg:" + m, JSON.stringify(aggs[m]));
           await env.PINS.put("archmeta:seeded", new Date().toISOString());
@@ -1116,7 +1119,9 @@ export default {
                "last seen wearing", a description) are UAV missions. ms is the note-derived flag
                stamped at ingestion: 0 = notes seen, no search markers -> not ours. Rows from
                before the flag existed (ms absent) keep the old behavior — the tap covers those. */
-            if (rule === "missing" && /ASSIST/i.test(c.ty || "") && c.ms === 0) rule = "";
+            if (rule === "missing" && /ASSIST/i.test(c.ty || "") && c.ms !== 1) rule = "";   /* STRICT (dept ask 2026-08-01): assist-LE counts ONLY with a search marker in the notes — no notes seen = not ours (the officer tap can still rescue an odd one) */
+            if (rule === "mvc" && !(c.ej === 1 || c.ms === 1)) rule = "";       /* MVC flies only on ejection or missing-person markers in the notes */
+            if (rule === "mutual" && c.mt !== 1) rule = "";                     /* mutual aid flies only for fire / search / water-rescue jobs */
             if (rule && (noKeys.has(kk.name.slice(5)) || noTypes.has(tk))) rule = "";   /* marked or learned-out: not ours (a flown one still counts as opportunity) */
             const tc = tyCounts[tk] = tyCounts[tk] || { n: 0, r: rule, f: 0 };
             tc.n++; if (flew) tc.f++;
@@ -1638,6 +1643,10 @@ export default {
             msf: (() => { const d = String(a.details || "").trim();
               if (!d) return undefined;
               return /LSW|LAST\s+SEEN|MISSING|SILVER\s*ALERT|DEMENTIA|ALZHEIM|WANDER|\bSEARCH\b|\bLOST\b/i.test(d) ? 1 : 0; })(),
+            ejf: (() => { const d = String(a.details || "").trim(); if (!d) return undefined;
+              return /EJECT/i.test(d) ? 1 : 0; })(),                    /* ejection marker — gates the MVC UAV rule; flag only, same PII stance as msf */
+            mtf: (() => { const d = (String(a.description || "") + " " + String(a.details || "")).trim(); if (!d) return undefined;
+              return /FIRE|BRUSH|WILDLAND|STRUC|SMOKE|WATER\s*RESCUE|DROWN|SWIFT\s*WATER|MISSING|\bSEARCH\b|LSW|LAST\s+SEEN/i.test(d) ? 1 : 0; })(),   /* mutual-aid relevance: the tone or notes name a fire / search / water job */
             mapc:    String(a.map_code || "").trim(),               /* map book page (verified live: "645D3") */
             /* CLEANED CAD NOTES — live response ONLY (stripped before the KV log write below):
                same PII stance as msf. The MDT renders these as the readable radio log. */
@@ -1681,7 +1690,7 @@ export default {
             const g = byKey.get(k), seenU = {};
             g.units.forEach(u => { seenU[String(u).toUpperCase()] = 1; });
             for (const u of (c.units || [])) { const uk = String(u).toUpperCase(); if (u && !seenU[uk]) { seenU[uk] = 1; g.units.push(u); } }
-            for (const f of ["cad_code", "address", "channel", "started", "type", "msf"]) if (!g[f] && c[f]) g[f] = c[f];   /* fill blanks from another feed's view; msf: a 1 from either feed wins, 0 never overwrites */
+            for (const f of ["cad_code", "address", "channel", "started", "type", "msf", "ejf", "mtf"]) if (!g[f] && c[f]) g[f] = c[f];   /* fill blanks from another feed's view; msf: a 1 from either feed wins, 0 never overwrites */
           }
         }
         let calls = order.map(k => byKey.get(k));
@@ -1869,7 +1878,7 @@ export default {
                 if (cls !== "gen") {
                   await env.PINS.put("arch:" + (c.cad_code || c.id), JSON.stringify({
                     t: c.logged, ty: c.type || "", ad: c.address || "", la: c.lat ?? null, ln: c.lng ?? null,
-                    u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "", ms: c.msf }));
+                    u: merged, ch: chute != null ? chute : null, cu: chuteUnit || "", cc: c.channel || "", ms: c.msf, ej: c.ejf, mt: c.mtf }));
                   if (epochLive && Date.parse(c.logged) < Date.parse(epochLive)) { /* pre-epoch: raw-archived above, excluded from rollups */ } else {
                   const mh = ctMonthHour(c.logged), sft = sftOf(c.logged);
                   let out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */
