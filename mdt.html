@@ -957,11 +957,15 @@
   /* tap a call card -> focus the map on that run (nav buttons keep their own click) */
   $("callBand").addEventListener("click", (e) => {
     if (e.target.closest(".navbtn")) return;
-    const nh = e.target.closest(".nthead");
-    if (nh) { const id = nh.getAttribute("data-nt"); ntCollapsed[id] = !ntCollapsed[id]; renderBand(); return; }   /* fold/unfold, never refocus */
     const card = e.target.closest(".ccard");
     if (!card) return;
     if (card.classList.contains("slim")) { expandedId = card.dataset.id; renderBand(); }   /* tap a slim bar -> it becomes the expanded card */
+    else if (card.dataset.id && card.querySelector(".nthead")) {
+      /* the WHOLE tile folds the notes (gloved-thumb dexterity — the slim NOTES bar alone was a
+         precision target). Same tap still focuses the map below. */
+      ntCollapsed[card.dataset.id] = !ntCollapsed[card.dataset.id];
+      renderBand();
+    }
     if (!card.dataset.ll || !map) return;
     const p = card.dataset.ll.split(",").map(Number);
     if (p.length === 2 && isFinite(p[0])) try { map.setView(p, 15.5); } catch (err) {}
