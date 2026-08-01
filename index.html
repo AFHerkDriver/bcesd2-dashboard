@@ -943,8 +943,6 @@
   .tchip.on .tcn{color:var(--green)}
   .tchip.err{border-color:var(--amber);background:rgba(255,193,7,.10)}
   .tchip.err .tcn{color:var(--amber)}
-  .tchip.dk{border-color:#21262D;background:var(--bg);opacity:.6}     /* scheduled downtime: deliberately dark — down per plan, not broken */
-  .tchip.dk .tcn{color:#6E7681}
   .tchip.oos{border-color:var(--red);background:rgba(255,59,48,.14)}
   .tchip.oos .tcn{color:var(--red)}
   .trow{display:flex;align-items:center;gap:10px;border-left:3px solid var(--border);border-radius:6px;background:var(--panel2);padding:clamp(3px,.4vmin,7px) clamp(8px,.9vmin,14px)}
@@ -3398,8 +3396,8 @@
       if(!body) return;
       var items=[], s=window.UAV_STATE;                            /* collect {label, cls} for every visible pill, then sort A–Z */
       var maOn=!!(window.MA121_UNTIL && window.MA121_UNTIL>Date.now() && !(stSt&&stSt.macAck===window.MA121_UNTIL));   /* MAC121 dispatched -> auto-on 6h; once the officer ACKS this dispatch in control (macAck), their saved staffing/expiry governs instead — shorten, extend, or stand down */
-      items.push({label:"UAV121", cls: !s?"":(!s.ok?"err":(s.o121?"dk":(s.u121?"on":"")))});   /* scheduled OOS window -> dark, even if staffed */
-      items.push({label:"UAV124", cls: !s?"":(!s.ok?"err":(s.o124?"dk":(s.u124?"on":"")))});
+      items.push({label:"UAV121", cls: !s?"":(!s.ok?"err":(s.o121?"":(s.u121?"on":"")))});   /* scheduled OOS window -> plain idle chip (not green, not red), same as any unstaffed unit */
+      items.push({label:"UAV124", cls: !s?"":(!s.ok?"err":(s.o124?"":(s.u124?"on":"")))});
       if(stOk===false){
         body.className="teams-body err";
         /* apparatus unknown on read-fail: hiding them would read as "all in service" — a false all-clear */
