@@ -111,10 +111,11 @@
   @keyframes mbreath { 0%, 100% { filter: brightness(.4) saturate(1.15); } 50% { filter: brightness(2.3) saturate(1.35); } }   /* same dark-off trick as the wig-wag, kept a notch softer so it still breathes */
   .micro.scene .mb { animation: mbreath 4.4s ease-in-out infinite; }
   .micro.scene .mr { animation: mbreath 4.4s ease-in-out infinite -2.2s; }
-  .micro.cmd { background: rgb(70,255,120); }
-  .micro.cmd i { display: none; }
+  /* COMMAND: the rig keeps its own bar (regular or apparatus), segments steady — the GREEN
+     EMANATES off the bar on the slow scene breath. Green glow = command established. */
   .micro.cmd { animation: mcmd 4.4s ease-in-out infinite; }
-  @keyframes mcmd { 0%, 100% { filter: brightness(.55); box-shadow: 0 0 0 1px rgba(0,0,0,.6); } 50% { filter: brightness(1.5); box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 8px 2px rgba(70,255,120,.8); } }
+  @keyframes mcmd { 0%, 100% { box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 3px 1px rgba(70,255,120,.35); }
+                    50%      { box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 9px 3px rgba(70,255,120,.95), 0 0 20px 7px rgba(70,255,120,.45); } }
   .micro.stale { filter: grayscale(1) brightness(.5); }
   @media (prefers-reduced-motion: reduce) { .micro, .micro i { animation: none !important; } }
   .note { font-size: 11px; color: #8B949E; margin-top: 16px; line-height: 1.7; }
@@ -184,7 +185,7 @@
   <div class="pin" style="left:76%;top:64%"><span class="micro app resp"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
   <div class="pin" style="left:30%;top:55%"><span class="micro resp"><i class="mb"></i><i class="mr"></i></span></div>
   <div class="pin" style="left:40%;top:26%"><span class="micro app scene"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
-  <div class="pin" style="left:44%;top:29%"><span class="micro cmd"><i class="mb"></i><i class="mr"></i></span></div>
+  <div class="pin" style="left:44%;top:29%"><span class="micro app cmd"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span></div>
   <div class="pin" style="left:63%;top:80%"><span class="micro"><i class="mb"></i><i class="mr"></i></span></div>
   <div class="pin" style="left:22%;top:74%"><span class="micro mx"><i class="mb"></i><i class="mr"></i></span></div>
 </div>
