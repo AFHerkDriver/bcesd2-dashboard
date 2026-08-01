@@ -3835,8 +3835,9 @@
       var label=alEsc(a.event)+(m.tag?(" \u2014 "+m.tag):"");
       var until=a.until?("until "+new Date(a.until).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE})):"until further notice";
       var area=a.area?(alEsc(a.area)+" \u00b7 "):"";
-      var t=a.sent?new Date(a.sent):null, src="NWS"+(t&&!isNaN(t.getTime())?(" \u00b7 "+t.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE})):"");
-      return '<div class="al-band '+m.cls+'"><span class="al-icon">'+m.icon+'</span><div class="al-body"><div class="al-ev">'+label+'</div><div class="al-sub">'+area+until+'</div></div><span class="al-src">'+src+'</span></div>';
+      var what=a.summary?(alEsc(String(a.summary).slice(0,140))+" \u00b7 "):"";   /* the WHAT line \u2014 a "Special Weather Statement" title says nothing; the NWS headline/first sentence does */
+      var t=a.sent?new Date(a.sent):null, src=(t&&!isNaN(t.getTime()))?t.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}):"";   /* time only \u2014 the banner already lives in the NWS section, the label was redundant */
+      return '<div class="al-band '+m.cls+'"><span class="al-icon">'+m.icon+'</span><div class="al-body"><div class="al-ev">'+label+'</div><div class="al-sub">'+what+area+until+'</div></div>'+(src?('<span class="al-src">'+src+'</span>'):'')+'</div>';
     }
     /* Render EVERY band into the (hidden) source lane; the NWS carousel shows one at a time, warnings
        first + longer dwell. No internal pagination \u2014 the carousel owns rotation across alerts+heat+link. */
