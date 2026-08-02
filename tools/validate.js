@@ -68,6 +68,24 @@ try {
   } else ok("SW bump guard — no precached page changed");
 } catch (e) { ok("SW bump guard skipped (no git history here)"); }
 
+/* 4b — asset existence: every local png/json a page references must exist in the repo.
+   (v175's ship chain died half-way — index.html went live referencing roadclosure.png
+   before the file itself was ever committed. This check makes that class of gap loud.) */
+for (const f of PAGES.concat(["sw.js"])) {
+  const p = path.join(ROOT, f);
+  if (!fs.existsSync(p)) continue;
+  const src = fs.readFileSync(p, "utf8");
+  const rx = /["']([A-Za-z0-9_@-]+\.(?:png|json))["']/g;
+  const refs = new Set(); let m2;
+  while ((m2 = rx.exec(src))) refs.add(m2[1]);
+  for (const r of refs) {
+    if (r.startsWith("@")) continue;   /* bare retina suffix in a concat, not a filename */
+    if (fs.existsSync(path.join(ROOT, r)) || fs.existsSync(path.join(ROOT, "vendor", "images", r))) continue;
+    fail(f + " references " + r + " but no such file exists in the repo — half-shipped asset");
+  }
+}
+ok("asset existence — every referenced png/json is present");
+
 /* 5 — jsdom smoke */
 let jsdom = null;
 try { jsdom = require("jsdom"); } catch (e) {}

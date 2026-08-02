@@ -3596,7 +3596,7 @@
 
   /* ── Shift Scheduled Events — officer-set state.calendar:[{date?,time,end?,desc}].
      Sorted by date+start time. An event is NOW while start \u2264 now \u2264 end (no end = start+1h);
-     overlapping events can all be NOW. Auto-clears one hour after it ends — done work leaves
+     overlapping events can all be NOW. Auto-clears 15 minutes after it ends — done work leaves
      the board on its own. Dates: blank = today; unparseable entries display verbatim, sort last,
      and never auto-clear (we don't guess). Read failure \u2192 amber fail-loud. ── */
   (function(){
@@ -3655,7 +3655,7 @@
       var items=((st&&st.calendar)||[])
         .filter(function(e){ return e && (e.time || e.desc); })
         .map(function(e){ var r=resolve(e); r.e=e; return r; })
-        .filter(function(r){ return !r.valid || now.getTime() <= r.endDT.getTime()+3600000; })   /* clear 1h after end */
+        .filter(function(r){ return !r.valid || now.getTime() <= r.endDT.getTime()+900000; })   /* clear 15 min after end (officer preference 2026-08-01; was 1h) */
         .filter(function(r){ return !r.valid || r.startDT < horizon; })   /* only this 48h tour: day 1 sees tomorrow, day 2 doesn't */
         .sort(function(a,b){ return a.sortKey-b.sortKey; });
       list.className="sched-list";

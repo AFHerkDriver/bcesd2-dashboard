@@ -80,8 +80,10 @@
                   pointer-events: none; align-items: flex-start; }
   #callBand { display: flex; gap: 8px; flex: 1 1 auto; min-width: 0; pointer-events: none; }
   .ccard { pointer-events: auto; flex: 0 1 auto; min-width: 0; max-width: 640px; background: rgba(13,17,23,.94);   /* auto-size: basis comes from the card's own content, capped at 640 — a short call must not drag a wall of empty card across the map. min-width:0 still lets cards compress instead of overflowing under the chips */
-           border: 2px solid #F85149; border-radius: 12px; padding: 10px 14px; cursor: pointer; }
+           border: 2px solid #F85149; border-radius: 12px; padding: 10px 14px; cursor: pointer; position: relative; }
   .ccard:active { background: rgba(28,34,48,.96); }
+  .mapgrid { position: absolute; top: 8px; right: 10px; font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 1px; color: #E6EDF3; background: rgba(13,17,23,.9); border: 1px solid #30363D; border-radius: 6px; padding: 1px 8px; }   /* map-book grid in the corner where a driver's eye goes first */
+  .ccard:has(.mapgrid) .ty { padding-right: 72px; }   /* keep a long type name from running under the grid chip */
   .ccard .ty { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 1px; color: #F85149; line-height: 1.05; }
   .ccard .ad { font-size: 17px; color: #E6EDF3; margin-top: 2px; font-weight: 500; }
   .ccard .meta { font-size: 12px; color: #8B949E; margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
@@ -798,7 +800,7 @@
   /* ── call band rendering. PHONE with two calls: only ONE card expands at a time — the other
      collapses to a slim colored bar (type + address); tapping the bar swaps which is expanded, so
      the map is never buried under two full cards on a pocket screen. Tablet/MDT show both full. */
-  let lastTop = [], expandedId = null;
+  let lastTop = [], expandedIds = new Set();   /* every card holds its own expanded/slim state — expanding one never slims another */
   const ntCollapsed = {};                     /* call id -> notes folded (persists across re-renders) */
   const phoneMode = () => { try { return window.matchMedia("(max-width: 640px)").matches; } catch (e) { return false; } };
   function buildCard(c, slim) {
@@ -820,15 +822,16 @@
     const td = tenderCache[tenderKey(c)];
     return '<div class="ccard"' + attrs + ' style="border-color:' + col + '">' +
             '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
+            (c.mapc ? '<div class="mapgrid">' + esc(c.mapc) + '</div>' : '') +
             '<div class="ad">' + esc(c.address) + (c.apt ? ' <span class="aptc">APT ' + esc(c.apt) + '</span>' : '') + '</div>' +
             ((c.hist && c.hist.n > 1) ? ('<div class="histc">&#8617; <b>' + ord(c.hist.n) + ' call at this address</b>' +
               ((c.hist.prev || []).length ? (' &middot; prior: ' + c.hist.prev.map(function (p) { return esc(shortTy(p.ty)) + ' ' + mdShort(p.t); }).join(', ')) : '') + '</div>') : '') +
             (td === "need" ? '<div><span class="tdops">TENDER OPS</span></div>'
            : td === "if" ? '<div><span class="tdops if">TENDER IF FIRE</span></div>' : '') +
-            ((when || c.cross || c.mapc) ? '<div class="meta">' +
+            ((when || c.cross) ? '<div class="meta">' +
               (when ? '<span><b>' + when + '</b> &middot; ' + age + '</span>' : "") +
               (c.cross ? '<span>X: ' + esc(c.cross) + "</span>" : "") +
-              (c.mapc ? '<span>MAP <b>' + esc(c.mapc) + "</b></span>" : "") + "</div>" : "") +
+              "</div>" : "") +
             (() => {                                       /* nearest district camera — ONLY when it will likely show the incident: roadway call types within 1 mi (a camera sees its corridor, not into a house) */
               if (slim || c.lat == null || c.lng == null || c.gs) return "";
               if (!/MVC|MVA|ACCIDENT|COLLISION|CRASH|FIRE - VEHICLE|VEHICLE FIRE/i.test(String(c.type || ""))) return "";
@@ -861,8 +864,9 @@
   function renderBand() {
     if (!lastTop.length) { $("callBand").innerHTML = '<div id="noCalls">NO ACTIVE CALLS · live</div>'; return; }
     if (!phoneMode() || lastTop.length === 1) { $("callBand").innerHTML = lastTop.map(c => buildCard(c, false)).join(""); return; }
-    const exp = lastTop.find(c => c.id === expandedId) || lastTop[0];
-    $("callBand").innerHTML = lastTop.map(c => buildCard(c, c.id !== exp.id)).join("");
+    expandedIds.forEach(id => { if (!lastTop.some(c => c.id === id)) expandedIds.delete(id); });   /* prune calls that aged off */
+    if (!lastTop.some(c => expandedIds.has(c.id))) expandedIds.add(lastTop[0].id);                 /* never a band of all slim bars */
+    $("callBand").innerHTML = lastTop.map(c => buildCard(c, !expandedIds.has(c.id))).join("");
   }
   try { window.matchMedia("(max-width: 640px)").addEventListener("change", renderBand); } catch (e) {}
 
@@ -1005,7 +1009,7 @@
     if (cb) { const c0 = CAMDB && CAMDB.cams.find(x => x.id === cb.dataset.cam); if (c0) camOpen(c0); return; }
     const card = e.target.closest(".ccard");
     if (!card) return;
-    if (card.classList.contains("slim")) { expandedId = card.dataset.id; renderBand(); }   /* tap a slim bar -> it becomes the expanded card */
+    if (card.classList.contains("slim")) { expandedIds.add(card.dataset.id); renderBand(); }   /* tap a slim bar -> it expands; the other cards keep their own state */
     else if (card.dataset.id && card.querySelector(".nthead")) {
       /* the WHOLE tile folds the notes (gloved-thumb dexterity — the slim NOTES bar alone was a
          precision target). Same tap still focuses the map below. */
@@ -1045,10 +1049,12 @@
     fetch(WORKER + "/roadwork?pin=" + encodeURIComponent(PIN)).then(r => r.json()).then(j => {
       if (!j || !j.ok || !rwOn) return;
       rwLayer.clearLayers();
+      const rwIcon = L.icon({ iconUrl: "roadclosure.png", iconRetinaUrl: "roadclosure@2x.png", iconSize: [26, 26], iconAnchor: [13, 13] });   /* dept badge — closures/construction */
       (j.items || []).forEach(it => {
-        const col = it.k === "incident" ? "#FF8C42" : "#8B949E";
-        L.circleMarker([it.la, it.ln], { radius: 7, color: "#0D1117", weight: 2, fillColor: col, fillOpacity: .95 })
-          .bindPopup('<div class="hyd-pop"><b>' + esc(it.ty).toUpperCase() + '</b><br>' + esc(it.tx) + '</div>', { maxWidth: 260 })
+        const mk2 = it.k === "incident"
+          ? L.circleMarker([it.la, it.ln], { radius: 7, color: "#0D1117", weight: 2, fillColor: "#FF8C42", fillOpacity: .95 })   /* LIVE lane incident: orange dot — different thing than a planned closure */
+          : L.marker([it.la, it.ln], { icon: rwIcon, keyboard: false });
+        mk2.bindPopup('<div class="hyd-pop"><b>' + esc(it.ty).toUpperCase() + '</b><br>' + esc(it.tx) + '</div>', { maxWidth: 260 })
           .addTo(rwLayer);
       });
     }).catch(() => {});
