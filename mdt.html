@@ -82,7 +82,7 @@
   .ccard { pointer-events: auto; flex: 0 1 auto; min-width: 0; max-width: 640px; background: rgba(13,17,23,.94);   /* auto-size: basis comes from the card's own content, capped at 640 — a short call must not drag a wall of empty card across the map. min-width:0 still lets cards compress instead of overflowing under the chips */
            border: 2px solid #F85149; border-radius: 12px; padding: 10px 14px; cursor: pointer; position: relative; }
   .ccard:active { background: rgba(28,34,48,.96); }
-  /* AVL chip lives INSIDE #ctrls as a flex sibling of Roads/District — it inherits the corner
+  /* AVL chip lives INSIDE #ctrls as a flex sibling of the District button — it inherits the corner
      placement, the 8px gap, and the pip-split lift for free, and can never cover the buttons.
      40px+ tall: the file's gloved-thumb floor applies to this tap target too. */
   #avlChip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 999px; padding: 8px 14px; font-size: 14px; color: #8B949E; display: none; align-items: center; gap: 8px; min-height: 40px; box-sizing: border-box; cursor: pointer; }
@@ -94,6 +94,49 @@
   .avl-unit { display: inline-block; background: rgba(13,17,23,.92); border: 2px solid #58A6FF; border-radius: 6px; color: #E6EDF3; font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 1px; padding: 1px 7px; white-space: nowrap; }
   .avl-unit.old { border-color: #8B949E; color: #8B949E; }   /* fix aging out — gray beats a confident lie */
   .lechip { display: inline-block; background: #1F6FEB; color: #fff; border-radius: 5px; font-size: 10px; letter-spacing: 1px; padding: 1px 6px; vertical-align: 1px; }   /* law-enforcement bird */
+  /* ── AVL unit markers — the approved unit-demo spec (Samsara-ready). Badge PNG + CSS lightbar:
+     steady = available, wig-wag = responding (attached, >150 m out), slow breathe = on scene,
+     GREEN halo = command on scene, dim = stale GPS (never animate data we don't trust).
+     Below z13 the marker is the micro lightbar alone; at z13+ the full badge. */
+  .uv{position:relative;display:block;width:38px}
+  .uv img{display:block;width:100%}
+  .uv .gl{position:absolute;top:6%;height:25%;width:42%;border-radius:50%;filter:blur(2px);mix-blend-mode:screen;opacity:0;pointer-events:none}
+  .uv .gl.l{left:7%;background:radial-gradient(ellipse at center,rgba(255,255,255,.95) 0%,rgba(120,175,255,1) 26%,rgba(120,175,255,0) 78%)}
+  .uv .gl.r{right:7%;background:radial-gradient(ellipse at center,rgba(255,255,255,.95) 0%,rgba(255,95,80,1) 26%,rgba(255,95,80,0) 78%)}
+  .uv .gl.e1{left:2%;width:25%;background:radial-gradient(ellipse at center,rgba(255,255,255,.95) 0%,rgba(255,80,66,1) 26%,rgba(255,80,66,0) 78%)}
+  .uv .gl.e2{left:25%;width:21%;background:radial-gradient(ellipse at center,rgba(255,255,255,.95) 0%,rgba(110,170,255,1) 26%,rgba(110,170,255,0) 78%)}
+  .uv .gl.e3{right:25%;width:21%;background:radial-gradient(ellipse at center,rgba(255,255,255,.95) 0%,rgba(110,170,255,1) 26%,rgba(110,170,255,0) 78%)}
+  .uv .gl.e4{right:2%;width:25%;background:radial-gradient(ellipse at center,rgba(255,255,255,.95) 0%,rgba(255,80,66,1) 26%,rgba(255,80,66,0) 78%)}
+  @keyframes uvwig{0%,46%{opacity:1}50%,100%{opacity:0}}
+  .uv.resp .gl.l,.uv.resp .gl.e1,.uv.resp .gl.e3{animation:uvwig .5s linear infinite}
+  .uv.resp .gl.r,.uv.resp .gl.e2,.uv.resp .gl.e4{animation:uvwig .5s linear infinite -.25s}
+  @keyframes uvbreath{0%,100%{opacity:.12}50%{opacity:1}}
+  .uv.scene .gl.e2,.uv.scene .gl.e3,.uv.scene .gl.l{animation:uvbreath 4.4s ease-in-out infinite}
+  .uv.scene .gl.e1,.uv.scene .gl.e4,.uv.scene .gl.r{animation:uvbreath 4.4s ease-in-out infinite -2.2s}
+  .uv.cmd::after{content:"";position:absolute;inset:1%;border-radius:14%;pointer-events:none;animation:uvcmd 4.4s ease-in-out infinite}
+  @keyframes uvcmd{0%,100%{box-shadow:0 0 2px 1px rgba(70,255,120,.3)}50%{box-shadow:0 0 10px 4px rgba(70,255,120,.95),0 0 24px 9px rgba(70,255,120,.45)}}
+  .uv.stale{filter:grayscale(.75) brightness(.55)}
+  .uv .ulabel{position:absolute;left:8%;right:8%;top:44%;bottom:12%;display:flex;align-items:center;justify-content:center;white-space:nowrap;font-family:Arial,'Helvetica Neue',sans-serif;font-weight:700;color:#FFF;text-shadow:0 1px 1px rgba(0,0,0,.65)}
+  .micro{position:relative;display:block;width:16px;height:7px;border-radius:2px;background:rgb(198,204,214);overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.6),0 1px 3px rgba(0,0,0,.55)}
+  .micro i{position:absolute;top:0;bottom:0;width:42%}
+  .micro .mb{left:0;background:rgb(40,125,255)}
+  .micro .mr{right:0;background:rgb(255,42,30)}
+  .micro.app{width:20px}
+  .micro.app .m1{left:0;width:26%;background:rgb(255,42,30)}
+  .micro.app .m2{left:26%;width:16%;background:rgb(40,125,255)}
+  .micro.app .m3{left:58%;width:16%;background:rgb(40,125,255)}
+  .micro.app .m4{left:74%;width:26%;background:rgb(255,42,30)}
+  .micro:not(.resp):not(.scene):not(.cmd) i{filter:brightness(.55)}
+  @keyframes uvmflash{0%,46%{filter:brightness(2.3) saturate(1.35)}50%,100%{filter:brightness(.32) saturate(1.15)}}
+  .micro.resp .mb,.micro.app.resp .m1,.micro.app.resp .m4{animation:uvmflash .5s linear infinite}
+  .micro.resp .mr,.micro.app.resp .m2,.micro.app.resp .m3{animation:uvmflash .5s linear infinite -.25s}
+  @keyframes uvmbreath{0%,100%{filter:brightness(.4) saturate(1.15)}50%{filter:brightness(2.3) saturate(1.35)}}
+  .micro.scene .mb,.micro.app.scene .m2,.micro.app.scene .m3{animation:uvmbreath 4.4s ease-in-out infinite}
+  .micro.scene .mr,.micro.app.scene .m1,.micro.app.scene .m4{animation:uvmbreath 4.4s ease-in-out infinite -2.2s}
+  @keyframes uvmcmd{0%,100%{box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 3px 1px rgba(70,255,120,.35)}50%{box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 9px 3px rgba(70,255,120,.95),0 0 20px 7px rgba(70,255,120,.45)}}
+  .micro.cmd{animation:uvmcmd 4.4s ease-in-out infinite}
+  .micro.stale{filter:grayscale(1) brightness(.5)}
+  @media (prefers-reduced-motion:reduce){.uv .gl,.uv.cmd::after,.micro,.micro i{animation:none !important}.uv.scene .gl{opacity:.45}}
   #avlDlg { position: fixed; inset: 0; z-index: 1200; background: rgba(1,4,9,.72); display: none; align-items: center; justify-content: center; }
   #avlDlg .bx { background: #161B22; border: 1px solid #30363D; border-radius: 14px; padding: 20px 22px; width: min(330px, 88vw); }
   #avlDlg h3 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1px; color: #E6EDF3; margin: 0 0 8px; }
@@ -282,7 +325,6 @@
 </div>
 <div id="dronePip"><span class="lbl" id="droneLbl"></span><span id="pipErr"></span><button id="pipSize" title="Resize">&#10530;</button><video id="droneVid" muted autoplay playsinline controls></video><iframe id="droneFrame" scrolling="no" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>
 <div id="ctrls">
-  <button class="navbtn" id="rwBtn" type="button">&#128679; Roads</button>
   <button id="refit" title="Frame the district">&#8982; District</button>
 </div>
 
@@ -350,9 +392,13 @@
        its storm auto-on) */
     const radarOverlay = L.layerGroup(), windOverlay = L.layerGroup(), tenderOverlay = L.layerGroup();
     tourLayer = L.layerGroup();
-    L.control.layers({ "Dark": dark, "Positron": positron, "Satellite": satellite },   /* both lists alphabetical — the panel reads as a menu, not an accretion log */
+    map._layersCtl = L.control.layers({ "Dark": dark, "Positron": positron, "Satellite": satellite },   /* both lists alphabetical — the panel reads as a menu, not an accretion log */
       { "Radar": radarOverlay, "Tender Zones": tenderOverlay, "Tour Calls": tourLayer, "Wind Flow": windOverlay },
       { collapsed: true, sortLayers: true, position: "bottomright" }).addTo(map);
+    map._layersCtl.addOverlay(rwLayer, "Road Closures");   /* the Roads toggle lives here now, not a corner button */
+    map.on("overlayadd", (e) => { if (e.layer === rwLayer) { rwOn = true; rwLoad(); rwTimer = setInterval(rwLoad, 120000); } });
+    map.on("overlayremove", (e) => { if (e.layer === rwLayer) { rwOn = false; clearInterval(rwTimer); rwLayer.clearLayers(); } });
+    map.on("zoomend", avlZoomRedraw);                      /* AVL micro <-> full badge swap at z13 */
     /* tour pins live at z-390: over labels/tender, UNDER the live call circles (z-400 overlay pane) —
        a finished run must never sit on top of an active one */
     map.createPane("tourPane"); map.getPane("tourPane").style.zIndex = 390; map.getPane("tourPane").style.pointerEvents = "auto";
@@ -1097,13 +1143,9 @@
       });
     }).catch(() => {});
   }
-  function rwToggle() {
-    rwOn = !rwOn;
-    $("rwBtn").style.borderColor = rwOn ? "#FF8C42" : "";
-    $("rwBtn").style.color = rwOn ? "#FF8C42" : "";
-    if (rwOn) { if (!rwLayer) rwLayer = L.layerGroup(); rwLayer.addTo(map); rwLoad(); rwTimer = setInterval(rwLoad, 120000); }
-    else { clearInterval(rwTimer); try { map.removeLayer(rwLayer); } catch (e) {} }
-  }
+  /* Road Closures lives in the map's layers panel now (wired in initMap — the map does not
+     exist until PIN unlock, so NOTHING here may touch it at parse time) */
+  rwLayer = L.layerGroup();
 
   /* ── MEDEVAC / ROTORCRAFT — HEMS watchlist + any rotorcraft in the box. 15 s poll while the page
      is open; marker rotates with track; popup carries op/alt/speed and an ETA to the newest call.
@@ -1235,7 +1277,7 @@
     } catch (e) { clearTimeout(to); camStop(); camSnapshot(c); }
   }
   $("camClose").addEventListener("click", () => { camStop(); $("camView").classList.remove("on"); });
-  $("rwBtn").addEventListener("click", rwToggle);
+  /* (Roads toggle moved into the map's layers panel) */
   $("satStrip").addEventListener("click", () => {
     if (!lastHotspots.length || !map) return;
     const h = lastHotspots[lastHotspots.length - 1];
@@ -1403,8 +1445,41 @@
     const gap = Date.now() - avlLastOk;
     if (!avlLayer || !avlLastOk || gap < 45000) return;
     if (gap > 150000) { Object.keys(avlMks).forEach(k => { try { avlLayer.removeLayer(avlMks[k]); } catch (e) {} delete avlMks[k]; }); return; }
-    Object.keys(avlMks).forEach(k => { const el = avlMks[k].getElement && avlMks[k].getElement(); const sp = el && el.querySelector(".avl-unit"); if (sp) sp.classList.add("old"); });
+    Object.keys(avlMks).forEach(k => { const m = avlMks[k]; if (m && m._u) { m._u.age = 999; try { m.setIcon(avlIcon(m._u)); } catch (e) {} } });   /* stale dim through the spec's own state — never a confident lightbar on dead data */
   }
+  /* ── unit-demo marker spec, live: family from the fleet roster's own fam field (officer can
+     override there); state from what THIS screen already knows — call attachments and fix age. ── */
+  let avlFamMap = null;
+  function avlRosterLoad() {
+    if (!PIN) return;
+    fetch(WORKER + "/roster?pin=" + encodeURIComponent(PIN)).then(r => r.json()).then(j => {
+      if (!j || !j.ok || !j.roster) return;
+      avlRoster = j.roster.units || [];
+      avlFamMap = {};
+      avlRoster.forEach(u => String(u.cs || "").toUpperCase().split("/").forEach(p => { p = p.trim(); if (p) avlFamMap[p] = u.fam || "app"; }));
+    }).catch(() => {});
+  }
+  const avlFam = (cs) => (avlFamMap && avlFamMap[cs]) || (/^(UAV|AC|DC)/.test(cs) ? "rb" : "app");   /* roster fam wins; prefix fallback matches the demo (UAV/AC/DC ride the plain bar) */
+  function avlState(u) {
+    if (u.age > 60) return "stale";   /* dim beats everything — never animate data we don't trust */
+    const att = lastTop.find(c => (c.units || []).some(x => String(x).toUpperCase() === u.u));
+    if (!att) return "";
+    if (att.lat != null && isFinite(+att.lat) && (Math.abs(u.la - att.lat) + Math.abs(u.ln - att.lng)) * 111000 <= 150)
+      return /^(BC|AC|DC)/.test(u.u) ? "cmd" : "scene";   /* on location; command rigs flip the scene glow GREEN */
+    return "resp";
+  }
+  function avlIcon(u) {
+    const fam = avlFam(u.u), st = avlState(u);
+    if (map.getZoom() < 13) {   /* far zoom: the lightbar alone */
+      const app = fam !== "rb";
+      return L.divIcon({ className: "", iconSize: [app ? 20 : 16, 7], iconAnchor: [app ? 10 : 8, 4],
+        html: '<span class="micro' + (app ? " app" : "") + (st ? " " + st : "") + '">' + (app ? '<i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i>' : '<i class="mb"></i><i class="mr"></i>') + "</span>" });
+    }
+    return L.divIcon({ className: "", iconSize: [38, 38], iconAnchor: [19, 19],
+      html: '<span class="uv' + (st ? " " + st : "") + '"><img src="' + (fam === "rb" ? "unit-blank-rb.png" : "unit-blank-app.png") + '"><span class="ulabel" style="font-size:' + (u.u.length > 5 ? 8 : 10) + 'px">' + esc(u.u) + "</span>" +
+        (fam === "rb" ? '<span class="gl l"></span><span class="gl r"></span>' : '<span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span>') + "</span>" });
+  }
+  function avlZoomRedraw() { Object.keys(avlMks).forEach(k => { const m = avlMks[k]; if (m && m._u) { try { m.setIcon(avlIcon(m._u)); } catch (e) {} } }); }   /* wired to zoomend inside initMap — map does not exist at parse */
   function avlPoll() {   /* everyone else's rigs on OUR map — markers updated in place, never clear/rebuild */
     if (avlDlgAuto && avlDlg.style.display === "flex" && lastTop.length) { avlDlg.style.display = "none"; avlDlgAuto = false; }   /* a call dropped — the auto-opened ask yields the screen */
     if (!PIN || !map || document.hidden) return;
@@ -1418,11 +1493,11 @@
         if (u.dev && u.dev === avlDev) return;   /* our own echo, matched by device id — a SECOND device claiming our callsign still shows, making the conflict visible */
         if (!u.dev && u.u === avlLive && Date.now() - avlLastPost < 45000) return;   /* echo fallback for a pre-build-5 worker that doesn't return dev */
         seen[u.u] = 1;
-        const ic = L.divIcon({ className: "", iconSize: null, iconAnchor: [18, 11], html: '<span class="avl-unit' + (u.age > 60 ? " old" : "") + '">' + esc(u.u) + "</span>" });
+        const ic = avlIcon(u);
         const pop = '<div class="hyd-pop"><b>' + esc(u.u) + '</b><br>&plusmn;' + Math.round(+u.acc || 0) + ' m' + (u.spd != null && isFinite(+u.spd) ? ' &middot; ' + Math.round(u.spd * 2.237) + ' mph' : '') + ' &middot; ' + (u.age < 5 ? 'live' : u.age + ' s ago') + '</div>';   /* speed only when the device actually knows it — never a fabricated 0 mph */
         let m = avlMks[u.u];
-        if (m) { m.setLatLng([+u.la, +u.ln]); m.setIcon(ic); try { m.getPopup().setContent(pop); } catch (e) {} }
-        else { m = L.marker([+u.la, +u.ln], { icon: ic, keyboard: false, zIndexOffset: 800 }).bindPopup(pop, { maxWidth: 200 }); m.addTo(avlLayer); avlMks[u.u] = m; }
+        if (m) { m._u = u; m.setLatLng([+u.la, +u.ln]); m.setIcon(ic); try { m.getPopup().setContent(pop); } catch (e) {} }
+        else { m = L.marker([+u.la, +u.ln], { icon: ic, keyboard: false, zIndexOffset: 800 }).bindPopup(pop, { maxWidth: 200 }); m._u = u; m.addTo(avlLayer); avlMks[u.u] = m; }
       });
       Object.keys(avlMks).forEach(k => { if (!seen[k]) { try { avlLayer.removeLayer(avlMks[k]); } catch (e) {} delete avlMks[k]; } });   /* dropped unit: marker (and its open popup) goes — correct fail-loud */
     }).catch(avlStale);
@@ -1449,6 +1524,7 @@
     loadOutages(); setInterval(loadOutages, 180000);
     loadHelos(); setInterval(loadHelos, 15000);
     avlInit(); avlPoll(); setInterval(avlPoll, 15000);
+    avlRosterLoad(); setInterval(avlRosterLoad, 10 * 60 * 1000);   /* fam map for the unit markers */
     camAttach();                                    /* cold-start path: map exists only after boot */
   }
   if (PIN) { $("gate").style.display = "none"; boot(); }

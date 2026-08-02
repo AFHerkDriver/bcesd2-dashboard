@@ -92,9 +92,13 @@ try { jsdom = require("jsdom"); } catch (e) {}
 if (!jsdom) { console.log("note  jsdom not installed — smoke skipped (CI installs it; local: npm i --no-save jsdom)"); }
 else {
   const { JSDOM } = jsdom;
-  for (const page of ["index.html", "control.html"]) {
+  for (const page of ["index.html", "control.html", "mdt.html", "fleet.html"]) {
     try {
-      const html = fs.readFileSync(path.join(ROOT, page), "utf8");
+      let html = fs.readFileSync(path.join(ROOT, page), "utf8");
+      /* inline the vendored Leaflet where its script tag sits — jsdom loads no external scripts,
+         and parse-time L.* must run for REAL so a parse-time map bug (the v184 class) fails here */
+      html = html.replace('<script src="vendor/leaflet-1.9.4.js"></script>',
+        () => "<script>" + fs.readFileSync(path.join(ROOT, "vendor", "leaflet-1.9.4.js"), "utf8") + "<\/script>");
       const errs = [];
       const vc = new jsdom.VirtualConsole();
       vc.on("jsdomError", (e) => { if (!/Could not load link|Could not load img|network|net-disabled/i.test(String(e))) errs.push(String(e).slice(0, 160)); });
@@ -103,6 +107,7 @@ else {
         url: "https://afherkdriver.github.io/bcesd2-dashboard/" + page,
         virtualConsole: vc, pretendToBeVisual: true,
         beforeParse(window) {   /* jsdom ships no fetch — stub the network shut so wiring code runs and data code fails benignly */
+          /* (vendored Leaflet is inlined into the html above — beforeParse is too early: no documentElement yet) */
           window.fetch = () => Promise.reject(new Error("net-disabled"));
           if (!window.navigator.serviceWorker) Object.defineProperty(window.navigator, "serviceWorker", { value: { register: () => Promise.reject(new Error("net-disabled")), addEventListener: () => {} } });
         },
