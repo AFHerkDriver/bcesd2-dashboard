@@ -94,6 +94,7 @@
   .avl-unit { display: inline-block; background: rgba(13,17,23,.92); border: 2px solid #58A6FF; border-radius: 6px; color: #E6EDF3; font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 1px; padding: 1px 7px; white-space: nowrap; }
   .avl-unit.old { border-color: #8B949E; color: #8B949E; }   /* fix aging out — gray beats a confident lie */
   .lechip { display: inline-block; background: #1F6FEB; color: #fff; border-radius: 5px; font-size: 10px; letter-spacing: 1px; padding: 1px 6px; vertical-align: 1px; }   /* law-enforcement bird */
+  .lechip.fire { background: #FF6B35; color: #0D1117; font-weight: 700; }   /* aerial suppression — ember, the one air asset that changes OUR fireground */
   /* ── AVL unit markers — the approved unit-demo spec (Samsara-ready). Badge PNG + CSS lightbar:
      steady = available, wig-wag = responding (attached, >150 m out), slow breathe = on scene,
      GREEN halo = command on scene, dim = stale GPS (never animate data we don't trust).
@@ -1181,6 +1182,7 @@
             if (h.reg && !has(h.reg)) d += '<br>' + esc(h.reg) + (h.type ? ' (' + esc(h.type) + ')' : '');
             else if (h.type && !has(h.type)) d += '<br>' + esc(h.type);
             return '<div class="hyd-pop"><b>' + esc(ttl) + '</b>' +
+            (h.fire ? ' <span class="lechip fire">' + esc(h.fire) + '</span>' : '') +
             (h.le && !has(h.le) ? ' <span class="lechip">' + esc(h.le) + '</span>' : '') +
             d +
             (isFinite(+h.alt) ? ('<br>' + (+h.alt) + ' ft &middot; ' + Math.round(+h.gs || 0) + ' kt') : '') + eta + '</div>'; })(), { maxWidth: 240 })

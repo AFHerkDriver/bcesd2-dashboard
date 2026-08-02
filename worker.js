@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 6;
+const WORKER_VERSION = 7;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1619,7 +1619,14 @@ export default {
           "a7c6a5": ["DPS", "DPS N60TX"], "a8ec53": ["DPS", "DPS N674TX"], "a95dbb": ["DPS", "DPS N702TX"],
           "ab4176": ["DPS", "DPS N824TX"], "ab9074": ["DPS", "DPS N844TX"], "ac6e92": ["DPS", "DPS N90TX"]
         };
-        const LE_OPS = /san antonio police|public safety|texas dps|parks\s*(&|and)\s*wildlife|game warden/i;
+        const LE_OPS = /san antonio police|public safety|texas dps|parks\s*(&|and)\s*wildlife|game warden|bexar county|sheriff/i;   /* Bexar SO had no ship of its own as of 2026-08 (borrows SAPD/DPS) — the regex catches theirs the day it flies */
+        /* FIRE AVIATION — Texas suppression aircraft are contracted call-when-needed, so tails
+           rotate seasonally and a hex list would rot. Match the NIFC/FAA callsign conventions
+           in the flight field instead (they are assigned per-incident and are stable), plus the
+           operator names of the vendors and agencies that actually fly Texas fires. Anchored
+           patterns only: bare \u201cTANKER\u201d would also catch military air-refueling traffic. */
+        const FIRE_CALL = /^(?:TNKR|TANKER)\s*\d{1,3}$|^(?:LEAD)\s*\d{1,2}$|^(?:ATGS|AIRATK)\s*\d{1,3}$|^FIREBIRD\s*\d{0,3}$/i;   /* NO bare "AA": that is American's IATA prefix and SAT sees heavy AA traffic — tagging airliners as air attack would be an hourly lie. ATGS/AIRATK only. */
+        const FIRE_OPS = /forest service|firefighting|fire\s*boss|dauntless|neptune avia|10 tanker|erickson|croman|coulson|billings flying|brainerd|aeroflite|helicopter transport|air spray|conair/i;
         let ac = null;
         try {
           const r1 = await fetch("https://api.airplanes.live/v2/point/29.38/-98.62/50", { headers: { "Accept": "application/json" } });
@@ -1638,8 +1645,12 @@ export default {
           const rotor = String(a.category || "") === "A7";
           const listed = WATCH[hex] || (a.ownOp && OPS.test(String(a.ownOp)));
           const lw = LEW[hex];
-          const le = lw ? lw[0] : (a.ownOp && LE_OPS.test(String(a.ownOp)) ? (/san antonio police/i.test(String(a.ownOp)) ? "EAGLE" : /wildlife|game/i.test(String(a.ownOp)) ? "POACHER" : "DPS") : null);
-          if (!rotor && !listed && !le) continue;   /* LE fixed-wing (DPS Pilatus overhead) rides in too — overhead LE traffic is intel */
+          const le = lw ? lw[0] : (a.ownOp && LE_OPS.test(String(a.ownOp)) ? (/san antonio police/i.test(String(a.ownOp)) ? "EAGLE" : /wildlife|game/i.test(String(a.ownOp)) ? "POACHER" : /bexar|sheriff/i.test(String(a.ownOp)) ? "BCSO" : "DPS") : null);
+          const fcall = String(a.flight || "").trim();
+          const fire = (FIRE_CALL.test(fcall) || (a.ownOp && FIRE_OPS.test(String(a.ownOp))))
+            ? (/^(?:TNKR|TANKER)/i.test(fcall) ? "TANKER" : /^LEAD/i.test(fcall) ? "LEAD" : /^(?:ATGS|AIRATK)/i.test(fcall) ? "AIR ATTACK" : "FIRE AIR")
+            : null;   /* aerial suppression working our area — the one air asset a fire district most needs to see */
+          if (!rotor && !listed && !le && !fire) continue;   /* LE/fire FIXED-WING rides in too (a DPS Pilatus or an air-attack ship overhead is intel, not clutter) */
           if (a.lat == null || a.lon == null) continue;
           const nla = +a.lat, nln = +a.lon;
           if (!isFinite(nla) || !isFinite(nln)) continue;
@@ -1647,7 +1658,7 @@ export default {
                        op: WATCH[hex] || (lw ? lw[1] : String(a.ownOp || "").slice(0, 40)),
                        call: String(a.flight || "").trim().slice(0, 12), alt: (a.alt_baro === "ground") ? 0 : (isFinite(+a.alt_baro) ? +a.alt_baro : null),
                        gs: isFinite(+a.gs) ? +a.gs : null, trk: isFinite(+a.track) ? +a.track : null,   /* NUMERIC COERCION AT THE SOURCE — these land in client innerHTML/style sinks */
-                       med: !!listed, le: le || null });   /* med: HEMS watchlist; le: radio callsign the crews actually hear — EAGLE (SAPD), DPS (troopers), POACHER (game wardens) */
+                       med: !!listed, le: le || null, fire: fire || null });   /* med: HEMS watchlist; le: the callsign crews actually hear (EAGLE/DPS/POACHER/BCSO); fire: aerial suppression (TANKER/LEAD/AIR ATTACK) */
         }
         const out = { ok: true, helos, updated: new Date().toISOString() };
         heloMem = { at: Date.now(), out };
