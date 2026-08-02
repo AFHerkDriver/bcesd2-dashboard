@@ -1254,6 +1254,23 @@
         try{ map.addLayer(want); }catch(e){}
       }
     },5*60*1000);
+    /* NIGHT AUTO-REVERT — an officer's bright basemap pick at NIGHT must not burn on the wall
+       till dawn: after 10 minutes without a hand on the map, night hands the board back to dark.
+       Daytime picks keep the old rule (stick until the dusk boundary). Never swaps mid call-zoom. */
+    var lastMapTouch=Date.now();
+    ["pointerdown","wheel","touchstart"].forEach(function(ev){
+      try{ map.getContainer().addEventListener(ev,function(){ lastMapTouch=Date.now(); },{passive:true}); }catch(e){}
+    });
+    map.on("baselayerchange",function(){ lastMapTouch=Date.now(); });
+    setInterval(function(){
+      if(sunUp(29.465,-98.730)) return;                    /* daytime: sun rules, unchanged */
+      if(!userBase || preFocusBase) return;                /* no manual pick, or mid call-zoom hold */
+      if(map.hasLayer(dark)) return;                       /* the pick WAS dark — nothing to revert */
+      if(Date.now()-lastMapTouch < 10*60*1000) return;     /* someone is still working the map */
+      userBase=null;                                       /* pick expires — the sun logic owns the board again */
+      [satellite,positron].forEach(function(l){ if(map.hasLayer(l)){ try{ map.removeLayer(l); }catch(e){} } });
+      try{ map.addLayer(dark); }catch(e){}
+    },60*1000);
     var droneIcon=L.icon({iconUrl:"drone-marker.png",iconRetinaUrl:"drone-marker@2x.png",iconSize:[46,46],iconAnchor:[23,23]});
     /* POI reticle — a hollow red targeting ring, transparent through the middle so the ground it
        marks shows through (the old raster had a filled dark centre). Built as an inline SVG so it
