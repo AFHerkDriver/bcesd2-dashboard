@@ -1476,7 +1476,7 @@
         html: '<span class="micro' + (app ? " app" : "") + (st ? " " + st : "") + '">' + (app ? '<i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i>' : '<i class="mb"></i><i class="mr"></i>') + "</span>" });
     }
     return L.divIcon({ className: "", iconSize: [38, 38], iconAnchor: [19, 19],
-      html: '<span class="uv' + (st ? " " + st : "") + '"><img src="' + (fam === "rb" ? "unit-blank-rb.png" : "unit-blank-app.png") + '"><span class="ulabel" style="font-size:' + (u.u.length > 5 ? 8 : 10) + 'px">' + esc(u.u) + "</span>" +
+      html: '<span class="uv' + (st ? " " + st : "") + '" style="position:relative;display:block;width:38px"><img src="' + (fam === "rb" ? "unit-blank-rb.png" : "unit-blank-app.png") + '" style="display:block;width:100%"><span class="ulabel" style="font-size:' + (u.u.length > 5 ? 8 : 10) + 'px">' + esc(u.u) + "</span>" +   /* geometry INLINE — a stylesheet mishap may dull the glow but can never explode a 216px png across the map */
         (fam === "rb" ? '<span class="gl l"></span><span class="gl r"></span>' : '<span class="gl e1"></span><span class="gl e2"></span><span class="gl e3"></span><span class="gl e4"></span>') + "</span>" });
   }
   function avlZoomRedraw() { Object.keys(avlMks).forEach(k => { const m = avlMks[k]; if (m && m._u) { try { m.setIcon(avlIcon(m._u)); } catch (e) {} } }); }   /* wired to zoomend inside initMap — map does not exist at parse */

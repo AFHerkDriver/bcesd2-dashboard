@@ -1348,7 +1348,7 @@
       }
       var cs=String(u.u).replace(/[<>&"]/g,"");
       return L.divIcon({className:"",iconSize:[38,38],iconAnchor:[19,19],
-        html:'<span class="uv'+(st2?" "+st2:"")+'"><img src="'+(fam==="rb"?"unit-blank-rb.png":"unit-blank-app.png")+'"><span class="ulabel" style="font-size:'+(cs.length>5?8:10)+'px">'+cs+'</span></span>'});
+        html:'<span class="uv'+(st2?" "+st2:"")+'" style="position:relative;display:block;width:38px"><img src="'+(fam==="rb"?"unit-blank-rb.png":"unit-blank-app.png")+'" style="display:block;width:100%"><span class="ulabel" style="font-size:'+(cs.length>5?8:10)+'px">'+cs+'</span></span>'});   /* geometry INLINE — stylesheet mishaps must never explode the badge */
     }
     function wallAvlDraw(){
       avlWallLayer.clearLayers();
