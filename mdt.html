@@ -1234,8 +1234,8 @@
   function camAttach() {                             /* idempotent: runs from the fetch callback AND from boot — whichever finds both map and db LAST wins */
     if (!CAMDB || !map || camLayer) return;
     camLayer = L.layerGroup();
-    const camIcon = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15],
-      html: '<div style="width:30px;height:30px;border-radius:8px;background:rgba(13,17,23,.88);border:2px solid #2DD4BF;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 1px 4px rgba(0,0,0,.7)">&#128249;</div>' });   /* a real tap target, visible on satellite imagery */
+    const camIcon = L.icon({ iconUrl: "camera-marker.png", iconRetinaUrl: "camera-marker@2x.png",
+      iconSize: [30, 30], iconAnchor: [15, 15] });   /* dept camera badge — a real tap target, and it reads on satellite imagery */
     j.cams.forEach(c => {
       L.marker([c.la, c.ln], { icon: camIcon, keyboard: false, zIndexOffset: -100 })
         .on("click", () => camOpen(c)).addTo(camLayer);
