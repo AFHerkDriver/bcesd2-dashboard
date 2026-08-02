@@ -70,8 +70,10 @@
     border-radius:0;padding:1px 0;min-height:0;width:100%;margin-top:2px}
   input.nt-in::placeholder{color:#4d5566}
   input.nt-in:focus{outline:none;border-bottom-color:var(--accent)}
+  .stn-rows{display:flex;flex-direction:column;gap:4px}
   .stn-chips{display:flex;gap:4px;flex-wrap:wrap}
-  .stn-c{font-family:'DM Mono',monospace;font-size:11px;padding:4px 7px;border:1px solid var(--border);
+  .unit-row .stn-chips{flex-wrap:nowrap}   /* rows are pre-split (120-125 / 161-162) — never rewrap */
+  .stn-c{font-family:'DM Mono',monospace;font-size:11px;padding:4px 7px;border:1px solid var(--border);min-width:36px;box-sizing:border-box;text-align:center;
     border-radius:6px;background:var(--panel2);color:var(--dim);cursor:pointer;line-height:1}
   .stn-c.on{border-color:var(--accent);color:var(--accent);background:rgba(255,107,53,.14);font-weight:600}
   .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -93,7 +95,7 @@
     text-transform:uppercase;margin:14px 2px 6px;display:flex;align-items:center;gap:8px}
   .grp-h .n{font-family:'DM Mono',monospace;font-size:11px;color:var(--dim)}
   .unit-row{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:8px 0;
-    display:grid;grid-template-columns:minmax(84px,auto) 1fr auto;gap:8px 14px;align-items:center}
+    display:grid;grid-template-columns:1fr minmax(300px,340px) auto;gap:8px 14px;align-items:center}   /* FIXED middle column: the seg, station rows and ✕ line up card-over-card instead of drifting with pill widths */
   /* callsign is editable in place — an input dressed as the big label */
   .unit-row input.cs{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;line-height:1;
     width:100%;min-height:0;padding:0;background:none;border:none;border-radius:0;color:var(--text);
@@ -231,8 +233,10 @@ var DRAFT='bc2fd_fleet_draft';
 /* home stations as tap-chips (multi-select -> slash list) — cleaner than typing, always valid */
 var STN_LIST=['120','121','122','123','124','125','161','162'];
 function stnChips(st){ var on=String(st||'').split('/').filter(Boolean);
-  return '<div class="stn-chips">'+STN_LIST.map(function(s){
-    return '<button type="button" class="stn-c'+(on.indexOf(s)>=0?' on':'')+'" data-s="'+s+'">'+s+'</button>'; }).join('')+'</div>'; }
+  var chip=function(s){ return '<button type="button" class="stn-c'+(on.indexOf(s)>=0?' on':'')+'" data-s="'+s+'">'+s+'</button>'; };
+  /* two fixed rows: our stations 120-125, then the ESD-6 pair 161-162 — never a drifting wrap */
+  return '<div class="stn-rows"><div class="stn-chips">'+STN_LIST.slice(0,6).map(chip).join('')+'</div>'+
+         '<div class="stn-chips">'+STN_LIST.slice(6).map(chip).join('')+'</div></div>'; }
 
 /* ── unit typing: callsign prefix → display group, icon family, command flag ──
    Families match the badge blanks on unit-demo.html: app = multicolor apparatus bar,
