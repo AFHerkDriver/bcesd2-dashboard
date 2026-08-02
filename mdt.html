@@ -78,7 +78,7 @@
                   padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
                            8px max(8px, env(safe-area-inset-left));   /* iPhone Dynamic Island / notch: cards step around the camera housing (env()=0 everywhere else) */
                   pointer-events: none; align-items: flex-start; }
-  #callBand { display: flex; gap: 8px; flex: 1 1 auto; min-width: 0; pointer-events: none; }
+  #callBand { display: flex; gap: 8px; flex: 1 1 auto; min-width: 0; pointer-events: none; align-items: flex-start; }   /* flex-start, NOT the default stretch: a short call card must size to its own content instead of being dragged to the tallest card’s height */
   .ccard { pointer-events: auto; flex: 0 1 auto; min-width: 0; max-width: 640px; background: rgba(13,17,23,.94);   /* auto-size: basis comes from the card's own content, capped at 640 — a short call must not drag a wall of empty card across the map. min-width:0 still lets cards compress instead of overflowing under the chips */
            border: 2px solid #F85149; border-radius: 12px; padding: 10px 14px; cursor: pointer; position: relative; }
   .ccard:active { background: rgba(28,34,48,.96); }
@@ -253,7 +253,7 @@
     #callBandWrap:has(#noCalls) { flex-direction: row; align-items: flex-start; }   /* idle: NO ACTIVE CALLS and the facilities chip share one row */
     #callBandWrap:has(#noCalls) #rail { flex-direction: column; margin-left: auto; }
     #rail { flex-direction: row; justify-content: flex-end; max-width: none; margin-left: 0; }
-    #callBand { flex-direction: column; }
+    #callBand { flex-direction: column; align-items: stretch; }   /* phone stacks vertically — there full width is right, so stretch comes back */
     .ccard { max-width: none; }
     .ccard .ty { font-size: 21px; }
     .ccard .ad { font-size: 15px; }
