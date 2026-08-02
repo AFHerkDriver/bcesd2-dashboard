@@ -1168,7 +1168,9 @@
         if (tgt && h.gs > 20) {
           const dy = (h.la - tgt.lat) * 60, dx = (h.ln - tgt.lng) * 52.5;   /* nm at 29.4N */
           const nm = Math.sqrt(dy * dy + dx * dx);
-          eta = ' &middot; <b>' + Math.round(nm / h.gs * 60) + ' min</b> to newest call';
+          /* name the call it is timed against — “to newest call” told nobody anything.
+             Only within 10 mi (8.7 nm): beyond that a transiting bird probably is not ours. */
+          if (nm <= 8.7) eta = ' &middot; <b>' + Math.max(1, Math.round(nm / h.gs * 60)) + ' min</b> to ' + esc(tgt.type);   /* FULL call type — the whole point is knowing WHICH run the bird is timed against */
         }
         L.marker([h.la, h.ln], { icon: ic, keyboard: false, zIndexOffset: 600 })
           .bindPopup((() => {   /* dedupe: a line only earns its place if the title doesn't already say it */
