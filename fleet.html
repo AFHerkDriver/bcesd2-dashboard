@@ -110,6 +110,12 @@
     color:var(--dim);background:none;display:inline-block;margin:4px 0 0 4px;font-family:'DM Mono',monospace;
     cursor:pointer;-webkit-appearance:none;appearance:none}
   .unit-row .rsv.on{border-color:var(--amber);color:#000;background:var(--amber);font-weight:700}
+  /* MX — rig is in the shop: identity stays on the row, but it leaves the selectable fleet */
+  .unit-row .mxb{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);
+                 color:var(--dim);background:transparent;cursor:pointer;display:inline-block;margin-left:4px;vertical-align:top}
+  .unit-row .mxb.on{border-color:var(--red);color:#fff;background:var(--red);font-weight:700}
+  .unit-row.mxrow{opacity:.6}
+  .unit-row.mxrow input.cs{text-decoration:line-through}
   .unit-row .fam{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);color:var(--dim);display:inline-block;margin-top:4px;
     background:none;font-family:'DM Mono',monospace;-webkit-appearance:none;appearance:none}
   .unit-row button.fam{cursor:pointer}
@@ -314,7 +320,7 @@ function render(){
   var host=document.getElementById('roster');
   if(!roster.units.length){ host.innerHTML='<div class="empty">No units yet &mdash; add the first one above.</div>'; return; }
   var groups={};
-  roster.units.forEach(function(u,i){ u._i=i; var g=u.rsv?'Reserve':typeOf(u.cs).g; (groups[g]=groups[g]||[]).push(u); });
+  roster.units.forEach(function(u,i){ u._i=i; var g=u.mx?'Maintenance':(u.rsv?'Reserve':typeOf(u.cs).g); (groups[g]=groups[g]||[]).push(u); });   /* shop-bound rigs file under Maintenance regardless of type */
   var html='';
   GROUP_ORDER.forEach(function(g){
     if(!groups[g]) return;
@@ -322,12 +328,13 @@ function render(){
     html+='<div class="grp-h">'+esc(g)+' <span class="n">'+groups[g].length+'</span></div>';
     groups[g].forEach(function(u){
       var t=typeOf(u.cs);
-      html+='<div class="unit-row" data-i="'+u._i+'">'
+      html+='<div class="unit-row'+(u.mx?' mxrow':'')+'" data-i="'+u._i+'">'
         +'<div><input class="cs'+(String(u.cs||'').length>8?' sm':'')+'" value="'+esc(u.cs||'')+'" placeholder="&mdash;" maxlength="26" autocapitalize="characters" autocomplete="off"><div class="reg">'+esc(u.reg)+'</div>'
         +'<div class="mkrow">'+(u.yr?'<span class="yr">'+esc(u.yr)+'</span>':'')+'<input class="mk-in" value="'+esc(u.mk||'')+'" placeholder="make / model" maxlength="48" autocomplete="off"></div>'+'<input class="nt-in" value="'+esc(u.nt||'')+'" placeholder="Notes" maxlength="140" autocomplete="off">'
         +'<button class="fam '+(u.fam||'rb')+'" type="button" title="Tap to cycle lightbar style">'+barLabel(u.fam)+'</button>'
         +(u.cmd?'<span class="fam cmd" style="margin-left:4px">CMD</span>':'')
-        +'<button class="rsv'+(u.rsv?' on':'')+'">RESERVE</button></div>'
+        +'<button class="rsv'+(u.rsv?' on':'')+'">RESERVE</button>'
+        +'<button class="mxb'+(u.mx?' on':'')+'" title="In for maintenance — callsign leaves the selectable fleet">MX</button></div>'
         +'<div class="mid">'
           +'<div class="seg" role="group">'
             +'<button data-v="always" class="'+(u.vis==='always'?'on':'')+'">ALWAYS</button>'
@@ -342,6 +349,14 @@ function render(){
   });
   host.innerHTML=html;
   avlPaint();   /* re-render wipes the rows — restamp the live-GPS badges from the last poll */
+}
+function csParts(cs){ return String(cs||'').toUpperCase().split('/').map(function(s){return s.trim();}).filter(Boolean); }
+function activeDup(){   /* first callsign part carried by TWO+ in-service rigs, else null */
+  var seen={};
+  for(var i=0;i<roster.units.length;i++){ var u=roster.units[i]; if(u.mx) continue;
+    var ps=csParts(u.cs);
+    for(var k=0;k<ps.length;k++){ if(seen[ps[k]]) return ps[k]; seen[ps[k]]=1; } }
+  return null;
 }
 function markDirty(){
   dirty=true;
@@ -371,6 +386,19 @@ document.getElementById('roster').addEventListener('click',function(ev){
     u.fam=order[(order.indexOf(u.fam||'rb')+1)%order.length];
     u.fmo=1;                                   /* manual override — auto-detect keeps hands off now */
     markDirty(); render(); return;
+  }
+  if(ev.target.classList.contains('mxb')){
+    if(u.mx){   /* returning to service: only if no in-service rig holds this callsign */
+      var mine=csParts(u.cs), clash=null;
+      roster.units.forEach(function(o){ if(o===u||o.mx) return;
+        csParts(o.cs).forEach(function(p){ if(mine.indexOf(p)>=0) clash=p; }); });
+      if(clash){
+        var st0=document.getElementById('stat');
+        st0.textContent='⚠ '+clash+' is riding an in-service rig — clear it there before returning this one'; st0.className='stat bad';
+        return;
+      }
+    }
+    u.mx=u.mx?0:1; markDirty(); render(); return;
   }
   if(ev.target.classList.contains('rsv')){
     if(u.rsv&&!u.cs){                      /* leaving reserve needs a callsign first */
@@ -564,6 +592,8 @@ function load(){
 document.getElementById('save').addEventListener('click',function(){
   normalize();
   var stat=document.getElementById('stat');
+  var dup=activeDup();
+  if(dup){ stat.textContent='⚠ '+dup+' is on two IN-SERVICE rigs — a callsign can only ride one rig outside MX'; stat.className='stat bad'; return; }
   stat.textContent='saving…'; stat.className='stat';
   fetch(AUTH_URL+'/roster',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({pin:pin(),roster:roster,baseAt:roster.at||0})})   /* baseAt: prove this save is built on the current server copy */
