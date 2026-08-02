@@ -104,9 +104,7 @@
   #avlSave { background: #1F6FEB; border-color: #1F6FEB; color: #fff; }
   #avlSkip { background: transparent; color: #8B949E; }
   #avlOff { display: block; width: 100%; margin-top: 12px; background: transparent; border: none; color: #8B949E; font-size: 11px; letter-spacing: 1px; text-decoration: underline; cursor: pointer; }
-  #avlPick { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 11px; }
-  #avlPick .avlpk { background: #0D1117; border: 1px solid #30363D; border-radius: 999px; color: #E6EDF3; font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 1px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
-  #avlPick .avlpk.on { border-color: #1F6FEB; background: #1F6FEB; }
+  #avlPick { width: 100%; box-sizing: border-box; background: #0D1117; border: 1px solid #30363D; border-radius: 8px; color: #E6EDF3; font-family: 'DM Mono', monospace; font-size: 15px; padding: 11px 12px; margin-bottom: 11px; min-height: 44px; }   /* fleet-roster dropdown — Samsara feeds this same menu when it goes live */
   .mapgrid { position: absolute; top: 8px; right: 10px; font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 1px; color: #E6EDF3; background: rgba(13,17,23,.9); border: 1px solid #30363D; border-radius: 6px; padding: 1px 8px; }   /* map-book grid in the corner where a driver's eye goes first */
   .ccard:has(.mapgrid) .ty { padding-right: 72px; }   /* keep a long type name from running under the grid chip */
   .ccard .ty { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 1px; color: #F85149; line-height: 1.05; }
@@ -1266,20 +1264,20 @@
   const avlDlg = document.createElement("div");
   avlDlg.id = "avlDlg";
   avlDlg.innerHTML = '<div class="bx"><h3>Unit Tracking</h3>' +
-    '<p>GPS fix confirmed. Tap this rig&#8217;s radio callsign (from the fleet roster) or type it — its position will show on the other MDTs and the wall board until this browser session ends. Leave blank to keep GPS private to this screen.</p>' +
-    '<div id="avlPick"></div>' +
+    '<p>GPS fix confirmed. Pick this rig&#8217;s radio callsign from the fleet roster or type it — its position will show on the other MDTs and the wall board until this browser session ends. Leave blank to keep GPS private to this screen.</p>' +
+    '<select id="avlPick"><option value="">Fleet Roster&hellip;</option></select>' +
     '<input id="avlIn" maxlength="8" placeholder="BC231" autocomplete="off">' +
     '<div class="row"><button id="avlSkip">Not Now</button><button id="avlSave">Save</button></div>' +
     '<button id="avlOff" type="button">Turn Off GPS This Session</button></div>';
   document.body.appendChild(avlDlg);
-  function avlPickFill(units) {   /* fleet-roster callsigns as tap-chips — no typo drift between roster and broadcast */
+  function avlPickFill(units) {   /* fleet-roster callsigns, A-Z, in the dropdown — no typo drift between roster and broadcast */
     const seen = {}, list = [];
     (units || []).forEach(u => String(u.cs || "").toUpperCase().split("/").forEach(part => {   /* slash-shared callsigns (BR232/BT232) offer each half */
       const c = part.trim();
       if (/^[A-Z0-9-]{2,8}$/.test(c) && !seen[c]) { seen[c] = 1; list.push(c); }
     }));
     list.sort();
-    $("avlPick").innerHTML = list.map(c => '<button type="button" class="avlpk' + (c === avlUnit ? " on" : "") + '">' + esc(c) + "</button>").join("");
+    $("avlPick").innerHTML = '<option value="">Fleet Roster&hellip;</option>' + list.map(c => '<option value="' + esc(c) + '"' + (c === avlUnit ? " selected" : "") + ">" + esc(c) + "</option>").join("");
   }
   function avlShowEnable() { avlChip.dataset.mode = "enable"; avlChip.className = "idle"; avlChip.innerHTML = '<span class="avld"></span>Enable Unit Tracking'; avlChip.style.display = "flex"; }
   function avlAskOpen(auto) {
@@ -1289,10 +1287,8 @@
     else if (PIN) fetch(WORKER + "/roster?pin=" + encodeURIComponent(PIN)).then(r => r.json())
       .then(j => { if (j && j.ok && j.roster) { avlRoster = j.roster.units || []; avlPickFill(avlRoster); } }).catch(() => {});   /* roster unreachable -> typing still works */
   }
-  avlDlg.addEventListener("click", (e) => {
-    const b = e.target.closest(".avlpk"); if (!b) return;
-    $("avlIn").value = b.textContent;
-    avlDlg.querySelectorAll(".avlpk.on").forEach(x => x.classList.remove("on")); b.classList.add("on");
+  avlDlg.addEventListener("change", (e) => {
+    if (e.target && e.target.id === "avlPick" && e.target.value) $("avlIn").value = e.target.value;   /* picking from the roster fills the write-in; the write-in stays the single source of truth */
   });
   $("avlSkip").addEventListener("click", () => { avlDlg.style.display = "none"; try { localStorage.setItem("avlAsked", "1"); } catch (e) {} avlChipDraw(null); });
   $("avlSave").addEventListener("click", () => {
