@@ -917,7 +917,7 @@ function segSet(wrapId, val){
 }
 function activeMed(){
   if(state.med.mode==='default') return DEFAULT_MED;
-  if(state.med.end && new Date() > new Date(state.med.end)) return DEFAULT_MED; // auto-revert
+  if(state.med.end && (function(){ var t=ctParse(state.med.end); return !isNaN(t) && Date.now()>t; })()) return DEFAULT_MED; // auto-revert — CENTRAL wall-clock, same rule as the board
   if(state.med.mode==='alternate') return ALT_MED;
   return { name: state.med.custom.name||'(custom)', role:'Alternate', phone: state.med.custom.phone||'—' };
 }
@@ -1086,7 +1086,9 @@ function segClick(wrapId, cb){
     cb(b.getAttribute('data-v')); hydrate();
   });
 }
-segClick('segMed', function(v){ state.med.mode=v; });
+segClick('segMed', function(v){ state.med.mode=v;
+  if(v!=='default' && state.med.end){ var t=ctParse(state.med.end); if(!isNaN(t) && Date.now()>t){ state.med.end=''; $('medEnd').value=''; } }   /* a PAST end-window silently vetoes the flip on the board (revert outranks mode) — picking a new doc clears the stale window */
+});
 segClick('segFlag', function(v){ state.fire.redFlag=v; if(v==='on') state.flood.mode='off'; });   /* fire + flood share one slot — never both forced on */
 segClick('segB121', function(v){ state.teams.b121=(v==='on'); updateExpVis(); });
 segClick('segMac121', function(v){ state.teams.mac121=(v==='on'); updateExpVis(); });

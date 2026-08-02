@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════
    BC2FD STATION DASHBOARD — SERVICE WORKER
-   CACHE: bc2fd-dash-v174   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
+   CACHE: bc2fd-dash-v176   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
    The bump is what makes the wall TV self-update: new bytes here →
    browser installs the new SW → skipWaiting/claim → the board's
    controllerchange listener silently reloads. No hands on the TV.
@@ -12,14 +12,15 @@
    own fail-loud semantics.
    ═══════════════════════════════════════════════════════════════════ */
 
-var CACHE = 'bc2fd-dash-v174';
+var CACHE = 'bc2fd-dash-v176';
 /* drone-broken.png is precached deliberately: it is the art shown when the relay is UNREACHABLE,
    so fetching it on demand would mean requesting it at exactly the moment the network is failing.
    Its pair is precached too so the two states swap without a flash on first failure. */
 var SHELL = ['./', 'cameras.json', 'index.html', 'control.html', 'metrics.html', 'mdt.html', 'fleet.html', 'report.html',
              'vendor/leaflet-1.9.4.js', 'vendor/leaflet-1.9.4.css', 'vendor/hls-1.5.15.min.js',
              'vendor/images/layers.png', 'vendor/images/layers-2x.png',   /* the layers-control button IS an image — vendoring the css without these broke the button on every map */
-             'helo-med.png', 'helo-med@2x.png', 'helo-air.png', 'helo-air@2x.png',,   /* vendored libs: the map draws with zero CDN reachability */
+             'helo-med.png', 'helo-med@2x.png', 'helo-air.png', 'helo-air@2x.png',
+             'roadclosure.png', 'roadclosure@2x.png',,   /* vendored libs: the map draws with zero CDN reachability */
              'hydrants.json',                                                                      /* ~2 MB, deliberate: offline tender logic is worth it */
              'bexar-county.json', 'district-bounds.json', 'fleet-seed.json',
              'drone-idle.png', 'drone-broken.png'];   /* the cab page is the one most likely to be offline — it belongs in the shell */

@@ -1278,10 +1278,12 @@
         .then(function(r){return r.json();}).then(function(j){
           if(!j||!j.ok) return;
           rwWallLayer.clearLayers();
+          var rwIc=L.icon({iconUrl:"roadclosure.png",iconRetinaUrl:"roadclosure@2x.png",iconSize:[24,24],iconAnchor:[12,12]});
           (j.items||[]).forEach(function(it){
-            var col=it.k==="incident"?"#FF8C42":"#8B949E";
-            L.circleMarker([it.la,it.ln],{radius:6,color:"#0D1117",weight:2,fillColor:col,fillOpacity:.95})
-              .bindPopup('<b>'+String(it.ty).replace(/[<>&]/g,"").toUpperCase()+'</b><br>'+String(it.tx).replace(/[<>&]/g,""),{maxWidth:250})
+            var mk2=it.k==="incident"
+              ? L.circleMarker([it.la,it.ln],{radius:6,color:"#0D1117",weight:2,fillColor:"#FF8C42",fillOpacity:.95})
+              : L.marker([it.la,it.ln],{icon:rwIc,keyboard:false});
+            mk2.bindPopup('<b>'+String(it.ty).replace(/[<>&]/g,"").toUpperCase()+'</b><br>'+String(it.tx).replace(/[<>&]/g,""),{maxWidth:250})
               .addTo(rwWallLayer);
           });
         }).catch(function(){});
@@ -1542,7 +1544,7 @@
       if(window.FLOOD_ACTIVE) return true;
       /* Match the EVENT TEXT, not band classes — "Heat Advisory" wears the default warning class, and
          class-matching would paint radar over a 100° clear day. Radar is for precip/wind events only. */
-      var b=document.querySelectorAll("#nwsSrc .al-band .al-ev");
+      var b=document.querySelectorAll("#nwsSrc .al-band");   /* WHOLE band text: an SWS title says nothing — the storm words ride the detail line (observed 2026-08-01: live storms under a Special Weather Statement left radar dark) */
       for(var i=0;i<b.length;i++){ if(/TORNADO|THUNDER|FLOOD|SEVERE|STORM|HURRICANE|TROPICAL|HAIL|WIND/i.test(b[i].textContent||"")) return true; }
       return false;
     }
