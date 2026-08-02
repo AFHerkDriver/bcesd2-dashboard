@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 5;
+const WORKER_VERSION = 6;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1528,7 +1528,11 @@ export default {
       try { b = await req.json(); } catch (e) { return json({ ok: false, error: "bad json" }, 400); }
       const gate = await pinGate(env, ip, b.pin, json);
       if (gate.res) return gate.res;
-      if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "display-only" }, 403);   /* the wall TV\u2019s kiosk PIN must not be able to invent apparatus positions — same write wall as /state and /roster */
+      /* NO board-tier wall here, deliberately (build 6): the shared STATION PIN is what every MDT
+         signs in with — field-proven 2026-08-01 when the wall broke all broadcasting with zero
+         security gain (a kiosk-credential attacker holds the same PIN the rigs post with).
+         Compensating controls: valid PIN required, charset-locked unit, greater-SA bounds,
+         accuracy gate, 50-unit cap, 150 s expiry, no history. /state and /roster keep their walls. */
       const unit = String(b.unit || "").trim().toUpperCase();
       if (!/^[A-Z0-9-]{2,8}$/.test(unit)) return json({ ok: false, error: "bad unit" }, 400);   /* charset-locked — this string lands in other MDTs\u2019 DOM (they escape too; defense in depth) */
       const la = +b.la, ln = +b.ln, acc = +b.acc;

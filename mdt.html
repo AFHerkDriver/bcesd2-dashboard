@@ -1263,7 +1263,7 @@
   let avlGood = localStorage.getItem("avlGood") === "1";                     /* device has proven real GPS at least once */
   let avlDev = "";                                                           /* per-device id — makes a duplicate-callsign claim visible instead of silently flapping */
   try { avlDev = localStorage.getItem("avlDev") || ""; if (!avlDev) { avlDev = Math.random().toString(36).slice(2, 10); localStorage.setItem("avlDev", avlDev); } } catch (e) {}
-  let avlSyncErr = false, avlFixAt = 0, avlWatchId = null, avlLastAcc = null, avlHdg = null, avlLastOk = 0, avlDlgAuto = false;
+  let avlSyncErr = false, avlSyncMsg = "", avlFixAt = 0, avlWatchId = null, avlLastAcc = null, avlHdg = null, avlLastOk = 0, avlDlgAuto = false;
   const avlMks = {};                                                         /* unit -> live marker, updated in place (no clear/rebuild — taps and popups survive) */
   const avlChip = document.createElement("div");
   avlChip.id = "avlChip";
@@ -1328,10 +1328,10 @@
       avlChip.style.display = "flex"; return;
     }
     const who = avlLive ? ('<b>' + esc(avlLive) + '</b>') : 'GPS';
-    if (fix === "err") { avlChip.className = "err"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; sync failed'; }
+    if (fix === "err") { avlChip.className = "err"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; sync failed' + (avlSyncMsg ? " — " + esc(avlSyncMsg) : ""); }
     else if (fix === "nofix") { avlChip.className = "err"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; no fix'; }
     else if (avlSyncErr && avlLive && PIN) {   /* every repaint path respects a failing broadcast — Not Now / Save must not paint green over it */
-      avlChip.className = "err"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; sync failed';
+      avlChip.className = "err"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; sync failed' + (avlSyncMsg ? " — " + esc(avlSyncMsg) : "");
     }
     else if (!isFinite(avlLastAcc)) {
       avlChip.className = "idle"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; acquiring&hellip;';   /* went live before the first fix of the session */
@@ -1368,8 +1368,8 @@
       avlLastPost = now; avlLastLL = [la, ln];
       fetch(WORKER + "/avl", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin: PIN, unit: avlLive, la, ln, acc, spd: p.coords.speed, hdg: p.coords.heading, dev: avlDev }) })
-        .then(r => r.json()).then(j => { if (!j || !j.ok) { avlSyncErr = true; avlChipDraw("err"); } else avlSyncErr = false; })
-        .catch(() => { avlSyncErr = true; avlChipDraw("err"); });
+        .then(r => r.json()).then(j => { if (!j || !j.ok) { avlSyncErr = true; avlSyncMsg = String((j && j.error) || "no reply").slice(0, 40); avlChipDraw("err"); } else { avlSyncErr = false; avlSyncMsg = ""; } })
+        .catch(() => { avlSyncErr = true; avlSyncMsg = "offline"; avlChipDraw("err"); });
     }, function (e) {
       if (e && e.code === 1) {
         if (avlWatchId != null) { try { navigator.geolocation.clearWatch(avlWatchId); } catch (e2) {} avlWatchId = null; }
