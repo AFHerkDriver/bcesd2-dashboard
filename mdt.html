@@ -1161,7 +1161,8 @@
       heloLayer.clearLayers();
       const tgt = lastTop.length && lastTop[0].lat != null && !lastTop[0].gs ? lastTop[0] : null;
       (j.helos || []).forEach(h => {
-        const badge = h.med ? "helo-med" : (/^(EAGLE|DPS|POACHER)$/.test(String(h.le || "")) ? ("le-" + String(h.le).toLowerCase()) : "");   /* dept badge set: red cross = HEMS, blue circles = SAPD/DPS, green = game warden */
+        const FIREART = { "TANKER": "le-tanker", "AIR ATTACK": "le-airattack", "LEAD": "le-airattack", "FIRE AIR": "le-fireair" };   /* amber fixed-wing badges — a SEAT is not a helicopter, and the old gray rotor silhouette said it was */
+        const badge = h.med ? "helo-med" : (FIREART[String(h.fire || "")] || (/^(EAGLE|DPS|POACHER)$/.test(String(h.le || "")) ? ("le-" + String(h.le).toLowerCase()) : ""));   /* dept badge set: red cross = HEMS, amber wings = aerial suppression, blue circles = SAPD/DPS, green = game warden */
         const rot = badge ? 0 : (isFinite(+h.trk) ? +h.trk : 0);   /* style-attribute sink — numbers only. Round badges stay upright; only the directional gray silhouette rotates to heading */
         const ic = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15],
           html: '<div style="transform:rotate(' + rot + 'deg);width:30px;height:30px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="' + (badge || "helo-air") + '.png" srcset="' + (badge || "helo-air") + '@2x.png 2x" width="28" style="display:block;margin:1px auto"></div>' });

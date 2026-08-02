@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════
    BC2FD STATION DASHBOARD — SERVICE WORKER
-   CACHE: bc2fd-dash-v190   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
+   CACHE: bc2fd-dash-v191   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
    The bump is what makes the wall TV self-update: new bytes here →
    browser installs the new SW → skipWaiting/claim → the board's
    controllerchange listener silently reloads. No hands on the TV.
@@ -12,7 +12,7 @@
    own fail-loud semantics.
    ═══════════════════════════════════════════════════════════════════ */
 
-var CACHE = 'bc2fd-dash-v190';
+var CACHE = 'bc2fd-dash-v191';
 /* drone-broken.png is precached deliberately: it is the art shown when the relay is UNREACHABLE,
    so fetching it on demand would mean requesting it at exactly the moment the network is failing.
    Its pair is precached too so the two states swap without a flash on first failure. */
@@ -23,6 +23,7 @@ var SHELL = ['./', 'cameras.json', 'index.html', 'control.html', 'metrics.html',
              'roadclosure.png', 'roadclosure@2x.png',
              'ownship.png', 'ownship@2x.png',
              'le-eagle.png', 'le-eagle@2x.png', 'le-dps.png', 'le-dps@2x.png', 'le-poacher.png', 'le-poacher@2x.png',
+             'le-tanker.png', 'le-tanker@2x.png', 'le-airattack.png', 'le-airattack@2x.png', 'le-fireair.png', 'le-fireair@2x.png',
              'unit-blank-app.png', 'unit-blank-rb.png',   /* vendored libs: the map draws with zero CDN reachability */
              'hydrants.json',                                                                      /* ~2 MB, deliberate: offline tender logic is worth it */
              'bexar-county.json', 'district-bounds.json', 'fleet-seed.json',
