@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 10;
+const WORKER_VERSION = 11;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1612,6 +1612,7 @@ export default {
            Marconi-dedication H125, not in any db at build time. */
         const LEW = {
           "a03120": ["EAGLE", "SAPD EAGLE N111NK"], "a0f47b": ["EAGLE", "SAPD EAGLE N1603M"], "a77ed1": ["EAGLE", "SAPD EAGLE N582RD"],
+          "a462dd": ["EAGLE", "SAPD EAGLE N382BM"],   /* the Marconi ship — live-verified 2026-08-02; registered to CITY OF SAN ANTONIO, in no registry database at build time */
           "a6894b": ["EAGLE", "SAPD EAGLE N520DT"], "a75995": ["EAGLE", "SAPD EAGLE N573AG"], "ab322c": ["EAGLE", "SAPD EAGLE N820PM"],
           "a2a7d6": ["POACHER", "POACHER N270PW"], "a3e627": ["POACHER", "POACHER N350PW"],
           "a0644d": ["DPS", "DPS N124TX"], "a0a2d2": ["DPS", "DPS N140BJ"], "a0a46f": ["DPS", "DPS N140TX"],
@@ -1622,7 +1623,7 @@ export default {
           "a7c6a5": ["DPS", "DPS N60TX"], "a8ec53": ["DPS", "DPS N674TX"], "a95dbb": ["DPS", "DPS N702TX"],
           "ab4176": ["DPS", "DPS N824TX"], "ab9074": ["DPS", "DPS N844TX"], "ac6e92": ["DPS", "DPS N90TX"]
         };
-        const LE_OPS = /san antonio police|public safety|texas dps|parks\s*(&|and)\s*wildlife|game warden|bexar county|sheriff/i;   /* Bexar SO had no ship of its own as of 2026-08 (borrows SAPD/DPS) — the regex catches theirs the day it flies */
+        const LE_OPS = /san antonio police|city of san antonio|public safety|texas dps|parks\s*(&|and)\s*wildlife|game warden|bexar county|sheriff/i;   /* \u201ccity of san antonio\u201d because SAPD aircraft are registered to the CITY, not the department — that is how N382BM slipped through. Bexar SO had no ship of its own as of 2026-08 (borrows SAPD/DPS); the regex catches theirs the day it flies */
         /* FIRE AVIATION — Texas suppression aircraft are contracted call-when-needed, so tails
            rotate seasonally and a hex list would rot. Match the NIFC/FAA callsign conventions
            in the flight field instead (they are assigned per-incident and are stable), plus the
@@ -1654,7 +1655,7 @@ export default {
           const rotor = String(a.category || "") === "A7" && !(typ && FIXED.test(typ));
           const listed = WATCH[hex] || (a.ownOp && OPS.test(String(a.ownOp)));
           const lw = LEW[hex];
-          const le = lw ? lw[0] : (a.ownOp && LE_OPS.test(String(a.ownOp)) ? (/san antonio police/i.test(String(a.ownOp)) ? "EAGLE" : /wildlife|game/i.test(String(a.ownOp)) ? "POACHER" : /bexar|sheriff/i.test(String(a.ownOp)) ? "BCSO" : "DPS") : null);
+          const le = lw ? lw[0] : (a.ownOp && LE_OPS.test(String(a.ownOp)) ? (/san antonio police|city of san antonio/i.test(String(a.ownOp)) ? "EAGLE" : /wildlife|game/i.test(String(a.ownOp)) ? "POACHER" : /bexar|sheriff/i.test(String(a.ownOp)) ? "BCSO" : "DPS") : null);
           const fcall = String(a.flight || "").trim();
           /* MILITARY: US military ICAO allocation is AE0000-AFFFFF; the feed also sets a
              military flag bit. Either is sufficient — these ships carry no operator name. */

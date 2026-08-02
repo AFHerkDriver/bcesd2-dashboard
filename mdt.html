@@ -1191,7 +1191,8 @@
             const ttl = h.op || h.reg || h.hex, TU = String(ttl).toUpperCase();
             const has = (v) => v && TU.indexOf(String(v).toUpperCase()) >= 0;
             let d = '';
-            if (h.call && !has(h.call)) d += '<br>callsign ' + esc(h.call);
+            const sameAsReg = h.call && h.reg && String(h.call).toUpperCase() === String(h.reg).toUpperCase();
+            if (h.call && !has(h.call) && !sameAsReg) d += '<br>callsign ' + esc(h.call);   /* a ship squawking its own registration does not need the line twice */
             if (h.reg && !has(h.reg)) d += '<br>' + esc(h.reg) + (h.type ? ' (' + esc(h.type) + ')' : '');
             else if (h.type && !has(h.type)) d += '<br>' + esc(h.type);
             return '<div class="hyd-pop"><b>' + esc(ttl) + '</b>' +
