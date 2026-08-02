@@ -151,13 +151,15 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 4;
+const WORKER_VERSION = 5;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
 function addrKey(ad) { return String(ad || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").replace(/\s+/g, " ").trim(); }
 
 let heloMem = { at: 0, out: null };   /* /helos in-isolate cache — see the route for why KV can't do this */
+let avlMem = { units: {}, kvAt: 0 };
+let avlGetMem = { at: 0, kv: null };   /* /avl GET-side KV memo — reads share the same daily budget as writes */   /* /avl hot store — in-isolate for the same reason (KV free tier caps writes/day; a 10 s report cadence would burn it in hours). KV holds a 90 s snapshot as the cross-isolate backstop. */
 
 /* Google-polyline decoder — Kubra outage tiles encode geom.p as polylines (verified live). */
 function plDecode(s) {
@@ -602,7 +604,8 @@ function ctDate(iso) {
    Returns { who } with the parsed PIN record, or { res } — a Response to return immediately. */
 async function pinGate(env, ip, rawPin, json, errMsg) {
   const rlKey = "rl:" + ip;
-  const fails = parseInt((await env.PINS.get(rlKey)) || "0", 10);
+  let fails = 0;
+  try { fails = parseInt((await env.PINS.get(rlKey)) || "0", 10); } catch (e) { return { res: json({ ok: false, error: "auth store unavailable" }, 503) }; }   /* KV down/over-quota must degrade LOUD (503) — an uncaught throw here would 500 dispatch and weather district-wide */
   const deny = () => json({ ok: false, error: errMsg || "unauthorized" }, 401);
   if (fails >= 8) return { res: json({ ok: false, error: "rate-limited" }, 429) };
   const bump = async () => {
@@ -610,7 +613,8 @@ async function pinGate(env, ip, rawPin, json, errMsg) {
   };
   const pin = String(rawPin || "").trim();
   if (!/^\d{4,8}$/.test(pin)) return { res: deny() };   /* format-invalid (usually the EMPTY pin an idle board polls with) is denied but NOT counted — counting it lets a locked kiosk rate-limit the whole station NAT; brute-forcers must send format-valid pins, so the counter still guards the oracle */
-  const rec = await env.PINS.get("pin:" + pin);
+  let rec = null;
+  try { rec = await env.PINS.get("pin:" + pin); } catch (e) { return { res: json({ ok: false, error: "auth store unavailable" }, 503) }; }
   if (!rec) { await bump(); return { res: deny() }; }
   let who = {};
   try { who = JSON.parse(rec); } catch { /* value not JSON — still a valid PIN */ }
@@ -1515,6 +1519,71 @@ export default {
       } catch (e) { return json({ ok: false, error: "roadwork error" }, 502); }
     }
 
+    /* ── AVL — poor-man's Samsara: each MDT self-reports its position, every MDT sees every unit.
+       Retention, honestly stated: the feed hides any fix older than 150 s; the LAST fix per unit
+       lingers up to 240 s in the KV snapshot and up to ~5 min in isolate RAM before the prune —
+       latest fix only, never a track history (same PII stance as call narratives). ── */
+    if (req.method === "POST" && url.pathname === "/avl") {
+      let b = {};
+      try { b = await req.json(); } catch (e) { return json({ ok: false, error: "bad json" }, 400); }
+      const gate = await pinGate(env, ip, b.pin, json);
+      if (gate.res) return gate.res;
+      if ((gate.who.tier || "officer") === "board") return json({ ok: false, error: "display-only" }, 403);   /* the wall TV\u2019s kiosk PIN must not be able to invent apparatus positions — same write wall as /state and /roster */
+      const unit = String(b.unit || "").trim().toUpperCase();
+      if (!/^[A-Z0-9-]{2,8}$/.test(unit)) return json({ ok: false, error: "bad unit" }, 400);   /* charset-locked — this string lands in other MDTs\u2019 DOM (they escape too; defense in depth) */
+      const la = +b.la, ln = +b.ln, acc = +b.acc;
+      if (!isFinite(la) || !isFinite(ln) || la < 28.8 || la > 30.2 || ln < -99.5 || ln > -97.8) return json({ ok: false, error: "out of area" }, 400);   /* greater-San-Antonio box — mutual aid fits, a rig \u201cbroadcasting\u201d from Houston does not */
+      if (!isFinite(acc) || acc < 0 || acc > 250) return json({ ok: false, error: "coarse fix" }, 400);   /* a wifi guess is not a unit position — the MDT already refuses to send these; refuse here too */
+      const now = Date.now();
+      for (const u in avlMem.units) { if (now - avlMem.units[u].t > 300000) delete avlMem.units[u]; }   /* prune dead entries — RAM holds nothing older than ~5 min */
+      if (!avlMem.units[unit] && Object.keys(avlMem.units).length >= 50) return json({ ok: false, error: "unit table full" }, 429);   /* blast-radius cap — 50 far exceeds the real fleet; a scripted PIN cannot flood every MDT map */
+      avlMem.units[unit] = { la: +la.toFixed(5), ln: +ln.toFixed(5), acc: Math.round(acc),
+        spd: (b.spd != null && isFinite(+b.spd) && +b.spd >= 0) ? Math.round(+b.spd * 10) / 10 : null,   /* geolocation reports null (or -1 on some Safaris) for UNKNOWN — +null is 0, and \u201c0 mph\u201d on a rig doing 60 is a confident lie */
+        hdg: (b.hdg != null && isFinite(+b.hdg) && +b.hdg >= 0) ? Math.round(+b.hdg) : null,
+        dev: /^[a-z0-9]{4,16}$/i.test(String(b.dev || "")) ? String(b.dev) : null,   /* per-device id so a duplicate callsign claim is VISIBLE to both claimers instead of silently flapping */
+        t: now };
+      /* KV snapshot — read-merge-write, CONTENT-AWARE: an isolate writes only when it actually
+         holds something newer than the stored copy. No global write clock — a review round
+         proved one (_at) lets a single isolate win every epoch and silently starve the other
+         isolate's units off every board. Each posting isolate refreshes its own units at most
+         every 140 s (under the 150 s stale filter, so they never flap off other feeds);
+         ~600 writes/day per posting isolate, and units only post during active tracking. */
+      if (now - avlMem.kvAt > 140000) {
+        avlMem.kvAt = now;
+        try {
+          const prev = JSON.parse((await env.PINS.get("avl")) || "{}");
+          let fold = 0;
+          for (const u in prev) { if (u === "_at") continue; const k = prev[u]; if (k && isFinite(+k.t) && now - k.t <= 300000 && (!avlMem.units[u] || k.t > avlMem.units[u].t) && ++fold <= 60) avlMem.units[u] = k; }   /* fold other isolates\u2019 fresh units (newer t wins, capped) — never resurrect the long-dead */
+          const newer = Object.keys(avlMem.units).some(u => { const p = prev[u]; return !p || !isFinite(+p.t) || avlMem.units[u].t - (+p.t || 0) > 30000; });
+          if (newer) await env.PINS.put("avl", JSON.stringify(avlMem.units), { expirationTtl: 240 });
+        } catch (e) { /* backstop only — never block a position report on it */ }
+      }
+      return json({ ok: true }, 200);
+    }
+    if (req.method === "GET" && url.pathname === "/avl") {
+      const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
+      if (gate.res) return gate.res;
+      const now = Date.now();
+      if (now - avlGetMem.at > 10000) {   /* memo the KV read 10 s per isolate — several boards poll every 15 s and reads share the same free-tier budget */
+        avlGetMem.at = now;
+        try { avlGetMem.kv = JSON.parse((await env.PINS.get("avl")) || "{}"); } catch (e) { avlGetMem.kv = avlGetMem.kv || {}; }
+      }
+      const merged = {};
+      for (const u in avlGetMem.kv) { if (u !== "_at") merged[u] = avlGetMem.kv[u]; }
+      for (const u in avlMem.units) { if (!merged[u] || avlMem.units[u].t > merged[u].t) merged[u] = avlMem.units[u]; }
+      const units = [];
+      for (const u in merged) {
+        const p = merged[u];
+        if (!p || !isFinite(+p.la) || !isFinite(+p.ln) || !isFinite(+p.t)) continue;
+        if (now - p.t > 150000) continue;   /* stale = absent — a 3-minute-old pin is a lie about where the unit is */
+        units.push({ u, la: +p.la, ln: +p.ln, acc: +p.acc || 0,
+          spd: (p.spd != null && isFinite(+p.spd)) ? +p.spd : null, hdg: (p.hdg != null && isFinite(+p.hdg)) ? +p.hdg : null,
+          dev: p.dev || null, age: Math.max(0, Math.round((now - p.t) / 1000)) });
+        if (units.length >= 60) break;   /* defense in depth against a pre-poisoned snapshot */
+      }
+      return json({ ok: true, units }, 200);
+    }
+
     /* ── GET /helos?pin — medevac/rotorcraft near the district. airplanes.live primary (free, 1 req/s
        cap), adsb.fi fallback (same readsb schema, but v2 lat/lon nests under "aircraft"). 12 s KV
        cache shares one upstream poll across every board. Watchlist = confirmed HEMS ships serving
@@ -1527,6 +1596,26 @@ export default {
         if (heloMem.out && Date.now() - heloMem.at < 12000) return json(heloMem.out, 200);   /* in-isolate 12 s cache — KV's 60 s TTL floor makes it useless here (a put under 60 s THROWS; that bug once 502'd this whole route) */
         const WATCH = { "a3b393": "AirLIFE N338AM", "adbb18": "AirLIFE N984ME", "aa58ea": "AirLIFE N766ME" };   /* confirmed hexes; ownOp match below catches the rest of the fleets */
         const OPS = /air\s*methods|reach\s*air|med[-\s]?trans|air\s*evac|methodist|airlife/i;
+        /* LAW-ENFORCEMENT watchlist — verified 2026-08-01 (hexdb.io cross-checked against the FAA
+           N-number encoding; algorithm reproduced all 22 db-known pairs before computing the rest).
+           Tags are the LOCAL RADIO CALLSIGNS (per BC2FD): EAGLE = SAPD, DPS = troopers,
+           POACHER = TPWD game wardens. SAPD (KSSF): 3 H125/AS350 + 3 retiring EC120s. TPWD: 2 H125.
+           TX DPS rotor fleet (DPS 107 = the San Antonio bird, but any can deploy here).
+           The LE_OPS regex is the safety net for tails not listed yet — e.g. SAPD's newest
+           Marconi-dedication H125, not in any db at build time. */
+        const LEW = {
+          "a03120": ["EAGLE", "SAPD EAGLE N111NK"], "a0f47b": ["EAGLE", "SAPD EAGLE N1603M"], "a77ed1": ["EAGLE", "SAPD EAGLE N582RD"],
+          "a6894b": ["EAGLE", "SAPD EAGLE N520DT"], "a75995": ["EAGLE", "SAPD EAGLE N573AG"], "ab322c": ["EAGLE", "SAPD EAGLE N820PM"],
+          "a2a7d6": ["POACHER", "POACHER N270PW"], "a3e627": ["POACHER", "POACHER N350PW"],
+          "a0644d": ["DPS", "DPS N124TX"], "a0a2d2": ["DPS", "DPS N140BJ"], "a0a46f": ["DPS", "DPS N140TX"],
+          "a0b702": ["DPS", "DPS N145TX"], "a16da1": ["DPS", "DPS N191TX"], "a1a29e": ["DPS", "DPS N204TX"],
+          "a1ecaf": ["DPS", "DPS N223FM"], "a2409a": ["DPS", "DPS N244TX"], "a33ec9": ["DPS", "DPS N308TX"],
+          "a3917e": ["DPS", "DPS N329TX"], "a411c2": ["DPS", "DPS N361TX"], "a4c0f3": ["DPS", "DPS N405TX"],
+          "a4ac07": ["DPS", "DPS N40TX"], "a4dc0b": ["DPS", "DPS N412F"], "a71774": ["DPS", "DPS N556TX"],
+          "a7c6a5": ["DPS", "DPS N60TX"], "a8ec53": ["DPS", "DPS N674TX"], "a95dbb": ["DPS", "DPS N702TX"],
+          "ab4176": ["DPS", "DPS N824TX"], "ab9074": ["DPS", "DPS N844TX"], "ac6e92": ["DPS", "DPS N90TX"]
+        };
+        const LE_OPS = /san antonio police|public safety|texas dps|parks\s*(&|and)\s*wildlife|game warden/i;
         let ac = null;
         try {
           const r1 = await fetch("https://api.airplanes.live/v2/point/29.38/-98.62/50", { headers: { "Accept": "application/json" } });
@@ -1544,15 +1633,17 @@ export default {
           const hex = String(a.hex || "").toLowerCase();
           const rotor = String(a.category || "") === "A7";
           const listed = WATCH[hex] || (a.ownOp && OPS.test(String(a.ownOp)));
-          if (!rotor && !listed) continue;
+          const lw = LEW[hex];
+          const le = lw ? lw[0] : (a.ownOp && LE_OPS.test(String(a.ownOp)) ? (/san antonio police/i.test(String(a.ownOp)) ? "EAGLE" : /wildlife|game/i.test(String(a.ownOp)) ? "POACHER" : "DPS") : null);
+          if (!rotor && !listed && !le) continue;   /* LE fixed-wing (DPS Pilatus overhead) rides in too — overhead LE traffic is intel */
           if (a.lat == null || a.lon == null) continue;
           const nla = +a.lat, nln = +a.lon;
           if (!isFinite(nla) || !isFinite(nln)) continue;
           helos.push({ hex: hex.replace(/[^a-f0-9]/g, ""), la: nla, ln: nln, reg: String(a.r || "").slice(0, 12), type: String(a.t || "").slice(0, 8),
-                       op: WATCH[hex] || String(a.ownOp || "").slice(0, 40),
+                       op: WATCH[hex] || (lw ? lw[1] : String(a.ownOp || "").slice(0, 40)),
                        call: String(a.flight || "").trim().slice(0, 12), alt: (a.alt_baro === "ground") ? 0 : (isFinite(+a.alt_baro) ? +a.alt_baro : null),
                        gs: isFinite(+a.gs) ? +a.gs : null, trk: isFinite(+a.track) ? +a.track : null,   /* NUMERIC COERCION AT THE SOURCE — these land in client innerHTML/style sinks */
-                       med: !!listed });   /* med: on the HEMS watchlist; plain A7 = any rotorcraft */
+                       med: !!listed, le: le || null });   /* med: HEMS watchlist; le: radio callsign the crews actually hear — EAGLE (SAPD), DPS (troopers), POACHER (game wardens) */
         }
         const out = { ok: true, helos, updated: new Date().toISOString() };
         heloMem = { at: Date.now(), out };

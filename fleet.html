@@ -102,6 +102,8 @@
   .unit-row input.cs.bad{color:var(--red);border-bottom-color:var(--red)}
   .unit-row input.cs.sm{font-size:18px}   /* slash-shared callsigns shrink to fit */
   .unit-row .reg{font-size:11px;color:var(--dim);letter-spacing:1px}
+  .gpslive{color:var(--green);font-size:10px;letter-spacing:1px;white-space:nowrap}   /* rig is broadcasting AVL right now */
+  .gpslive.stale{color:var(--dim)}   /* poll gap >45 s — the badge must not keep reading live */
   .unit-row .mk{font-size:11px;color:var(--dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* reserve chip — tap to toggle; checked = amber, callsign may stay blank */
   .unit-row .rsv{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);
@@ -282,6 +284,30 @@ var roster={v:1,units:[]};
 var dirty=false;
 function pin(){ try{ var a=JSON.parse(sessionStorage.getItem(SKEY)||'null'); return (a&&a.pin)||''; }catch(e){ return ''; } }
 
+/* ── live AVL — a green badge on any row whose callsign is broadcasting from an MDT right now ── */
+var lastAvl=[],lastAvlAt=0;
+function avlPaint(){
+  document.querySelectorAll('.unit-row').forEach(function(row){
+    var inp=row.querySelector('input.cs'); if(!inp) return;
+    var old=row.querySelector('.gpslive'); if(old) old.remove();
+    var parts=String(inp.value||'').toUpperCase().split('/').map(function(s){return s.trim();});
+    var gap=lastAvlAt?(Date.now()-lastAvlAt)/1000:1e9;
+    if(gap>150) return;   /* feed dead >150 s: no badge at all — same stale=absent rule as both boards */
+    var hit=null; lastAvl.forEach(function(u){ if(parts.indexOf(u.u)>=0) hit=u; });
+    if(!hit) return;
+    var reg=row.querySelector('.reg'); if(!reg) return;
+    reg.insertAdjacentHTML('beforeend',' <span class="gpslive'+(gap>45?' stale':'')+'">&#9679; GPS &plusmn;'+Math.round(+hit.acc||0)+' m &middot; '+(gap>45?'stale':(hit.age<5?'live':hit.age+' s'))+'</span>');
+  });
+}
+function avlTick(){
+  if(document.hidden||!pin()) return;
+  fetch(AUTH_URL+'/avl?pin='+encodeURIComponent(pin())).then(function(r){return r.json();}).then(function(j){
+    if(j&&j.ok){ lastAvl=j.units||[]; lastAvlAt=Date.now(); }
+    avlPaint();   /* repaint on EVERY outcome so the gap clock runs — a dead feed grays then clears the badges */
+  }).catch(function(){ avlPaint(); });
+}
+setInterval(avlTick,15000); setTimeout(avlTick,2500);
+
 /* ── render ── */
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 function render(){
@@ -315,6 +341,7 @@ function render(){
     });
   });
   host.innerHTML=html;
+  avlPaint();   /* re-render wipes the rows — restamp the live-GPS badges from the last poll */
 }
 function markDirty(){
   dirty=true;

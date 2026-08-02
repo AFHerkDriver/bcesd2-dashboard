@@ -1320,14 +1320,46 @@
           heloWallLayer.clearLayers();
           (j.helos||[]).forEach(function(h){
             var ic=L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
-              html:'<div style="transform:rotate('+(isFinite(+h.trk)?+h.trk:0)+'deg);width:26px;height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="'+(h.med?"helo-med.png":"helo-air.png")+'" srcset="'+(h.med?"helo-med@2x.png":"helo-air@2x.png")+' 2x" width="24" style="display:block;margin:1px auto"></div>'});   /* dept badge icons; rotated to live heading */
+              html:(function(){var bd=h.med?"helo-med":(/^(EAGLE|DPS|POACHER)$/.test(String(h.le||""))?("le-"+String(h.le).toLowerCase()):"");return '<div style="transform:rotate('+(bd?0:(isFinite(+h.trk)?+h.trk:0))+'deg);width:26px;height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="'+(bd||"helo-air")+'.png" srcset="'+(bd||"helo-air")+'@2x.png 2x" width="24" style="display:block;margin:1px auto"></div>';})()});   /* dept badges: HEMS cross + SAPD/DPS/POACHER circles stay upright; gray silhouette rotates to heading */
             L.marker([h.la,h.ln],{icon:ic,keyboard:false,zIndexOffset:600})
-              .bindTooltip(String(h.op||h.reg||h.hex).replace(/[<>&"]/g,"")+(isFinite(+h.alt)?(" · "+(+h.alt)+" ft"):""),{direction:"top",offset:[0,-10]})
+              .bindTooltip((h.le?String(h.le).replace(/[<>&"]/g,"")+" · ":"")+String(h.op||h.reg||h.hex).replace(/[<>&"]/g,"")+(isFinite(+h.alt)?(" · "+(+h.alt)+" ft"):""),{direction:"top",offset:[0,-10]})
               .addTo(heloWallLayer);
           });
         }).catch(function(){});
     }
     wallHelos(); setInterval(wallHelos,15000);
+
+    /* ── UNIT AVL — rigs broadcasting from MDT Lite show as callsign chips, same look as the
+       MDTs. Always on: markers only exist while a unit is actually reporting (150 s server
+       cutoff), so an empty district costs nothing. Fix aging past 60 s goes gray — a stale
+       pin must read stale from across the bay. ── */
+    (function(){
+      var st=document.createElement("style");
+      st.textContent='.avl-unit{display:inline-block;background:rgba(13,17,23,.92);border:2px solid #58A6FF;border-radius:6px;color:#E6EDF3;font-family:"Bebas Neue",sans-serif;font-size:16px;letter-spacing:1px;padding:1px 8px;white-space:nowrap}.avl-unit.old{border-color:#8B949E;color:#8B949E}';
+      document.head.appendChild(st);
+    })();
+    var avlWallLayer=L.layerGroup().addTo(map); var avlWallOk=0;
+    function wallAvlStale(){   /* feed unreachable: gray every chip after 45 s, clear after 150 s — a frozen position must not read live */
+      var gap=Date.now()-avlWallOk; if(!avlWallOk||gap<45000) return;
+      if(gap>150000){ avlWallLayer.clearLayers(); return; }
+      avlWallLayer.getLayers().forEach(function(m){ var el=m.getElement&&m.getElement(); var sp=el&&el.querySelector('.avl-unit'); if(sp) sp.classList.add('old'); });
+    }
+    function wallAvl(){
+      var pin=window.BOARD_PIN?window.BOARD_PIN():""; if(!pin) return;
+      fetch("https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/avl?pin="+encodeURIComponent(pin))
+        .then(function(r){return r.json();}).then(function(j){
+          if(!j||!j.ok){ wallAvlStale(); return; }
+          avlWallOk=Date.now();
+          avlWallLayer.clearLayers();
+          (j.units||[]).forEach(function(u){
+            if(!isFinite(+u.la)||!isFinite(+u.ln)) return;
+            var ic=L.divIcon({className:"",iconSize:null,iconAnchor:[18,11],
+              html:'<span class="avl-unit'+(u.age>60?' old':'')+'">'+String(u.u).replace(/[<>&"]/g,"")+'</span>'});
+            L.marker([+u.la,+u.ln],{icon:ic,keyboard:false,interactive:false,zIndexOffset:700}).addTo(avlWallLayer);
+          });
+        }).catch(wallAvlStale);
+    }
+    wallAvl(); setInterval(wallAvl,15000);
 
     /* ── POWER OUTAGES (CPS via worker) — amber highlights; auto-ON while any outage exists in the
        box, auto-OFF when clear, and always available from the layers control. ── */
@@ -1712,10 +1744,18 @@
                 HIGHWAY:"HWY",CIRCLE:"CIR",COURT:"CT",PLACE:"PL",COVE:"CV",BEND:"BND",CROSSING:"XING",EXPRESSWAY:"EXPY"}[m]; })
       .replace(/[^A-Z0-9]/g,""); }
     window.OOS_HYD=window.OOS_HYD||[];
-    function hydIsOOS(addr){
-      var a=hydNorm(addr); if(!a) return false;
+    /* SHARED MATCHER CONTRACT (same rule on MDT + control): "HYD 494658" pins ONE plug by
+       number; a bare number matches the hydrant id exactly OR anchors at the address start;
+       street-name flags match anywhere. Number flags reach plugs with no address on file. */
+    function hydIsOOS(addr,id){
+      var a=hydNorm(addr), hid=String(id==null?"":id);
       for(var i=0;i<window.OOS_HYD.length;i++){ var o=window.OOS_HYD[i];
-        if(o && o.length>=4 && (/^\d/.test(o) ? a.indexOf(o)===0 : a.indexOf(o)>=0)) return true; }   /* SHARED MATCHER CONTRACT (same rule on MDT + control): numeric flags anchor at the start, street-name flags match anywhere */
+        if(!o||o.length<4) continue;
+        var m=/^HYD(\d+)$/.exec(o);
+        if(m){ if(hid===m[1]) return true; continue; }
+        if(/^\d+$/.test(o)){ if(hid===o||(a&&a.indexOf(o)===0)) return true; continue; }
+        if(/^\d/.test(o)){ if(a&&a.indexOf(o)===0) return true; continue; }
+        if(a&&a.indexOf(o)>=0) return true; }
       return false;
     }
     window.HYD_ISOOS=hydIsOOS;                        /* the tender scan lives in another module — same verdicts, one matcher */
@@ -1740,7 +1780,7 @@
       var w=b.getWest(), s=b.getSouth(), e=b.getEast(), n=b.getNorth(), shown=0, H=window.HYDB.h;
       for(var i=0;i<H.length;i++){ var h=H[i];       /* [id, main_in, lat, lng, addr|0, private] */
         if(h[3]<w||h[3]>e||h[2]<s||h[2]>n) continue;
-        if(h[4]&&hydIsOOS(h[4])) continue;           /* flagged reds live in oosLayer — always on, never doubled */
+        if(hydIsOOS(h[4],h[0])) continue;             /* flagged reds live in oosLayer — always on, never doubled */
         if(++shown>400) break;
         var icon = (h[1]||0)>=10 ? hydIconBig : hydIcon;
         /* tappable (MDT parity): tap -> hydrant id, PRIVATE badge, address, main size */
@@ -1755,7 +1795,7 @@
       if(!window.HYDB||!window.OOS_HYD.length) return;
       var H=window.HYDB.h;
       for(var i=0;i<H.length;i++){ var h=H[i];
-        if(!h[4]||!hydIsOOS(h[4])) continue;
+        if(!hydIsOOS(h[4],h[0])) continue;            /* number flags reach plugs with no address on file */
         L.marker([h[2],h[3]],{icon:hydIconOOS,keyboard:false})
           .bindPopup(hydPop(h,true),{maxWidth:260}).addTo(oosLayer);
       }
@@ -3050,7 +3090,7 @@
         var dy=(h[2]-c.lat)*TD_KY, dx=(h[3]-c.lng)*TD_KX;
         if(dy*dy+dx*dx>305*305) continue;
         if(h[5]) continue;                                             /* private plug — not our supply (matches the MDT rule) */
-        if(h[4] && window.HYD_ISOOS && window.HYD_ISOOS(h[4])) continue; /* officer-flagged OOS must not suppress TENDER OPS */
+        if(window.HYD_ISOOS && window.HYD_ISOOS(h[4],h[0])) continue; /* officer-flagged OOS must not suppress TENDER OPS */
         near=true; break; }
       tenderCache[k] = near ? null : (cls==="k-fire" ? "need" : "if");
     }

@@ -82,6 +82,31 @@
   .ccard { pointer-events: auto; flex: 0 1 auto; min-width: 0; max-width: 640px; background: rgba(13,17,23,.94);   /* auto-size: basis comes from the card's own content, capped at 640 — a short call must not drag a wall of empty card across the map. min-width:0 still lets cards compress instead of overflowing under the chips */
            border: 2px solid #F85149; border-radius: 12px; padding: 10px 14px; cursor: pointer; position: relative; }
   .ccard:active { background: rgba(28,34,48,.96); }
+  /* AVL chip lives INSIDE #ctrls as a flex sibling of Roads/District — it inherits the corner
+     placement, the 8px gap, and the pip-split lift for free, and can never cover the buttons.
+     40px+ tall: the file's gloved-thumb floor applies to this tap target too. */
+  #avlChip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 999px; padding: 8px 14px; font-size: 14px; color: #8B949E; display: none; align-items: center; gap: 8px; min-height: 40px; box-sizing: border-box; cursor: pointer; }
+  #avlChip b { color: #E6EDF3; }
+  #avlChip .avld { width: 9px; height: 9px; border-radius: 50%; background: #3FB950; flex: none; }
+  #avlChip.coarse .avld { background: #D29922; }
+  #avlChip.err .avld { background: #F85149; }
+  #avlChip.idle .avld { background: #8B949E; }   /* enable / go-live prompt states — nothing is being claimed yet */
+  .avl-unit { display: inline-block; background: rgba(13,17,23,.92); border: 2px solid #58A6FF; border-radius: 6px; color: #E6EDF3; font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 1px; padding: 1px 7px; white-space: nowrap; }
+  .avl-unit.old { border-color: #8B949E; color: #8B949E; }   /* fix aging out — gray beats a confident lie */
+  .lechip { display: inline-block; background: #1F6FEB; color: #fff; border-radius: 5px; font-size: 10px; letter-spacing: 1px; padding: 1px 6px; vertical-align: 1px; }   /* law-enforcement bird */
+  #avlDlg { position: fixed; inset: 0; z-index: 1200; background: rgba(1,4,9,.72); display: none; align-items: center; justify-content: center; }
+  #avlDlg .bx { background: #161B22; border: 1px solid #30363D; border-radius: 14px; padding: 20px 22px; width: min(330px, 88vw); }
+  #avlDlg h3 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1px; color: #E6EDF3; margin: 0 0 8px; }
+  #avlDlg p { font-size: 12.5px; color: #8B949E; line-height: 1.45; margin: 0 0 12px; }
+  #avlDlg input { width: 100%; box-sizing: border-box; background: #0D1117; border: 1px solid #30363D; border-radius: 8px; color: #E6EDF3; font-family: 'DM Mono', monospace; font-size: 18px; letter-spacing: 2px; text-transform: uppercase; padding: 9px 12px; text-align: center; }
+  #avlDlg .row { display: flex; gap: 10px; margin-top: 14px; }
+  #avlDlg .row button { flex: 1; border-radius: 8px; border: 1px solid #30363D; padding: 10px 0; font-family: 'Bebas Neue', sans-serif; font-size: 17px; letter-spacing: 1px; cursor: pointer; }
+  #avlSave { background: #1F6FEB; border-color: #1F6FEB; color: #fff; }
+  #avlSkip { background: transparent; color: #8B949E; }
+  #avlOff { display: block; width: 100%; margin-top: 12px; background: transparent; border: none; color: #8B949E; font-size: 11px; letter-spacing: 1px; text-decoration: underline; cursor: pointer; }
+  #avlPick { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 11px; }
+  #avlPick .avlpk { background: #0D1117; border: 1px solid #30363D; border-radius: 999px; color: #E6EDF3; font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 1px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+  #avlPick .avlpk.on { border-color: #1F6FEB; background: #1F6FEB; }
   .mapgrid { position: absolute; top: 8px; right: 10px; font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 1px; color: #E6EDF3; background: rgba(13,17,23,.9); border: 1px solid #30363D; border-radius: 6px; padding: 1px 8px; }   /* map-book grid in the corner where a driver's eye goes first */
   .ccard:has(.mapgrid) .ty { padding-right: 72px; }   /* keep a long type name from running under the grid chip */
   .ccard .ty { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 1px; color: #F85149; line-height: 1.05; }
@@ -418,7 +443,22 @@
                 AVENUE: "AVE", HIGHWAY: "HWY", CIRCLE: "CIR", COURT: "CT", PLACE: "PL", COVE: "CV", BEND: "BND",
                 CROSSING: "XING", EXPRESSWAY: "EXPY" }[m]))
     .replace(/[^A-Z0-9]/g, "");
-  const hydIsOOS = (a) => { a = hydNorm(a); return !!a && oosHyd.some(o => o && o.length >= 4 && (/^\d/.test(o) ? a.startsWith(o) : a.indexOf(o) >= 0)); };   /* SHARED MATCHER CONTRACT (same rule on wall + control): a numeric flag ("123 Main St") anchors at the address start so it can never kill 5123 Main St; a street-name flag ("Talley Rd" during a main break) still matches every plug on the street */
+  /* SHARED MATCHER CONTRACT (same rule on wall + control): "HYD 494658" pins ONE plug by its
+     number; a bare number matches the hydrant id exactly OR anchors at the address start (so a
+     house-number flag can never kill 5123 Main St); a street-name flag ("Talley Rd" during a
+     main break) still matches every plug on the street. Number flags work for the thousands of
+     plugs with no address on file. */
+  const hydIsOOS = (a, id) => {
+    a = hydNorm(a); const hid = String(id == null ? "" : id);
+    return oosHyd.some(o => {
+      if (!o || o.length < 4) return false;
+      const m = /^HYD(\d+)$/.exec(o);
+      if (m) return hid === m[1];
+      if (/^\d+$/.test(o)) return hid === o || (!!a && a.startsWith(o));
+      if (/^\d/.test(o)) return !!a && a.startsWith(o);
+      return !!a && a.indexOf(o) >= 0;
+    });
+  };
   function hydUpdate() {
     if (!map) return;
     if (map.getZoom() < HYD_Z || !HYDB) { hydLayer.clearLayers(); hydPainted = ""; return; }
@@ -430,7 +470,7 @@
     let shown = 0;
     for (const h of HYDB.h) {                      /* [id, main_in, lat, lng, addr|0, private] */
       if (h[3] < w || h[3] > e || h[2] < s || h[2] > n) continue;
-      if (h[4] && hydIsOOS(h[4])) continue;        /* flagged reds live in oosLayer — always on, never doubled */
+      if (hydIsOOS(h[4], h[0])) continue;          /* flagged reds live in oosLayer — always on, never doubled */
       if (++shown > 400) break;
       const addr = h[4] || "";
       const icon = (h[1] || 0) >= 10 ? hydIconBig : hydIcon;
@@ -450,10 +490,10 @@
     oosLayer.clearLayers();
     if (!HYDB || !oosHyd.length) return;
     for (const h of HYDB.h) {
-      if (!h[4] || !hydIsOOS(h[4])) continue;
+      if (!hydIsOOS(h[4], h[0])) continue;         /* number flags reach plugs with no address on file */
       L.marker([h[2], h[3]], { icon: hydIconOOS, keyboard: false })
         .bindPopup('<div class="hyd-pop"><b>HYD ' + esc(h[0]) + '</b> <span class="hp-oos">OUT OF SERVICE</span>' +
-          '<br>' + esc(h[4]) +
+          (h[4] ? '<br>' + esc(h[4]) : '') +
           '<br><span class="hp-sz">' + ((h[1] || 0) ? h[1] + '&Prime; main' : 'main size unknown') + '</span></div>', { maxWidth: 260 })
         .addTo(oosLayer);
     }
@@ -761,7 +801,7 @@
       const dy = (h[2] - lat) * TD_KY, dx = (h[3] - lng) * TD_KX;
       if (dy * dy + dx * dx > lim) continue;       /* distance first — the exclusions below only run on in-radius hits, keeping the 48k scan cheap */
       if (h[5]) continue;                          /* private plug — not the department's supply for a tender decision */
-      if (h[4] && hydIsOOS(h[4])) continue;        /* officer-flagged OOS — a dead plug must NOT suppress the TENDER OPS chip */
+      if (hydIsOOS(h[4], h[0])) continue;          /* officer-flagged OOS — a dead plug must NOT suppress the TENDER OPS chip */
       return true;
     }
     return false;
@@ -1080,9 +1120,10 @@
       heloLayer.clearLayers();
       const tgt = lastTop.length && lastTop[0].lat != null && !lastTop[0].gs ? lastTop[0] : null;
       (j.helos || []).forEach(h => {
-        const rot = isFinite(+h.trk) ? +h.trk : 0;   /* style-attribute sink — numbers only */
+        const badge = h.med ? "helo-med" : (/^(EAGLE|DPS|POACHER)$/.test(String(h.le || "")) ? ("le-" + String(h.le).toLowerCase()) : "");   /* dept badge set: red cross = HEMS, blue circles = SAPD/DPS, green = game warden */
+        const rot = badge ? 0 : (isFinite(+h.trk) ? +h.trk : 0);   /* style-attribute sink — numbers only. Round badges stay upright; only the directional gray silhouette rotates to heading */
         const ic = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15],
-          html: '<div style="transform:rotate(' + rot + 'deg);width:30px;height:30px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="' + (h.med ? "helo-med.png" : "helo-air.png") + '" srcset="' + (h.med ? "helo-med@2x.png" : "helo-air@2x.png") + ' 2x" width="28" style="display:block;margin:1px auto"></div>' });   /* dept badge icons: red cross = HEMS bird, gray = other rotorcraft; rotated to live heading */
+          html: '<div style="transform:rotate(' + rot + 'deg);width:30px;height:30px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="' + (badge || "helo-air") + '.png" srcset="' + (badge || "helo-air") + '@2x.png 2x" width="28" style="display:block;margin:1px auto"></div>' });
         let eta = "";
         if (tgt && h.gs > 20) {
           const dy = (h.la - tgt.lat) * 60, dx = (h.ln - tgt.lng) * 52.5;   /* nm at 29.4N */
@@ -1091,6 +1132,7 @@
         }
         L.marker([h.la, h.ln], { icon: ic, keyboard: false, zIndexOffset: 600 })
           .bindPopup('<div class="hyd-pop"><b>' + esc(h.op || h.reg || h.hex) + '</b>' +
+            (h.le ? ' <span class="lechip">' + esc(h.le) + '</span>' : '') +
             (h.call ? ('<br>callsign ' + esc(h.call)) : '') + (h.reg ? ('<br>' + esc(h.reg) + (h.type ? (' (' + esc(h.type) + ')') : '')) : '') +
             (isFinite(+h.alt) ? ('<br>' + (+h.alt) + ' ft &middot; ' + Math.round(+h.gs || 0) + ' kt') : '') + eta + '</div>', { maxWidth: 240 })
           .addTo(heloLayer);
@@ -1200,6 +1242,189 @@
   });
 
   /* ── boot ── */
+  /* ── AVL — this device on its own map (ownship chevron), and optionally on every OTHER MDT,
+     the wall board, and the fleet page as a unit callsign. Decision ladder: no geolocation API /
+     permission denied / device never produced a real (<=300 m) fix -> the module stays fully
+     silent and the MDT looks stock. A proven-GPS device earns the chip ladder (live / coarse /
+     no-fix / sync-failed — never a silent lie). Broadcasting is claimed PER SESSION: a saved
+     callsign shows one tap of \u201cGo Live\u201d each new browser session, so a personal phone
+     reopened at home does not silently broadcast a crew member\u2019s house as the rig.
+     Server keeps only the latest fix per unit — hidden from the feed after 150 s, gone from the
+     worker snapshot within ~3 min; no track history anywhere. ── */
+  let avlSelfMk = null, avlLayer = null, avlLastPost = 0, avlLastLL = null, avlRoster = null;
+  let avlUnit = (localStorage.getItem("avlUnit") || "").toUpperCase();      /* remembered callsign — dialog prefill */
+  let avlLive = "";                                                          /* callsign broadcasting THIS session */
+  try { avlLive = (sessionStorage.getItem("avlLive") || "").toUpperCase(); } catch (e) {}
+  let avlGood = localStorage.getItem("avlGood") === "1";                     /* device has proven real GPS at least once */
+  let avlDev = "";                                                           /* per-device id — makes a duplicate-callsign claim visible instead of silently flapping */
+  try { avlDev = localStorage.getItem("avlDev") || ""; if (!avlDev) { avlDev = Math.random().toString(36).slice(2, 10); localStorage.setItem("avlDev", avlDev); } } catch (e) {}
+  let avlSyncErr = false, avlFixAt = 0, avlWatchId = null, avlLastAcc = null, avlHdg = null, avlLastOk = 0, avlDlgAuto = false;
+  const avlMks = {};                                                         /* unit -> live marker, updated in place (no clear/rebuild — taps and popups survive) */
+  const avlChip = document.createElement("div");
+  avlChip.id = "avlChip";
+  document.getElementById("ctrls").appendChild(avlChip);
+  const avlDlg = document.createElement("div");
+  avlDlg.id = "avlDlg";
+  avlDlg.innerHTML = '<div class="bx"><h3>Unit Tracking</h3>' +
+    '<p>GPS fix confirmed. Tap this rig&#8217;s radio callsign (from the fleet roster) or type it — its position will show on the other MDTs and the wall board until this browser session ends. Leave blank to keep GPS private to this screen.</p>' +
+    '<div id="avlPick"></div>' +
+    '<input id="avlIn" maxlength="8" placeholder="BC231" autocomplete="off">' +
+    '<div class="row"><button id="avlSkip">Not Now</button><button id="avlSave">Save</button></div>' +
+    '<button id="avlOff" type="button">Turn Off GPS This Session</button></div>';
+  document.body.appendChild(avlDlg);
+  function avlPickFill(units) {   /* fleet-roster callsigns as tap-chips — no typo drift between roster and broadcast */
+    const seen = {}, list = [];
+    (units || []).forEach(u => String(u.cs || "").toUpperCase().split("/").forEach(part => {   /* slash-shared callsigns (BR232/BT232) offer each half */
+      const c = part.trim();
+      if (/^[A-Z0-9-]{2,8}$/.test(c) && !seen[c]) { seen[c] = 1; list.push(c); }
+    }));
+    list.sort();
+    $("avlPick").innerHTML = list.map(c => '<button type="button" class="avlpk' + (c === avlUnit ? " on" : "") + '">' + esc(c) + "</button>").join("");
+  }
+  function avlShowEnable() { avlChip.dataset.mode = "enable"; avlChip.className = "idle"; avlChip.innerHTML = '<span class="avld"></span>Enable Unit Tracking'; avlChip.style.display = "flex"; }
+  function avlAskOpen(auto) {
+    avlDlgAuto = !!auto;
+    $("avlIn").value = avlUnit; avlDlg.style.display = "flex";
+    if (avlRoster) avlPickFill(avlRoster);
+    else if (PIN) fetch(WORKER + "/roster?pin=" + encodeURIComponent(PIN)).then(r => r.json())
+      .then(j => { if (j && j.ok && j.roster) { avlRoster = j.roster.units || []; avlPickFill(avlRoster); } }).catch(() => {});   /* roster unreachable -> typing still works */
+  }
+  avlDlg.addEventListener("click", (e) => {
+    const b = e.target.closest(".avlpk"); if (!b) return;
+    $("avlIn").value = b.textContent;
+    avlDlg.querySelectorAll(".avlpk.on").forEach(x => x.classList.remove("on")); b.classList.add("on");
+  });
+  $("avlSkip").addEventListener("click", () => { avlDlg.style.display = "none"; try { localStorage.setItem("avlAsked", "1"); } catch (e) {} avlChipDraw(null); });
+  $("avlSave").addEventListener("click", () => {
+    const v = $("avlIn").value.trim().toUpperCase();
+    if (v && !/^[A-Z0-9-]{2,8}$/.test(v)) { $("avlIn").style.borderColor = "#F85149"; return; }
+    avlUnit = v; avlLive = v;   /* avlSyncErr stays — only a POST that actually succeeds turns the chip green */
+    try { localStorage.setItem("avlUnit", v); localStorage.setItem("avlAsked", "1"); if (v) sessionStorage.setItem("avlLive", v); else sessionStorage.removeItem("avlLive"); } catch (e) {}
+    avlDlg.style.display = "none"; avlChipDraw(null);
+  });
+  $("avlOff").addEventListener("click", () => {   /* the in-app off switch — GPS fully dark until next session (or re-enable via the chip that returns then) */
+    avlDlg.style.display = "none"; avlLive = "";
+    try { sessionStorage.setItem("avlOff", "1"); sessionStorage.removeItem("avlLive"); localStorage.setItem("avlAsked", "1"); } catch (e) {}
+    if (avlWatchId != null) { try { navigator.geolocation.clearWatch(avlWatchId); } catch (e) {} avlWatchId = null; }
+    avlChip.style.display = "none";
+    if (avlSelfMk) { try { map.removeLayer(avlSelfMk); } catch (e) {} avlSelfMk = null; }
+  });
+  avlChip.addEventListener("click", () => {
+    if (avlChip.dataset.mode === "enable") { avlChip.style.display = "none"; avlStart(); return; }
+    if (avlChip.dataset.mode === "golive") { avlLive = avlUnit; try { sessionStorage.setItem("avlLive", avlLive); } catch (e) {} avlChipDraw(null); return; }
+    avlAskOpen();
+  });
+  function avlChipDraw(fix) {   /* fix = {acc} | null (redraw with last known acc) | "err" | "nofix" */
+    if (fix && typeof fix === "object" && isFinite(fix.acc)) avlLastAcc = fix.acc;
+    if (avlWatchId == null) { avlChip.style.display = "none"; return; }   /* watch is dead (permission revoked mid-session) — a chip over a corpse is a lie */
+    if (!avlGood) return;   /* device never produced a real fix — stock MDT, no chip states at all */
+    avlChip.dataset.mode = "";
+    if (avlUnit && !avlLive) {   /* saved rig, new session: one tap to resume broadcasting — never silent, never automatic */
+      avlChip.dataset.mode = "golive"; avlChip.className = "idle";
+      avlChip.innerHTML = '<span class="avld"></span><b>' + esc(avlUnit) + '</b> &middot; Tap To Go Live';
+      avlChip.style.display = "flex"; return;
+    }
+    const who = avlLive ? ('<b>' + esc(avlLive) + '</b>') : 'GPS';
+    if (fix === "err") { avlChip.className = "err"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; sync failed'; }
+    else if (fix === "nofix") { avlChip.className = "err"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; no fix'; }
+    else if (avlSyncErr && avlLive && PIN) {   /* every repaint path respects a failing broadcast — Not Now / Save must not paint green over it */
+      avlChip.className = "err"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; sync failed';
+    }
+    else if (!isFinite(avlLastAcc)) {
+      avlChip.className = "idle"; avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; acquiring&hellip;';   /* went live before the first fix of the session */
+    }
+    else {
+      avlChip.className = avlLastAcc > 100 ? "coarse" : "";
+      avlChip.innerHTML = '<span class="avld"></span>' + who + ' &middot; &plusmn;' + Math.round(avlLastAcc) + ' m' +
+        (avlLive && avlLastAcc > 200 ? ' &middot; too coarse to send' : avlLastAcc > 100 ? ' &middot; coarse' : '');   /* 100-200 m broadcasts (flagged); >200 m does NOT — say which */
+    }
+    avlChip.style.display = "flex";
+  }
+  function avlStart() {
+    if (avlWatchId != null) { try { navigator.geolocation.clearWatch(avlWatchId); } catch (e) {} }   /* re-arm, never stack watchers */
+    avlWatchId = navigator.geolocation.watchPosition(function (p) {
+      avlFixAt = Date.now();
+      const la = p.coords.latitude, ln = p.coords.longitude, acc = p.coords.accuracy;
+      if (!isFinite(la) || !isFinite(ln) || !isFinite(acc)) return;
+      if (p.coords.heading != null && isFinite(+p.coords.heading) && +p.coords.heading >= 0) avlHdg = +p.coords.heading;   /* null/NaN when stationary — keep the last real heading */
+      if (acc <= 300) {   /* a 2 km wifi guess painted as ownship is worse than nothing */
+        if (!avlGood) { avlGood = true; try { localStorage.setItem("avlGood", "1"); } catch (e) {} }
+        if (map) {
+          const ic = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15],
+            html: '<div style="transform:rotate(' + (avlHdg == null ? 0 : Math.round(avlHdg)) + 'deg);width:30px;height:30px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="ownship.png" srcset="ownship@2x.png 2x" width="28" style="display:block;margin:1px auto"></div>' });   /* dept ownship chevron, rotated to travel direction */
+          if (!avlSelfMk) avlSelfMk = L.marker([la, ln], { icon: ic, keyboard: false, interactive: false, zIndexOffset: 900 }).addTo(map);
+          else { avlSelfMk.setLatLng([la, ln]); avlSelfMk.setIcon(ic); }
+        }
+      } else if (avlSelfMk) { try { map.removeLayer(avlSelfMk); } catch (e) {} avlSelfMk = null; }
+      avlChipDraw(avlSyncErr && avlLive && PIN ? "err" : { acc });   /* a failed broadcast stays RED until a post actually succeeds — no green-while-dead */
+      if (acc <= 100 && !lastTop.length && localStorage.getItem("avlAsked") !== "1" && avlDlg.style.display !== "flex") avlAskOpen(true);   /* one-time ask — never while a call is on the band */
+      if (!avlLive || !PIN || acc > 200 || document.hidden) return;   /* broadcast only a trusted fix from a visible, opted-in screen */
+      const now = Date.now();
+      const moved = avlLastLL ? (Math.abs(la - avlLastLL[0]) + Math.abs(ln - avlLastLL[1])) * 111000 : 1e9;   /* rough meters — cadence gate, not navigation */
+      if (now - avlLastPost < 5000 || (now - avlLastPost < 30000 && moved < 40)) return;   /* hard 5 s floor even at speed; a PARKED rig throttles to 30 s — its position is not news, and every post costs the shared KV read budget */
+      avlLastPost = now; avlLastLL = [la, ln];
+      fetch(WORKER + "/avl", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: PIN, unit: avlLive, la, ln, acc, spd: p.coords.speed, hdg: p.coords.heading, dev: avlDev }) })
+        .then(r => r.json()).then(j => { if (!j || !j.ok) { avlSyncErr = true; avlChipDraw("err"); } else avlSyncErr = false; })
+        .catch(() => { avlSyncErr = true; avlChipDraw("err"); });
+    }, function (e) {
+      if (e && e.code === 1) {
+        if (avlWatchId != null) { try { navigator.geolocation.clearWatch(avlWatchId); } catch (e2) {} avlWatchId = null; }
+        avlChip.style.display = "none";
+        if (avlSelfMk) { try { map.removeLayer(avlSelfMk); } catch (e2) {} avlSelfMk = null; }
+        /* DISMISSING the browser prompt also lands here on some browsers — if permission is
+           still askable, offer the chip again; a real DENY stays stock, no nagging */
+        try { if (navigator.permissions && navigator.permissions.query) navigator.permissions.query({ name: "geolocation" }).then(st => { if (st.state === "prompt") avlShowEnable(); }).catch(() => {}); } catch (e2) {}
+      } else avlChipDraw("nofix");   /* garage / canyon — say so (proven-GPS devices only) and keep watching */
+    }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+  }
+  setInterval(function () { if (avlFixAt && avlWatchId != null && Date.now() - avlFixAt > 60000) avlChipDraw("nofix"); }, 30000);   /* watchdog: a silently dead watch must not leave a green chip */
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible") return;
+    if (avlWatchId != null) avlStart();   /* wake-refresh: re-arm a watch iOS may have killed while backgrounded */
+    avlStale(); avlPoll();                /* and repaint the unit picture NOW — hours-old markers must not sit there looking live */
+  });
+  function avlInit() {
+    if (!navigator.geolocation) return;   /* no API at all — stock MDT */
+    try { if (sessionStorage.getItem("avlOff") === "1") return; } catch (e) {}   /* user hit the off switch this session */
+    const showEnable = avlShowEnable;
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: "geolocation" }).then(st => {
+        if (st.state === "granted") { if (localStorage.getItem("avlAsked") === "1" && !avlUnit) showEnable(); else avlStart(); }   /* declined-broadcast users get the passive chip, not an always-on watch */
+        else if (st.state === "prompt") showEnable();
+        /* denied: stock MDT — flipping it back on lives in browser settings, not our chrome */
+      }).catch(showEnable);
+    } else showEnable();   /* old Safari can't preflight — one tap and the browser asks */
+  }
+  function avlStale() {   /* poll failing: gray every chip after 45 s, clear after 150 s — frozen positions must not read live */
+    const gap = Date.now() - avlLastOk;
+    if (!avlLayer || !avlLastOk || gap < 45000) return;
+    if (gap > 150000) { Object.keys(avlMks).forEach(k => { try { avlLayer.removeLayer(avlMks[k]); } catch (e) {} delete avlMks[k]; }); return; }
+    Object.keys(avlMks).forEach(k => { const el = avlMks[k].getElement && avlMks[k].getElement(); const sp = el && el.querySelector(".avl-unit"); if (sp) sp.classList.add("old"); });
+  }
+  function avlPoll() {   /* everyone else's rigs on OUR map — markers updated in place, never clear/rebuild */
+    if (avlDlgAuto && avlDlg.style.display === "flex" && lastTop.length) { avlDlg.style.display = "none"; avlDlgAuto = false; }   /* a call dropped — the auto-opened ask yields the screen */
+    if (!PIN || !map || document.hidden) return;
+    fetch(WORKER + "/avl?pin=" + encodeURIComponent(PIN)).then(r => r.json()).then(j => {
+      if (!j || !j.ok) { avlStale(); return; }
+      avlLastOk = Date.now();
+      if (!avlLayer) avlLayer = L.layerGroup().addTo(map);
+      const seen = {};
+      (j.units || []).forEach(u => {
+        if (!isFinite(+u.la) || !isFinite(+u.ln)) return;
+        if (u.dev && u.dev === avlDev) return;   /* our own echo, matched by device id — a SECOND device claiming our callsign still shows, making the conflict visible */
+        if (!u.dev && u.u === avlLive && Date.now() - avlLastPost < 45000) return;   /* echo fallback for a pre-build-5 worker that doesn't return dev */
+        seen[u.u] = 1;
+        const ic = L.divIcon({ className: "", iconSize: null, iconAnchor: [18, 11], html: '<span class="avl-unit' + (u.age > 60 ? " old" : "") + '">' + esc(u.u) + "</span>" });
+        const pop = '<div class="hyd-pop"><b>' + esc(u.u) + '</b><br>&plusmn;' + Math.round(+u.acc || 0) + ' m' + (u.spd != null && isFinite(+u.spd) ? ' &middot; ' + Math.round(u.spd * 2.237) + ' mph' : '') + ' &middot; ' + (u.age < 5 ? 'live' : u.age + ' s ago') + '</div>';   /* speed only when the device actually knows it — never a fabricated 0 mph */
+        let m = avlMks[u.u];
+        if (m) { m.setLatLng([+u.la, +u.ln]); m.setIcon(ic); try { m.getPopup().setContent(pop); } catch (e) {} }
+        else { m = L.marker([+u.la, +u.ln], { icon: ic, keyboard: false, zIndexOffset: 800 }).bindPopup(pop, { maxWidth: 200 }); m.addTo(avlLayer); avlMks[u.u] = m; }
+      });
+      Object.keys(avlMks).forEach(k => { if (!seen[k]) { try { avlLayer.removeLayer(avlMks[k]); } catch (e) {} delete avlMks[k]; } });   /* dropped unit: marker (and its open popup) goes — correct fail-loud */
+    }).catch(avlStale);
+  }
+
   let booted = false;
   function boot() {
     if (booted) return; booted = true;
@@ -1220,6 +1445,7 @@
     loadDrones(); setInterval(loadDrones, 20000);
     loadOutages(); setInterval(loadOutages, 180000);
     loadHelos(); setInterval(loadHelos, 15000);
+    avlInit(); avlPoll(); setInterval(avlPoll, 15000);
     camAttach();                                    /* cold-start path: map exists only after boot */
   }
   if (PIN) { $("gate").style.display = "none"; boot(); }

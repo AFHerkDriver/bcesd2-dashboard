@@ -403,7 +403,7 @@
     <!-- OOS Hydrants — officer-flagged; the board turns matching CAD hydrants into red slashed pins -->
     <div class="card fold clps" id="cardOOS">
       <h2>OOS Hydrants <span class="fold-sum" id="oosFoldSum"></span></h2>
-      <div class="hint">Enter the hydrant&rsquo;s street address (e.g. <b>11219 CHARISMATIC</b>) &mdash; the <b>&#10003;</b> confirms it matched a plug in the department hydrant db, and both maps show the red slashed pin at ANY zoom. Suffix spelling (Road vs RD) doesn&rsquo;t matter. Remove the entry when the hydrant is repaired.</div>
+      <div class="hint">Enter the hydrant&rsquo;s street address (e.g. <b>11219 CHARISMATIC</b>) <b>or its hydrant number</b> (e.g. <b>494658</b>, or <b>HYD 494658</b> to force number-only matching) &mdash; the <b>&#10003;</b> confirms it matched a plug in the department hydrant db, and both maps show the red slashed pin at ANY zoom. Numbers work for plugs with no address on file; suffix spelling (Road vs RD) doesn&rsquo;t matter. Remove the entry when the hydrant is repaired.</div>
       <div id="oosList"></div>
       <button class="add" id="addOOS">+ Flag a hydrant OOS</button>
     </div>
@@ -587,7 +587,7 @@
       noteFail=function(n){ failNames.push(n); };
       function chk(p){ P.push(p.then(function(ok){ if(!ok) bad++; }).catch(function(){ bad++; })); }
       var FS_KEY2='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ';
-      var EXPECTED_WORKER=4;   /* the worker build this page shipped alongside — keep in step with WORKER_VERSION in worker.js */
+      var EXPECTED_WORKER=5;   /* the worker build this page shipped alongside — keep in step with WORKER_VERSION in worker.js */
       chk(jget(CTL_AUTH+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})}).then(function(r){
         var wv=r.j&&r.j.wv;
         return row('Worker build (Cloudflare paste)', wv===EXPECTED_WORKER,
@@ -1257,7 +1257,7 @@ function hydNormC(s){ return String(s||'').toUpperCase()
   .replace(/[^A-Z0-9]/g,''); }
 function loadHydDb(){ if(HYDN||HYDN_REQ) return; HYDN_REQ=true;
   fetch('hydrants.json').then(function(r){ return r.ok?r.json():null; }).then(function(j){
-    if(j&&Array.isArray(j.h)){ HYDN=[]; j.h.forEach(function(h){ if(h[4]) HYDN.push([hydNormC(h[4]),h[0]]); });
+    if(j&&Array.isArray(j.h)){ HYDN=[]; j.h.forEach(function(h){ HYDN.push([h[4]?hydNormC(h[4]):'',String(h[0])]); });   /* every plug, address or not — number flags must validate against the address-less ones too */
       try{ renderOOS(); }catch(e){} }
   }).catch(function(){}); }
 function setOOSBadge(i){
@@ -1265,9 +1265,17 @@ function setOOSBadge(i){
   var f=hydNormC(state.oosHydrants[i]||'');
   if(!f||f.length<4){ el.className='oosck'; el.textContent=''; return; }
   if(!HYDN){ el.className='oosck'; el.textContent='…'; return; }
-  var n=0,id='';
-  for(var k=0;k<HYDN.length;k++){ if(/^\d/.test(f) ? HYDN[k][0].indexOf(f)===0 : HYDN[k][0].indexOf(f)>=0){ n++; if(!id) id=HYDN[k][1]; } }   /* SHARED MATCHER CONTRACT: numeric flags anchor at the address start (no 5123-vs-123 kills), street-name flags match anywhere */
-  if(n){ el.className='oosck ok'; el.textContent='✓ '+(n===1?('HYD '+id):(n+' plugs')); }
+  var n=0,id='',byNum=false,m=/^HYD(\d+)$/.exec(f);
+  /* SHARED MATCHER CONTRACT (same rule as both boards): HYD-prefixed = that one plug by number;
+     bare number = hydrant id exact OR address-start anchor (no 5123-vs-123 kills); street-name
+     flags match anywhere. Number flags validate against plugs with no address on file. */
+  for(var k=0;k<HYDN.length;k++){ var addr=HYDN[k][0], hid=HYDN[k][1], hit=false, num=false;
+    if(m){ hit=(hid===m[1]); num=hit; }
+    else if(/^\d+$/.test(f)){ num=(hid===f); hit=num||(addr&&addr.indexOf(f)===0); }
+    else if(/^\d/.test(f)){ hit=!!(addr&&addr.indexOf(f)===0); }
+    else { hit=!!(addr&&addr.indexOf(f)>=0); }
+    if(hit){ n++; if(!id) id=hid; if(num) byNum=true; } }
+  if(n){ el.className='oosck ok'; el.textContent='✓ '+(n===1?('HYD '+id+(byNum?' — by number':'')):(n+' plugs')); }
   else { el.className='oosck bad'; el.textContent='✗ no match'; }
 }
 function renderOOS(){
@@ -1276,7 +1284,7 @@ function renderOOS(){
   loadHydDb();
   state.oosHydrants.forEach(function(a,i){
     var row=document.createElement('div'); row.className='list-row';
-    row.innerHTML='<input type="text" data-oos="'+i+'" value="'+esc(a||'')+'" placeholder="Hydrant address (e.g. 11219 CHARISMATIC)" style="flex:1 1 220px;min-width:0">'+
+    row.innerHTML='<input type="text" data-oos="'+i+'" value="'+esc(a||'')+'" placeholder="Address or hydrant number" style="flex:1 1 220px;min-width:0">'+
       '<span class="oosck" data-oosck="'+i+'"></span>'+
       '<button class="wdel oosdel" data-oosdel="'+i+'">✕</button>';
     box.appendChild(row);
