@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 9;
+const WORKER_VERSION = 10;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1645,7 +1645,13 @@ export default {
         const helos = [];
         for (const a of ac) {
           const hex = String(a.hex || "").toLowerCase();
-          const rotor = String(a.category || "") === "A7";
+          /* FIXED-WING types that sometimes squawk A7 by mistake. Blacklist, not whitelist:
+             an unrecognised type still counts as a rotorcraft, because missing a real helo is
+             worse than one stray pin. Airbus A2xx/A3xx are listed but A1xx is NOT — A109/A139/
+             A169/A189 are AgustaWestland helicopters. Same care with Boeing B7xx vs Bell B407. */
+          const FIXED = /^(?:C\d{2,3}[A-Z]?|P28[A-Z]?|PA\d\d|SR2\d|DA\d\d|BE\d\d|BG\d\d|M20[A-Z]?|A[23]\d\w|B7\w\w|E1\d\w|E[27]\d\w|CRJ\d|GLF\d|LJ\d\d|TBM\d|PC\d\d|AT\d{2,3}|AC\d\d|RV\d|F1\d\d|GL\d\d|CL\d\d|DHC\d|D228|SF34|SW\d|B190|GLID|ULAC|BALL)$/i;
+          const typ = String(a.t || "").trim().toUpperCase();
+          const rotor = String(a.category || "") === "A7" && !(typ && FIXED.test(typ));
           const listed = WATCH[hex] || (a.ownOp && OPS.test(String(a.ownOp)));
           const lw = LEW[hex];
           const le = lw ? lw[0] : (a.ownOp && LE_OPS.test(String(a.ownOp)) ? (/san antonio police/i.test(String(a.ownOp)) ? "EAGLE" : /wildlife|game/i.test(String(a.ownOp)) ? "POACHER" : /bexar|sheriff/i.test(String(a.ownOp)) ? "BCSO" : "DPS") : null);
