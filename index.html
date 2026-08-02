@@ -1234,9 +1234,9 @@
     map.attributionControl.setPrefix(false);   /* drop Leaflet's own prefix; OSM/CARTO/Esri credit stays (tiny, subdued via CSS) */
     /* Optional overlays: Wind Flow (windy-style particles — also auto-on during red flag) and Call
        Demand (archive density, lazy-loaded on first enable). Both OFF by default — wall stays clean. */
-    var windOverlay=L.layerGroup(), heatLayer=L.layerGroup(), tenderOverlay=L.layerGroup();
+    var windOverlay=L.layerGroup(), heatLayer=L.layerGroup(), tenderOverlay=L.layerGroup(), respOverlay=L.layerGroup();
     var layersCtl=L.control.layers({"Dark":dark,"Positron":positron,"Satellite":satellite},   /* both lists alphabetical — same as the MDT */
-      {"Call Demand":heatLayer,"Tender Zones":tenderOverlay,"Wind Flow":windOverlay},{collapsed:true,position:"bottomright",sortLayers:true}).addTo(map);   /* alphabetical, ALWAYS — late addOverlay entries (Cameras, Power Outages, Road Closures) sort in, not append */
+      {"Call Demand":heatLayer,"Station Areas":respOverlay,"Tender Zones":tenderOverlay,"Wind Flow":windOverlay},{collapsed:true,position:"bottomright",sortLayers:true}).addTo(map);   /* alphabetical, ALWAYS — late addOverlay entries (Cameras, Power Outages, Road Closures) sort in, not append */
     /* Follow the sun LIVE: satellite from sunrise to sunset, dark at night. The initial pick above
        only ran at page load — and the wall hard-reloads at 04:07, so it loaded dark and stayed dark
        all day. A 5-min check swaps at dawn/dusk. An officer's manual pick from the layers control
@@ -1321,7 +1321,7 @@
           (j.helos||[]).forEach(function(h){
             var ic=L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
               html:(function(){var FA={"TANKER":"le-tanker","AIR ATTACK":"le-airattack","LEAD":"le-airattack","FIRE AIR":"le-fireair"};
-                var bd=h.med?"helo-med":(FA[String(h.fire||"")]||(/^(EAGLE|DPS|POACHER)$/.test(String(h.le||""))?("le-"+String(h.le).toLowerCase()):""));return '<div style="transform:rotate('+(bd?0:(isFinite(+h.trk)?+h.trk:0))+'deg);width:26px;height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="'+(bd||"helo-air")+'.png" srcset="'+(bd||"helo-air")+'@2x.png 2x" width="24" style="display:block;margin:1px auto"></div>';})()});   /* dept badges: HEMS cross + SAPD/DPS/POACHER circles stay upright; gray silhouette rotates to heading */
+                var bd=h.med?"helo-med":(FA[String(h.fire||"")]||(/^(EAGLE|DPS|POACHER)$/.test(String(h.le||""))?("le-"+String(h.le).toLowerCase()):(h.mil?"helo-mil":"")));return '<div style="transform:rotate('+(bd?0:(isFinite(+h.trk)?+h.trk:0))+'deg);width:26px;height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="'+(bd||"helo-air")+'.png" srcset="'+(bd||"helo-air")+'@2x.png 2x" width="24" style="display:block;margin:1px auto"></div>';})()});   /* dept badges: HEMS cross + SAPD/DPS/POACHER circles stay upright; gray silhouette rotates to heading */
             L.marker([h.la,h.ln],{icon:ic,keyboard:false,zIndexOffset:600})
               .bindTooltip((h.mil?"MIL · ":"")+(h.fire?String(h.fire).replace(/[<>&"]/g,"")+" · ":"")+(h.le&&String(h.op||h.reg||h.hex).toUpperCase().indexOf(String(h.le).toUpperCase())<0?String(h.le).replace(/[<>&"]/g,"")+" · ":"")+String(h.op||h.reg||h.hex).replace(/[<>&"]/g,"")+(isFinite(+h.alt)?(" · "+(+h.alt)+" ft"):""),{direction:"top",offset:[0,-10]})
               .addTo(heloWallLayer);
@@ -1547,6 +1547,15 @@
        from the layers control, with the MDT's stronger ink since a deliberately enabled layer has
        to actually read. All rings go into ONE polygon
        per district so the SVG even-odd fill keeps covered islands unshaded. Under pins and labels. ── */
+    /* STATION RESPONSE AREAS — who owns this box. Outline-led, barely any fill, so the
+       wall keeps reading through it. Colors match the ATAK package. */
+    fetch("station-districts.json").then(function(r){ return r.ok?r.json():null; }).then(function(j){
+      if(!j||!j.d) return;
+      Object.keys(j.d).sort().forEach(function(stn){
+        L.polygon(j.d[stn].r,{pane:"boundPane",color:j.d[stn].c,weight:2,opacity:.85,
+          fillColor:j.d[stn].c,fillOpacity:.05,interactive:false}).addTo(respOverlay);
+      });
+    }).catch(function(){});
     fetch("tender-zones.json").then(function(r){ return r.ok?r.json():null; }).then(function(z){
       if(!z) return;
       ["esd2","esd6"].forEach(function(k){

@@ -395,7 +395,7 @@
     const radarOverlay = L.layerGroup(), windOverlay = L.layerGroup(), tenderOverlay = L.layerGroup();
     tourLayer = L.layerGroup();
     map._layersCtl = L.control.layers({ "Dark": dark, "Positron": positron, "Satellite": satellite },   /* both lists alphabetical — the panel reads as a menu, not an accretion log */
-      { "Radar": radarOverlay, "Tender Zones": tenderOverlay, "Tour Calls": tourLayer, "Wind Flow": windOverlay },
+      { "Radar": radarOverlay, "Station Areas": respOverlay, "Tender Zones": tenderOverlay, "Tour Calls": tourLayer, "Wind Flow": windOverlay },
       { collapsed: true, sortLayers: true, position: "bottomright" }).addTo(map);
     map._layersCtl.addOverlay(rwLayer, "Road Closures");   /* the Roads toggle lives here now, not a corner button */
     map.on("overlayadd", (e) => { if (e.layer === rwLayer) { rwOn = true; rwLoad(); rwTimer = setInterval(rwLoad, 120000); } });
@@ -409,6 +409,16 @@
        even-odd fill: covered islands inside a zone stay unshaded. Slightly more ink than the wall's
        ambient .07 — a deliberately toggled layer on a sunlit cab screen has to actually read. */
     map.createPane("tenderPane"); map.getPane("tenderPane").style.zIndex = 370; map.getPane("tenderPane").style.pointerEvents = "none";
+    /* STATION RESPONSE AREAS — who owns this box. Outline-only so it never washes out the
+       imagery or the hydrant pins underneath; colors match the ATAK package. */
+    fetch("station-districts.json").then(r => r.ok ? r.json() : null).then(j => {
+      if (!j || !j.d) return;
+      Object.keys(j.d).sort().forEach(stn => {
+        L.polygon(j.d[stn].r, { color: j.d[stn].c, weight: 2, opacity: .9, fill: true,
+          fillColor: j.d[stn].c, fillOpacity: .06, interactive: false })
+          .bindTooltip("Station " + stn, { permanent: false, direction: "center" }).addTo(respOverlay);
+      });
+    }).catch(() => {});
     fetch("tender-zones.json").then(r => r.ok ? r.json() : null).then(z => {
       if (!z) return;
       ["esd2", "esd6"].forEach(k => {
@@ -478,6 +488,7 @@
     if (j && Array.isArray(j.h)) { HYDB = j; hydPainted = ""; try { hydUpdate(); oosRepaint(); } catch (e) {} }
   }).catch(() => {});   /* absent db -> no dots, no tender chips; dispatch banner is the loud one */
   const HYD_Z = 16.2;
+  const respOverlay = L.layerGroup();   /* station response areas — opt-in from the layers control */
   let hydPainted = "", oosHyd = [];
   const hIc = (f, s) => L.icon({ iconUrl: f + ".png", iconRetinaUrl: f + "@2x.png", iconSize: [s, s], iconAnchor: [s / 2, s] });
   const hydIcon = hIc("hydrant-marker", 20), hydIconBig = hIc("hydrant-marker-hv", 26), hydIconOOS = hIc("hydrant-marker-oos", 26);
@@ -1163,7 +1174,7 @@
       const tgt = lastTop.length && lastTop[0].lat != null && !lastTop[0].gs ? lastTop[0] : null;
       (j.helos || []).forEach(h => {
         const FIREART = { "TANKER": "le-tanker", "AIR ATTACK": "le-airattack", "LEAD": "le-airattack", "FIRE AIR": "le-fireair" };   /* amber fixed-wing badges — a SEAT is not a helicopter, and the old gray rotor silhouette said it was */
-        const badge = h.med ? "helo-med" : (FIREART[String(h.fire || "")] || (/^(EAGLE|DPS|POACHER)$/.test(String(h.le || "")) ? ("le-" + String(h.le).toLowerCase()) : ""));   /* dept badge set: red cross = HEMS, amber wings = aerial suppression, blue circles = SAPD/DPS, green = game warden */
+        const badge = h.med ? "helo-med" : (FIREART[String(h.fire || "")] || (/^(EAGLE|DPS|POACHER)$/.test(String(h.le || "")) ? ("le-" + String(h.le).toLowerCase()) : (h.mil ? "helo-mil" : "")));   /* dept badge set: red cross = HEMS, amber wings = aerial suppression, blue circles = SAPD/DPS, green = game warden, camo = military */
         const rot = badge ? 0 : (isFinite(+h.trk) ? +h.trk : 0);   /* style-attribute sink — numbers only. Round badges stay upright; only the directional gray silhouette rotates to heading */
         const ic = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15],
           html: '<div style="transform:rotate(' + rot + 'deg);width:30px;height:30px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="' + (badge || "helo-air") + '.png" srcset="' + (badge || "helo-air") + '@2x.png 2x" width="28" style="display:block;margin:1px auto"></div>' });
