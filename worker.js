@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 7;
+const WORKER_VERSION = 8;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1599,7 +1599,10 @@ export default {
       try {
         if (heloMem.out && Date.now() - heloMem.at < 12000) return json(heloMem.out, 200);   /* in-isolate 12 s cache — KV's 60 s TTL floor makes it useless here (a put under 60 s THROWS; that bug once 502'd this whole route) */
         const WATCH = { "a3b393": "AirLIFE N338AM", "adbb18": "AirLIFE N984ME", "aa58ea": "AirLIFE N766ME" };   /* confirmed hexes; ownOp match below catches the rest of the fleets */
-        const OPS = /air\s*methods|reach\s*air|med[-\s]?trans|air\s*evac|methodist|airlife/i;
+        /* HEMS operators working Texas. Anchored deliberately: bare \u201cphi\u201d matches Delphi and
+           Philadelphia, bare \u201cguardian\u201d/\u201chalo\u201d/\u201cnative\u201d are ordinary words. Verified live
+           2026-08-02 against PHI HEALTH LLC (N404PH), which the old net missed. */
+        const OPS = /air\s*methods|reach\s*air|med[-\s]?trans|air\s*evac|methodist|airlife|air\s*life|phi\s*(?:health|air|med)|careflite|care\s*flight|halo[-\s]?flight|life\s*flight|lifeteam|life\s*team|guardian\s*flight|metro\s*aviation|classic\s*air\s*med|survival\s*flight|stat\s*medevac|native\s*air|air\s*ambulance|medical\s*air|aeromedical|air\s*med(?:ical)?\b/i;
         /* LAW-ENFORCEMENT watchlist — verified 2026-08-01 (hexdb.io cross-checked against the FAA
            N-number encoding; algorithm reproduced all 22 db-known pairs before computing the rest).
            Tags are the LOCAL RADIO CALLSIGNS (per BC2FD): EAGLE = SAPD, DPS = troopers,
