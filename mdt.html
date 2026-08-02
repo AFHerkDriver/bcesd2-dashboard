@@ -1129,10 +1129,17 @@
           eta = ' &middot; <b>' + Math.round(nm / h.gs * 60) + ' min</b> to newest call';
         }
         L.marker([h.la, h.ln], { icon: ic, keyboard: false, zIndexOffset: 600 })
-          .bindPopup('<div class="hyd-pop"><b>' + esc(h.op || h.reg || h.hex) + '</b>' +
-            (h.le ? ' <span class="lechip">' + esc(h.le) + '</span>' : '') +
-            (h.call ? ('<br>callsign ' + esc(h.call)) : '') + (h.reg ? ('<br>' + esc(h.reg) + (h.type ? (' (' + esc(h.type) + ')') : '')) : '') +
-            (isFinite(+h.alt) ? ('<br>' + (+h.alt) + ' ft &middot; ' + Math.round(+h.gs || 0) + ' kt') : '') + eta + '</div>', { maxWidth: 240 })
+          .bindPopup((() => {   /* dedupe: a line only earns its place if the title doesn't already say it */
+            const ttl = h.op || h.reg || h.hex, TU = String(ttl).toUpperCase();
+            const has = (v) => v && TU.indexOf(String(v).toUpperCase()) >= 0;
+            let d = '';
+            if (h.call && !has(h.call)) d += '<br>callsign ' + esc(h.call);
+            if (h.reg && !has(h.reg)) d += '<br>' + esc(h.reg) + (h.type ? ' (' + esc(h.type) + ')' : '');
+            else if (h.type && !has(h.type)) d += '<br>' + esc(h.type);
+            return '<div class="hyd-pop"><b>' + esc(ttl) + '</b>' +
+            (h.le && !has(h.le) ? ' <span class="lechip">' + esc(h.le) + '</span>' : '') +
+            d +
+            (isFinite(+h.alt) ? ('<br>' + (+h.alt) + ' ft &middot; ' + Math.round(+h.gs || 0) + ' kt') : '') + eta + '</div>'; })(), { maxWidth: 240 })
           .addTo(heloLayer);
       });
     }).catch(() => {});
