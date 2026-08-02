@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 8;
+const WORKER_VERSION = 9;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1650,6 +1650,10 @@ export default {
           const lw = LEW[hex];
           const le = lw ? lw[0] : (a.ownOp && LE_OPS.test(String(a.ownOp)) ? (/san antonio police/i.test(String(a.ownOp)) ? "EAGLE" : /wildlife|game/i.test(String(a.ownOp)) ? "POACHER" : /bexar|sheriff/i.test(String(a.ownOp)) ? "BCSO" : "DPS") : null);
           const fcall = String(a.flight || "").trim();
+          /* MILITARY: US military ICAO allocation is AE0000-AFFFFF; the feed also sets a
+             military flag bit. Either is sufficient — these ships carry no operator name. */
+          const hexNum = parseInt(hex.replace(/[^0-9a-f]/g, ""), 16);
+          const mil = (hexNum >= 0xAE0000 && hexNum <= 0xAFFFFF) || !!(a.dbFlags && (a.dbFlags & 1));
           const fire = (FIRE_CALL.test(fcall) || (a.ownOp && FIRE_OPS.test(String(a.ownOp))))
             ? (/^(?:TNKR|TANKER)/i.test(fcall) ? "TANKER" : /^LEAD/i.test(fcall) ? "LEAD" : /^(?:ATGS|AIRATK)/i.test(fcall) ? "AIR ATTACK" : "FIRE AIR")
             : null;   /* aerial suppression working our area — the one air asset a fire district most needs to see */
@@ -1661,7 +1665,7 @@ export default {
                        op: WATCH[hex] || (lw ? lw[1] : String(a.ownOp || "").slice(0, 40)),
                        call: String(a.flight || "").trim().slice(0, 12), alt: (a.alt_baro === "ground") ? 0 : (isFinite(+a.alt_baro) ? +a.alt_baro : null),
                        gs: isFinite(+a.gs) ? +a.gs : null, trk: isFinite(+a.track) ? +a.track : null,   /* NUMERIC COERCION AT THE SOURCE — these land in client innerHTML/style sinks */
-                       med: !!listed, le: le || null, fire: fire || null });   /* med: HEMS watchlist; le: the callsign crews actually hear (EAGLE/DPS/POACHER/BCSO); fire: aerial suppression (TANKER/LEAD/AIR ATTACK) */
+                       med: !!listed, le: le || null, fire: fire || null, mil: (mil && rotor) || undefined });   /* med: HEMS watchlist; le: the callsign crews actually hear (EAGLE/DPS/POACHER/BCSO); fire: aerial suppression; mil: military ROTORCRAFT only — fixed-wing transits are not our business */
         }
         const out = { ok: true, helos, updated: new Date().toISOString() };
         heloMem = { at: Date.now(), out };

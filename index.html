@@ -1323,7 +1323,7 @@
               html:(function(){var FA={"TANKER":"le-tanker","AIR ATTACK":"le-airattack","LEAD":"le-airattack","FIRE AIR":"le-fireair"};
                 var bd=h.med?"helo-med":(FA[String(h.fire||"")]||(/^(EAGLE|DPS|POACHER)$/.test(String(h.le||""))?("le-"+String(h.le).toLowerCase()):""));return '<div style="transform:rotate('+(bd?0:(isFinite(+h.trk)?+h.trk:0))+'deg);width:26px;height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="'+(bd||"helo-air")+'.png" srcset="'+(bd||"helo-air")+'@2x.png 2x" width="24" style="display:block;margin:1px auto"></div>';})()});   /* dept badges: HEMS cross + SAPD/DPS/POACHER circles stay upright; gray silhouette rotates to heading */
             L.marker([h.la,h.ln],{icon:ic,keyboard:false,zIndexOffset:600})
-              .bindTooltip((h.fire?String(h.fire).replace(/[<>&"]/g,"")+" · ":"")+(h.le&&String(h.op||h.reg||h.hex).toUpperCase().indexOf(String(h.le).toUpperCase())<0?String(h.le).replace(/[<>&"]/g,"")+" · ":"")+String(h.op||h.reg||h.hex).replace(/[<>&"]/g,"")+(isFinite(+h.alt)?(" · "+(+h.alt)+" ft"):""),{direction:"top",offset:[0,-10]})
+              .bindTooltip((h.mil?"MIL · ":"")+(h.fire?String(h.fire).replace(/[<>&"]/g,"")+" · ":"")+(h.le&&String(h.op||h.reg||h.hex).toUpperCase().indexOf(String(h.le).toUpperCase())<0?String(h.le).replace(/[<>&"]/g,"")+" · ":"")+String(h.op||h.reg||h.hex).replace(/[<>&"]/g,"")+(isFinite(+h.alt)?(" · "+(+h.alt)+" ft"):""),{direction:"top",offset:[0,-10]})
               .addTo(heloWallLayer);
           });
         }).catch(function(){});
