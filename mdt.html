@@ -1321,7 +1321,7 @@
   document.body.appendChild(avlDlg);
   function avlPickFill(units) {   /* fleet-roster callsigns, A-Z, in the dropdown — no typo drift between roster and broadcast */
     const seen = {}, list = [];
-    (units || []).forEach(u => { if (u.mx) return; String(u.cs || "").toUpperCase().split("/").forEach(part => {   /* slash-shared callsigns (BR232/BT232) offer each half; MX (in-shop) rigs are NOT selectable */
+    (units || []).forEach(u => { if (u.mx || u.rsv) return; String(u.cs || "").toUpperCase().split("/").forEach(part => {   /* slash-shared callsigns (BR232/BT232) offer each half; MX and RESERVE rigs are NOT selectable */
       const c = part.trim();
       if (/^[A-Z0-9-]{2,8}$/.test(c) && !seen[c]) { seen[c] = 1; list.push(c); }
     }); });
