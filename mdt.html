@@ -327,6 +327,7 @@
 </div>
 <div id="dronePip"><span class="lbl" id="droneLbl"></span><span id="pipErr"></span><button id="pipSize" title="Resize">&#10530;</button><video id="droneVid" muted autoplay playsinline controls></video><iframe id="droneFrame" scrolling="no" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>
 <div id="ctrls">
+  <button id="recenter" title="Center on my position" hidden>&#9678; Center</button>
   <button id="refit" title="Frame the district">&#8982; District</button>
 </div>
 
@@ -388,6 +389,8 @@
     map = L.map("map", { center: [29.44, -98.72], zoom: 12, layers: [sunUp() ? satellite : dark], zoomControl: false });
     bases = { satellite, dark, positron };            /* the focus choreography swaps bases at night */
     map.on("dragstart", focusCancel);                 /* cab adaptation: a finger on the map owns the view — cancel any auto-focus hold */
+    map.on("dragstart", avlBreakFollow);              /* ...and it also ends GPS follow, so the crew can look down the road */
+    map.on("zoomstart", (e) => { if (!avlFollow) return; if (!map._followPan) avlBreakFollow(); });   /* a pinch breaks follow; our own panTo does not zoom */
     map.attributionControl.setPrefix(false);
     map.createPane("radarPane"); map.getPane("radarPane").style.zIndex = 350;
     /* layer choices — same set as the wall: bases, Wind Flow particles, radar (manual on top of
@@ -471,8 +474,17 @@
   /* ⌖ toggles between the two districts: first tap frames D2 (121-125), next frames the south
      (161/162), and so on — the label always names where the NEXT tap goes */
   let refitSouth = false;
+  $("recenter").addEventListener("click", () => {
+    if (!avlLastLL2) return;
+    focusCancel();                                   /* a deliberate recenter outranks any auto-focus hold */
+    avlFollowOn(true);
+    map._followPan = true;   /* our own setView changes zoom and fires zoomstart — without this guard the handler below would break the follow we just turned on */
+    try { map.setView(avlLastLL2, Math.max(map.getZoom(), 15), { animate: true }); } catch (e) {}
+    setTimeout(() => { map._followPan = false; }, 700);   /* clear once the animation has settled */
+  });
   $("refit").addEventListener("click", () => {
     focusCancel();                                   /* a deliberate reframe outranks any auto-focus hold */
+    avlBreakFollow();                                /* and it means the crew wants the district, not themselves */
     if (refitSouth) { southView(); $("refit").innerHTML = "&#8982; District 2"; }
     else { districtView(); $("refit").innerHTML = "&#8982; District 6"; }
     refitSouth = !refitSouth;
@@ -820,6 +832,7 @@
     if (!active && now - lastFocus < MIN_GAP) return;   /* joining a live frame always re-frames; fresh focuses are gapped */
     lastFocus = now;
     focusPts.push({ ll: [c.lat, c.lng], exp: now + HOLD });
+    avlBreakFollow();                                /* the call owns the view now; Center brings the crew back when they choose */
     reframe();
   }
   function sonarDrop(c, col) {
@@ -1325,6 +1338,7 @@
   let avlDev = "";                                                           /* per-device id — makes a duplicate-callsign claim visible instead of silently flapping */
   try { avlDev = localStorage.getItem("avlDev") || ""; if (!avlDev) { avlDev = Math.random().toString(36).slice(2, 10); localStorage.setItem("avlDev", avlDev); } } catch (e) {}
   let avlSyncErr = false, avlSyncMsg = "", avlFixAt = 0, avlWatchId = null, avlLastAcc = null, avlHdg = null, avlLastOk = 0, avlDlgAuto = false;
+  let avlFollow = false, avlLastLL2 = null;   /* follow mode: map tracks ownship until the crew pans away or a call takes the view */
   const avlMks = {};                                                         /* unit -> live marker, updated in place (no clear/rebuild — taps and popups survive) */
   const avlChip = document.createElement("div");
   avlChip.id = "avlChip";
@@ -1418,6 +1432,9 @@
             html: '<div style="transform:rotate(' + (avlHdg == null ? 0 : Math.round(avlHdg)) + 'deg);width:30px;height:30px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="ownship.png" srcset="ownship@2x.png 2x" width="28" style="display:block;margin:1px auto"></div>' });   /* dept ownship chevron, rotated to travel direction */
           if (!avlSelfMk) avlSelfMk = L.marker([la, ln], { icon: ic, keyboard: false, interactive: false, zIndexOffset: 900 }).addTo(map);
           else { avlSelfMk.setLatLng([la, ln]); avlSelfMk.setIcon(ic); }
+          avlLastLL2 = [la, ln];
+          if (!avlFollow && !avlRecenterShown()) avlFollowOn(true);   /* first real fix starts the follow */
+          if (avlFollow) { try { map.panTo([la, ln], { animate: true, duration: .4 }); } catch (e) {} }
         }
       } else if (avlSelfMk) { try { map.removeLayer(avlSelfMk); } catch (e) {} avlSelfMk = null; }
       avlChipDraw(avlSyncErr && avlLive && PIN ? "err" : { acc });   /* a failed broadcast stays RED until a post actually succeeds — no green-while-dead */
@@ -1436,6 +1453,7 @@
         if (avlWatchId != null) { try { navigator.geolocation.clearWatch(avlWatchId); } catch (e2) {} avlWatchId = null; }
         avlChip.style.display = "none";
         if (avlSelfMk) { try { map.removeLayer(avlSelfMk); } catch (e2) {} avlSelfMk = null; }
+        avlLastLL2 = null; avlFollowOn(false);   /* no position any more — the Center button would lie */
         /* DISMISSING the browser prompt also lands here on some browsers — if permission is
            still askable, offer the chip again; a real DENY stays stock, no nagging */
         try { if (navigator.permissions && navigator.permissions.query) navigator.permissions.query({ name: "geolocation" }).then(st => { if (st.state === "prompt") avlShowEnable(); }).catch(() => {}); } catch (e2) {}
@@ -1460,6 +1478,14 @@
       }).catch(showEnable);
     } else showEnable();   /* old Safari can't preflight — one tap and the browser asks */
   }
+  function avlRecenterShown() { const b = $("recenter"); return b && !b.hidden; }
+  function avlFollowOn(on) {
+    avlFollow = !!on;
+    const b = $("recenter"); if (!b) return;
+    /* the button only means something once we actually have a position to go back to */
+    b.hidden = avlFollow || !avlLastLL2;
+  }
+  function avlBreakFollow() { if (avlFollow || !$("recenter").hidden) avlFollowOn(false); }   /* pan, pinch, or a call taking the view */
   function avlStale() {   /* poll failing: gray every chip after 45 s, clear after 150 s — frozen positions must not read live */
     const gap = Date.now() - avlLastOk;
     if (!avlLayer || !avlLastOk || gap < 45000) return;
