@@ -33,7 +33,13 @@
   html, body { height: 100%; overflow: hidden; }
   body { background: #0D1117; color: #E6EDF3; font-family: 'DM Mono', monospace; }
   button { font-family: 'DM Mono', monospace; cursor: pointer; }
-  #map { position: fixed; inset: 0; background: #0D1117; }
+  #map { position: fixed; inset: 0; background: #0D1117; transform-origin: 50% 50%; }
+  /* TRACK-UP: the map is oversized so a rotated square still covers the screen corners. */
+  #map.trackup { inset: -25%; width: 150%; height: 150%; }
+  /* markers counter-rotate with the INDEPENDENT rotate property so Leaflet's inline
+     translate3d positioning is untouched — badges and labels stay upright. */
+  #map.trackup .leaflet-marker-icon, #map.trackup .leaflet-tooltip { rotate: var(--maprot, 0deg); }
+  #map.trackup .leaflet-marker-icon.ownship-mk { rotate: 0deg; }   /* the rig itself always points up in track-up */
   .leaflet-container { background: #0D1117; font-family: 'DM Mono', monospace; }
   .call-pin{filter:drop-shadow(0 0 3px rgba(0,0,0,.85))}   /* keeps a pin legible over bright satellite imagery — same halo as the wall */
   /* fresh call: pulse + sonar double-ripple — the wall's treatment, in the cab. FINITE iteration
@@ -327,6 +333,7 @@
 </div>
 <div id="dronePip"><span class="lbl" id="droneLbl"></span><span id="pipErr"></span><button id="pipSize" title="Resize">&#10530;</button><video id="droneVid" muted autoplay playsinline controls></video><iframe id="droneFrame" scrolling="no" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>
 <div id="ctrls">
+  <button id="northup" title="North-up / Track-up" hidden>&#8593; North</button>
   <button id="recenter" title="Center on my position" hidden>&#9678; Center</button>
   <button id="refit" title="Frame the district">&#8982; District</button>
 </div>
@@ -474,6 +481,7 @@
   /* ⌖ toggles between the two districts: first tap frames D2 (121-125), next frames the south
      (161/162), and so on — the label always names where the NEXT tap goes */
   let refitSouth = false;
+  $("northup").addEventListener("click", () => setTrackUp(!trackUp));
   $("recenter").addEventListener("click", () => {
     if (!avlLastLL2) return;
     focusCancel();                                   /* a deliberate recenter outranks any auto-focus hold */
@@ -1339,6 +1347,7 @@
   try { avlDev = localStorage.getItem("avlDev") || ""; if (!avlDev) { avlDev = Math.random().toString(36).slice(2, 10); localStorage.setItem("avlDev", avlDev); } } catch (e) {}
   let avlSyncErr = false, avlSyncMsg = "", avlFixAt = 0, avlWatchId = null, avlLastAcc = null, avlHdg = null, avlLastOk = 0, avlDlgAuto = false;
   let avlFollow = false, avlLastLL2 = null;   /* follow mode: map tracks ownship until the crew pans away or a call takes the view */
+  let trackUp = false;   /* false = north-up (default). Track-up rotates the map so travel direction is up. */
   const avlMks = {};                                                         /* unit -> live marker, updated in place (no clear/rebuild — taps and popups survive) */
   const avlChip = document.createElement("div");
   avlChip.id = "avlChip";
@@ -1428,13 +1437,14 @@
       if (acc <= 300) {   /* a 2 km wifi guess painted as ownship is worse than nothing */
         if (!avlGood) { avlGood = true; try { localStorage.setItem("avlGood", "1"); } catch (e) {} }
         if (map) {
-          const ic = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15],
+          const ic = L.divIcon({ className: "ownship-mk", iconSize: [30, 30], iconAnchor: [15, 15],
             html: '<div style="transform:rotate(' + (avlHdg == null ? 0 : Math.round(avlHdg)) + 'deg);width:30px;height:30px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="ownship.png" srcset="ownship@2x.png 2x" width="28" style="display:block;margin:1px auto"></div>' });   /* dept ownship chevron, rotated to travel direction */
           if (!avlSelfMk) avlSelfMk = L.marker([la, ln], { icon: ic, keyboard: false, interactive: false, zIndexOffset: 900 }).addTo(map);
           else { avlSelfMk.setLatLng([la, ln]); avlSelfMk.setIcon(ic); }
           avlLastLL2 = [la, ln];
           if (!avlFollow && !avlRecenterShown()) avlFollowOn(true);   /* first real fix starts the follow */
           if (avlFollow) { try { map.panTo([la, ln], { animate: true, duration: .4 }); } catch (e) {} }
+          if (trackUp) applyRotation();   /* heading changed — swing the map under the rig */
         }
       } else if (avlSelfMk) { try { map.removeLayer(avlSelfMk); } catch (e) {} avlSelfMk = null; }
       avlChipDraw(avlSyncErr && avlLive && PIN ? "err" : { acc });   /* a failed broadcast stays RED until a post actually succeeds — no green-while-dead */
@@ -1454,6 +1464,7 @@
         avlChip.style.display = "none";
         if (avlSelfMk) { try { map.removeLayer(avlSelfMk); } catch (e2) {} avlSelfMk = null; }
         avlLastLL2 = null; avlFollowOn(false);   /* no position any more — the Center button would lie */
+        if (trackUp) setTrackUp(false);          /* and never leave the map rotated with no heading behind it */
         /* DISMISSING the browser prompt also lands here on some browsers — if permission is
            still askable, offer the chip again; a real DENY stays stock, no nagging */
         try { if (navigator.permissions && navigator.permissions.query) navigator.permissions.query({ name: "geolocation" }).then(st => { if (st.state === "prompt") avlShowEnable(); }).catch(() => {}); } catch (e2) {}
@@ -1478,12 +1489,33 @@
       }).catch(showEnable);
     } else showEnable();   /* old Safari can't preflight — one tap and the browser asks */
   }
+  function applyRotation() {
+    const el = $("map"); if (!el) return;
+    if (!trackUp) { el.classList.remove("trackup"); el.style.transform = ""; el.style.setProperty("--maprot", "0deg"); return; }
+    const hdg = (avlHdg == null ? 0 : Math.round(avlHdg));
+    el.classList.add("trackup");
+    el.style.transform = "rotate(" + (-hdg) + "deg)";
+    el.style.setProperty("--maprot", hdg + "deg");   /* counter-rotate markers back upright */
+  }
+  function setTrackUp(on) {
+    trackUp = !!on;
+    const b = $("northup");
+    if (b) b.innerHTML = trackUp ? "&#8593; Track" : "&#8593; North";
+    /* Leaflet's drag math is rotation-unaware: dragging a rotated map slides it sideways
+       under the finger. Track-up is the driving view and follow is on, so panning is off
+       until the crew goes back to north-up. Tapping markers still works. */
+    try { if (trackUp) map.dragging.disable(); else map.dragging.enable(); } catch (e) {}
+    applyRotation();
+    try { map.invalidateSize({ animate: false }); } catch (e) {}   /* the element changed size */
+    if (trackUp && avlLastLL2) { avlFollowOn(true); try { map.panTo(avlLastLL2, { animate: false }); } catch (e) {} }
+  }
   function avlRecenterShown() { const b = $("recenter"); return b && !b.hidden; }
   function avlFollowOn(on) {
     avlFollow = !!on;
     const b = $("recenter"); if (!b) return;
     /* the button only means something once we actually have a position to go back to */
     b.hidden = avlFollow || !avlLastLL2;
+    const nb = $("northup"); if (nb) nb.hidden = !avlLastLL2;   /* no position, no orientation choice */
   }
   function avlBreakFollow() { if (avlFollow || !$("recenter").hidden) avlFollowOn(false); }   /* pan, pinch, or a call taking the view */
   function avlStale() {   /* poll failing: gray every chip after 45 s, clear after 150 s — frozen positions must not read live */
@@ -1548,6 +1580,18 @@
     }).catch(avlStale);
   }
 
+  /* ── SCREEN WAKE LOCK — the cab screen must not sleep while this board is up. ── */
+  let wakeLock = null;
+  async function wakeAcquire() {
+    if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+    if (wakeLock && !wakeLock.released) return;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });   /* the OS drops it whenever we are hidden */
+    } catch (e) { wakeLock = null; }   /* denied, low battery, or unsupported — the screen just behaves normally */
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") wakeAcquire(); });
+
   let booted = false;
   function boot() {
     if (booted) return; booted = true;
@@ -1568,6 +1612,7 @@
     loadDrones(); setInterval(loadDrones, 20000);
     loadOutages(); setInterval(loadOutages, 180000);
     loadHelos(); setInterval(loadHelos, 15000);
+    wakeAcquire();                                    /* board is up — hold the screen on */
     avlInit(); avlPoll(); setInterval(avlPoll, 15000);
     avlRosterLoad(); setInterval(avlRosterLoad, 10 * 60 * 1000);   /* fam map for the unit markers */
     camAttach();                                    /* cold-start path: map exists only after boot */
