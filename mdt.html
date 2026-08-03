@@ -35,7 +35,9 @@
   button { font-family: 'DM Mono', monospace; cursor: pointer; }
   #map { position: fixed; inset: 0; background: #0D1117; transform-origin: 50% 50%; }
   /* TRACK-UP: the map is oversized so a rotated square still covers the screen corners. */
-  #map.trackup { inset: -25%; width: 150%; height: 150%; }
+  /* size and position come from trackupBox() — a square of side hypot(vw,vh) centred on the
+     screen. A percentage box cannot express that, and 150% left black corners on a tall phone. */
+  #map.trackup { right: auto; bottom: auto; }
   /* markers counter-rotate with the INDEPENDENT rotate property so Leaflet's inline
      translate3d positioning is untouched — badges and labels stay upright. */
   #map.trackup .leaflet-marker-icon, #map.trackup .leaflet-tooltip { rotate: var(--maprot, 0deg); }
@@ -93,6 +95,7 @@
      40px+ tall: the file's gloved-thumb floor applies to this tap target too. */
   #avlChip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 999px; padding: 8px 14px; font-size: 14px; color: #8B949E; display: none; align-items: center; gap: 8px; min-height: 40px; box-sizing: border-box; cursor: pointer; }
   #avlChip b { color: #E6EDF3; }
+  #avlChip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* never the reason the row overflows */
   #avlChip .avld { width: 9px; height: 9px; border-radius: 50%; background: #3FB950; flex: none; }
   #avlChip.coarse .avld { background: #D29922; }
   #avlChip.err .avld { background: #F85149; }
@@ -187,6 +190,13 @@
   .ntrow.sys { color: #FFC107; }
   .ntrow.sys::before { content: "⚠ "; color: #FFC107; }
   .ntfoot { color: #8B949E; font-size: 10px; margin-top: 4px; letter-spacing: .5px; }
+  /* MINIMISED card — the third tap. Type and map grid only; everything else is one tap away. */
+  .ccard.mini { display: flex; gap: 10px; align-items: center; padding: 9px 12px; }
+  .ccard.mini .mty { font-family: 'Bebas Neue', sans-serif; font-size: 23px; letter-spacing: 1px; line-height: 1;
+                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .ccard.mini .mgrid { margin-left: auto; font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 1px;
+                       color: #E6EDF3; background: rgba(13,17,23,.9); border: 1px solid #30363D; border-radius: 6px;
+                       padding: 1px 8px; white-space: nowrap; }
   .ccard.slim { display: flex; gap: 10px; align-items: baseline; padding: 8px 12px; }
   .ccard.slim .sty { font-family: 'Bebas Neue', sans-serif; font-size: 17px; letter-spacing: 1px; white-space: nowrap; }
   .ccard.slim .sad { font-size: 13px; color: #E6EDF3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -248,7 +258,12 @@
              border: 1px solid #FF6B35; color: #FF6B35; border-radius: 8px; padding: 13px 16px; font-size: 15px; }   /* >=40px gloved floor, like every other control */
 
   /* bottom-left controls */
-  #ctrls { position: fixed; left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); z-index: 800; display: flex; gap: 8px; }
+  /* the right bound clears the map's LAYERS button, which owns the bottom-right corner — the GPS
+     chip used to run straight over it and there was no way to reach the layer list. */
+  #ctrls { position: fixed; left: max(8px, env(safe-area-inset-left)); right: calc(max(8px, env(safe-area-inset-right)) + 56px);
+           bottom: max(8px, env(safe-area-inset-bottom)); z-index: 800; display: flex; gap: 8px;
+           flex-wrap: wrap; align-items: flex-end; pointer-events: none; }   /* bounded on BOTH sides and wrapping: four controls used to run off a phone's right edge. Bottom-anchored, so a wrapped line grows upward over the map. */
+  #ctrls > * { pointer-events: auto; }   /* the row itself must not eat map taps in the gaps */
   #ctrls button { background: rgba(13,17,23,.94); border: 1px solid #30363D; color: #E6EDF3; border-radius: 10px;
                   padding: 12px 16px; font-size: 15px; }
   #ctrls button:active { border-color: #FF6B35; color: #FF6B35; }
@@ -263,6 +278,7 @@
     #callBand { flex-direction: column; align-items: stretch; }   /* phone stacks vertically — there full width is right, so stretch comes back */
     .ccard { max-width: none; }
     .ccard .ty { font-size: 21px; }
+    .ccard.mini .mty { font-size: 20px; }
     .ccard .ad { font-size: 15px; }
     .ccard .meta { font-size: 11px; }
     .ccard .navbtn { height: 40px; min-width: 52px; justify-content: center; padding: 0; font-size: 13px; margin-top: 6px; }
@@ -271,7 +287,8 @@
     .ccard .navbtn .alogo svg { width: 19px; height: 19px; }
     .chip { font-size: 10px; padding: 5px 9px; }
     #dronePip { width: 58vw; }
-    #ctrls button { padding: 10px 13px; font-size: 13px; }
+    #ctrls button { padding: 10px 12px; font-size: 13px; }
+    #avlChip { padding: 7px 11px; font-size: 12.5px; }   /* phone: the chip is the widest control — keep the row on one line where it can */
   }
 
   /* layers control — Leaflet ships it white; restyle to the page's dark chrome */
@@ -487,7 +504,8 @@
     focusCancel();                                   /* a deliberate recenter outranks any auto-focus hold */
     avlFollowOn(true);
     map._followPan = true;   /* our own setView changes zoom and fires zoomstart — without this guard the handler below would break the follow we just turned on */
-    try { map.setView(avlLastLL2, Math.max(map.getZoom(), 15), { animate: true }); } catch (e) {}
+    const tz = Math.max(map.getZoom(), 15);
+    try { map.setView(avlViewCenter(avlLastLL2, tz), tz, { animate: true }); } catch (e) {}   /* offset computed at the zoom we are landing on, not the one we are leaving */
     setTimeout(() => { map._followPan = false; }, 700);   /* clear once the animation has settled */
   });
   $("refit").addEventListener("click", () => {
@@ -919,7 +937,10 @@
      collapses to a slim colored bar (type + address); tapping the bar swaps which is expanded, so
      the map is never buried under two full cards on a pocket screen. Tablet/MDT show both full. */
   let lastTop = [], expandedIds = new Set();   /* every card holds its own expanded/slim state — expanding one never slims another */
-  const ntCollapsed = {};                     /* call id -> notes folded (persists across re-renders) */
+  /* call id -> how much of the card is showing: 0 full, 1 notes folded, 2 minimised to a
+     type + map-grid bar. Tapping the tile cycles it, and the choice survives the re-render. */
+  const cardLvl = {};
+  const lvl = (id) => cardLvl[id] || 0;
   const phoneMode = () => { try { return window.matchMedia("(max-width: 640px)").matches; } catch (e) { return false; } };
   function buildCard(c, slim) {
     const col = callColor(c.type);
@@ -937,6 +958,9 @@
       '<span class="sty" style="color:' + col + '">' + esc(c.type) + "</span>" +
       '<span class="sad">' + esc(c.address) + "</span>" +
       (when ? '<span class="stime">' + when + "</span>" : "") + "</div>";
+    if (lvl(c.id) >= 2) return '<div class="ccard mini"' + attrs + ' style="border-color:' + col + '">' +
+      '<span class="mty" style="color:' + col + '">' + esc(c.type) + "</span>" +
+      (c.mapc ? '<span class="mgrid">' + esc(c.mapc) + "</span>" : "") + "</div>";
     const td = tenderCache[tenderKey(c)];
     return '<div class="ccard"' + attrs + ' style="border-color:' + col + '">' +
             '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
@@ -965,7 +989,7 @@
             (() => {                                       /* CLEANED CAD NOTES — collapsible: tap the NOTES bar to fold the log away and get the map back; the choice sticks per call across the 15s re-renders */
               const ns = Array.isArray(c.notes) ? c.notes : [];
               if (!ns.length && !c.caseNo && !c.leNo) return "";
-              const closed = !!ntCollapsed[c.id];
+              const closed = lvl(c.id) >= 1;
               const head = '<div class="nthead" data-nt="' + esc(c.id) + '">' +
                 (closed ? "&#9656;" : "&#9662;") + ' NOTES <b>' + ns.length + "</b></div>";
               if (closed) return head;
@@ -980,6 +1004,7 @@
   }
 
   function renderBand() {
+    Object.keys(cardLvl).forEach(id => { if (!lastTop.some(c => c.id === id)) delete cardLvl[id]; });   /* a call that aged off must not hand its collapse state on */
     if (!lastTop.length) { $("callBand").innerHTML = '<div id="noCalls">NO ACTIVE CALLS · live</div>'; return; }
     if (!phoneMode() || lastTop.length === 1) { $("callBand").innerHTML = lastTop.map(c => buildCard(c, false)).join(""); return; }
     expandedIds.forEach(id => { if (!lastTop.some(c => c.id === id)) expandedIds.delete(id); });   /* prune calls that aged off */
@@ -1128,10 +1153,13 @@
     const card = e.target.closest(".ccard");
     if (!card) return;
     if (card.classList.contains("slim")) { expandedIds.add(card.dataset.id); renderBand(); }   /* tap a slim bar -> it expands; the other cards keep their own state */
-    else if (card.dataset.id && card.querySelector(".nthead")) {
-      /* the WHOLE tile folds the notes (gloved-thumb dexterity — the slim NOTES bar alone was a
-         precision target). Same tap still focuses the map below. */
-      ntCollapsed[card.dataset.id] = !ntCollapsed[card.dataset.id];
+    else if (card.dataset.id) {
+      /* the WHOLE tile is the target (gloved-thumb dexterity — the slim NOTES bar alone was a
+         precision target). Each tap shows less: full -> notes folded -> a bar with just the
+         call type and the map grid -> full again. A call with no notes has no middle state
+         and goes straight to the bar. Same tap still focuses the map below. */
+      const cur = lvl(card.dataset.id), hasNotes = !!card.querySelector(".nthead");
+      cardLvl[card.dataset.id] = cur >= 2 ? 0 : (cur === 0 && !hasNotes ? 2 : cur + 1);
       renderBand();
     }
     if (!card.dataset.ll || !map) return;
@@ -1443,7 +1471,7 @@
           else { avlSelfMk.setLatLng([la, ln]); avlSelfMk.setIcon(ic); }
           avlLastLL2 = [la, ln];
           if (!avlFollow && !avlRecenterShown()) avlFollowOn(true);   /* first real fix starts the follow */
-          if (avlFollow) { try { map.panTo([la, ln], { animate: true, duration: .4 }); } catch (e) {} }
+          if (avlFollow) { try { map.panTo(avlViewCenter([la, ln]), { animate: true, duration: .4 }); } catch (e) {} }
           if (trackUp) applyRotation();   /* heading changed — swing the map under the rig */
         }
       } else if (avlSelfMk) { try { map.removeLayer(avlSelfMk); } catch (e) {} avlSelfMk = null; }
@@ -1489,14 +1517,69 @@
       }).catch(showEnable);
     } else showEnable();   /* old Safari can't preflight — one tap and the browser asks */
   }
+  /* the part of the window the map is actually visible in — the drone pane covers the rest */
+  function avlVisRect() {
+    const W = window.innerWidth, H = window.innerHeight, r = { x: 0, y: 0, w: W, h: H };
+    const pip = $("dronePip");
+    if (document.body.classList.contains("pip-split") && pip) {
+      const b = pip.getBoundingClientRect();
+      if (b.width > 1 && b.height > 1) {
+        if (b.width >= W * .9) r.h = Math.max(140, b.top);        /* portrait split: video owns the bottom */
+        else r.w = Math.max(140, b.left);                         /* landscape split: video owns the right */
+      }
+    }
+    return r;
+  }
+  /* where to CENTRE the map so ownship lands where it should. North-up: on it. Track-up: low. */
+  function avlViewCenter(ll, z) {
+    if (!trackUp || !ll || !map) return ll;
+    try {
+      z = (z == null ? map.getZoom() : z);
+      const r = avlVisRect();
+      const dx = (r.x + r.w / 2) - window.innerWidth / 2;          /* screen offset we want the rig at, */
+      const dy = (r.y + r.h * .76) - window.innerHeight / 2;       /* measured from the rotation centre */
+      const h = (avlHdg == null ? 0 : avlHdg) * Math.PI / 180;
+      const ox = dx * Math.cos(h) - dy * Math.sin(h);              /* R(hdg) * s — see the note above */
+      const oy = dx * Math.sin(h) + dy * Math.cos(h);
+      const p = map.project(L.latLng(ll[0], ll[1]), z);
+      return map.unproject(L.point(p.x - ox, p.y - oy), z);
+    } catch (e) { return ll; }   /* never let framing maths cost the crew their position */
+  }
+  /* The rotated map must still cover every screen corner. See the note on #map.trackup: the
+     smallest shape that does so at EVERY heading is a square of side hypot(vw,vh), centred.
+     Heading does not change it, so this runs on resize — never on a GPS fix. */
+  function trackupBox(el) {
+    const W = window.innerWidth, H = window.innerHeight, S = Math.ceil(Math.hypot(W, H)) + 2;
+    if (el._tuS === S) return;                       /* unchanged — do not churn Leaflet's tile grid */
+    el._tuS = S;
+    el.style.width = el.style.height = S + "px";
+    el.style.left = Math.round((W - S) / 2) + "px";   /* centred: the rotation origin and the ownship */
+    el.style.top = Math.round((H - S) / 2) + "px";    /* offset maths both assume element centre = screen centre */
+    el.style.right = el.style.bottom = "auto";
+    try { map.invalidateSize({ animate: false }); } catch (e) {}
+  }
   function applyRotation() {
     const el = $("map"); if (!el) return;
-    if (!trackUp) { el.classList.remove("trackup"); el.style.transform = ""; el.style.setProperty("--maprot", "0deg"); return; }
+    if (!trackUp) {
+      el.classList.remove("trackup"); el.style.transform = ""; el.style.setProperty("--maprot", "0deg");
+      el.style.width = el.style.height = el.style.left = el.style.top = el.style.right = el.style.bottom = "";
+      el._tuS = 0;                                    /* so re-entering track-up at the same size still applies the box */
+      return;
+    }
+    trackupBox(el);
     const hdg = (avlHdg == null ? 0 : Math.round(avlHdg));
     el.classList.add("trackup");
     el.style.transform = "rotate(" + (-hdg) + "deg)";
     el.style.setProperty("--maprot", hdg + "deg");   /* counter-rotate markers back upright */
   }
+  const trackupResize = () => {
+    if (!trackUp) return;
+    const el = $("map"); if (!el) return;
+    trackupBox(el);
+    if (avlFollow && avlLastLL2) { try { map.panTo(avlViewCenter(avlLastLL2), { animate: false }); } catch (e) {} }   /* the rig's screen slot moved with the screen */
+  };
+  window.addEventListener("resize", trackupResize);
+  window.addEventListener("orientationchange", () => setTimeout(trackupResize, 250));   /* iOS reports the new size late */
   function setTrackUp(on) {
     trackUp = !!on;
     const b = $("northup");
@@ -1507,7 +1590,8 @@
     try { if (trackUp) map.dragging.disable(); else map.dragging.enable(); } catch (e) {}
     applyRotation();
     try { map.invalidateSize({ animate: false }); } catch (e) {}   /* the element changed size */
-    if (trackUp && avlLastLL2) { avlFollowOn(true); try { map.panTo(avlLastLL2, { animate: false }); } catch (e) {} }
+    if (trackUp && avlLastLL2) avlFollowOn(true);
+    if (avlLastLL2 && avlFollow) { try { map.panTo(avlViewCenter(avlLastLL2), { animate: false }); } catch (e) {} }   /* north-up recentres the rig, track-up drops it low */
   }
   function avlRecenterShown() { const b = $("recenter"); return b && !b.hidden; }
   function avlFollowOn(on) {
