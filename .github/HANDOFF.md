@@ -1,6 +1,6 @@
 # Session handoff — read this before your first edit
 
-**Last updated: 2026-08-04, at commit `9b3d1a4` — v213 merged to `main` and confirmed live.**
+**Last updated: 2026-08-04, at commit `5fb64be` — v214 on `main` and confirmed live.**
 
 ## How this file works — you are expected to replace it
 
@@ -33,11 +33,11 @@ repo root publishes it, because the repo root is the web root.
 
 | Thing | Where it is |
 |---|---|
-| `main` | `9b3d1a4` — **up to date and deployed.** Actions run green. |
-| **What the boards actually run** | **v213**, verified live (`bc2fd-dash-v213` served). Nothing is unmerged. |
-| Working branch | `claude/bc2fd-dashboard-remote-control-dcg4ii` — fully merged into `main`, nothing unique left on it. Safe to branch fresh from `main`. |
+| `main` | `5fb64be` — **up to date and deployed.** Actions run green. |
+| **What the boards actually run** | **v214**, verified live (`bc2fd-dash-v214` served). Nothing is unmerged. |
+| Working branch | `claude/bc2fd-dashboard-remote-control-dcg4ii` — fully merged into `main` and now BEHIND it (v214 was committed straight to `main`). Nothing unique left on it. Branch fresh from `main`. |
 | Live worker | **build 13**, deployed 2026-08-04T05:11:42Z. Repo `worker.js` is byte-identical. **No paste pending.** |
-| SW cache | `bc2fd-dash-v213` |
+| SW cache | `bc2fd-dash-v214` |
 
 **Deploy = merging to `main`.** Pages builds `main`; pushing a feature branch does not reach the
 wall boards. **Never merge to `main` without explicit confirmation from the user** — that push is
@@ -123,10 +123,34 @@ Flagged; awaiting their call.
 ## Open
 
 - **Diagnostics double-gate** (above) — user may want name-only. Raised, not yet answered.
-- **v213 is live and unexercised in the field.** The Owner Access card has only ever been driven
-  from a local preview with simulated data — the worker's CORS is locked to the Pages origin, so
-  localhost cannot unlock it for real. First real Owner sign-in is the true test. If the Access Log
-  or Diagnostics look wrong, suspect the class gate (Trap A) before anything else.
+- **v213/v214 are live but unexercised in the field.** The Owner Access card has only ever been
+  driven from a local preview with stubbed worker responses — the worker's CORS is locked to the
+  Pages origin, so localhost cannot unlock it for real. First real Owner sign-in is the true test.
+  If the Access Log or Diagnostics look wrong, suspect the class gate (Trap A) first. If the PIN
+  roster order looks wrong, see Trap C — and check how that person's rank is actually spelled in
+  their stored name.
+
+## Trap C — the roster rank sort reads rank out of a free-text name
+
+v214 sorts the Access PINs list by rank (chief, asst chief, div chief, batt chief, capt, lt), then
+by name. **There is no rank field.** `/pins` returns a free-text `name`, so `admRank()` matches the
+rank off the front of that string. Consequences worth knowing before you touch it:
+
+- **The match order in `ADM_RANKS` is load-bearing and deliberately differs from the display order.**
+  "Asst Chief Vasquez" also matches a bare `/^chief/`, so the compound chiefs must be tested BEFORE
+  the plain one, or every chief collapses to rank 1. The `n:` field is the display rank; array order
+  is match order. Do not "tidy" the array into rank order.
+- Ranks match **anchored and word-bounded**, so a surname is not mistaken for a rank, and the
+  department's own name does not read as a Batt Chief ("BC2FD Wall Board" → unranked). There is a
+  test for exactly that.
+- The rank is stripped before names are compared, so "Captain Zamora" and "Capt Alvarez" sort by
+  surname rather than by how the rank was spelled.
+- Anything unranked sorts last, alphabetically. A misspelled or reordered rank ("Sanchez, Capt")
+  therefore falls to the bottom rather than sorting wrong — visible, not silent.
+- Per the user (2026-08-04): there is exactly **one** plain "Chief", and it is **Chief Rodriguez**.
+  Every other chief is a compound rank.
+
+Sorting is client-side on purpose: no worker change, so no Cloudflare paste.
 - **Remote control** — unstarted. See above for the problem it must solve.
 - **Worker rate limiter** — parked; the Cloudflare `RL` binding was never created, so it is inert.
 
