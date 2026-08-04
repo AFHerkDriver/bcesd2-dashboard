@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 11;
+const WORKER_VERSION = 12;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -2216,7 +2216,13 @@ export default {
             } catch (e) { /* the watch must never break the feed */ }
             if (c.id || c.cad_code) {
               await env.PINS.put(k, JSON.stringify({ ...c, stations: stationsOf(c.units), logged: c.logged,
-                                 notes: undefined,   /* narrative stays LIVE-ONLY — same PII stance as msf */
+                                 /* NARRATIVE RETAINED on the 48 h row (dept ask 2026-08-03) so the board can show
+                                    notes for a run after it ages off the 15-minute live window. It expires WITH the
+                                    row — this is a 48 h window, not a permanent record. The permanent `arch:` row
+                                    below is deliberately NOT changed and must never carry the narrative. Bounded
+                                    so one runaway CAD log cannot bloat every /calls read. */
+                                 notes: (Array.isArray(c.notes) ? c.notes : []).slice(0, 60)
+                                          .map(n => ({ s: n.s ? 1 : 0, x: String(n.x || "").slice(0, 400) })),
                                  chute: chute != null ? chute : null, chuteUnit: chuteUnit || "" }),
                                  { expirationTtl: 48 * 3600 });
               if (c.cad_code && c.id && ("call:" + c.id) !== k) {

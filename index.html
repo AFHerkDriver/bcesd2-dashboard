@@ -936,6 +936,34 @@
   .rs-wk.rs-flat{grid-template-columns:1fr auto}   /* every rig tied — a row of 100% bars says nothing */
   .rs-a{grid-area:a;font-size:clamp(10px,1.05vmin,14px);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rs-empty{padding:22px 14px;text-align:center;color:var(--dim);font-size:13px}
+  /* ── Call notes dock ──────────────────────────────────────────────────────────────
+     Opened by tapping an Active Calls row or a run in the detail sheet. It sits ABOVE the
+     map section instead of over it: a run tap also peeks the map at that pin for 15 s, and a
+     centred card would have hidden exactly what the tap moved. The map shrinks, the pin stays. */
+  .ntdock{flex:0 0 auto;display:flex;flex-direction:column;min-height:0;max-height:min(42%,340px);
+    margin-bottom:clamp(4px,.5vmin,9px);border:1px solid var(--ndc,var(--dim));border-radius:9px;
+    background:var(--panel2);overflow:hidden}
+  .ntdock[hidden]{display:none}
+  .nt-hd{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--border)}
+  .nt-dot{flex:0 0 auto;width:9px;height:9px;border-radius:3px;background:var(--ndc,var(--dim))}
+  .nt-ty{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;letter-spacing:1.2px;font-size:clamp(12px,1.35vmin,21px);
+    color:var(--ndc,var(--text));white-space:nowrap}
+  .nt-ad{flex:1 1 auto;min-width:0;font-size:clamp(10px,1.05vmin,14px);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nt-tm{flex:0 0 auto;font-size:clamp(9.5px,1vmin,13px);color:var(--dim);font-variant-numeric:tabular-nums}
+  .nt-x{flex:0 0 auto;background:none;border:1px solid var(--border);border-radius:7px;color:var(--dim);
+    font-family:inherit;font-size:12px;line-height:1;padding:5px 8px;min-height:32px;min-width:34px;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .nt-x:hover{color:var(--text);border-color:var(--dim)}
+  .nt-x:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+  .nt-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:5px 10px}
+  .nt-row{font-size:clamp(10.5px,1.1vmin,15px);line-height:1.35;color:var(--text);padding:3px 0;border-bottom:1px solid rgba(48,54,61,.5)}
+  .nt-row:last-child{border-bottom:none}
+  .nt-row.sys{color:var(--dim)}                       /* system/status line, not a caller-scene note */
+  .nt-foot{margin-top:5px;font-size:clamp(9px,.95vmin,12px);letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  /* never an ambiguous blank — say WHICH of the two empty cases this is */
+  .nt-none{padding:7px 2px;font-size:clamp(10.5px,1.1vmin,14px);color:var(--dim)}
+  .nt-gone{padding:7px 2px;font-size:clamp(10.5px,1.1vmin,14px);color:var(--amber);line-height:1.4}
+  .call-e[data-nk]{cursor:pointer}
+  .call-e[data-nk]:hover{background:rgba(255,255,255,.045)}
   .rt-cnm{font-family:'Bebas Neue',sans-serif;letter-spacing:.5px;color:var(--rc);font-size:clamp(11px,1.25vmin,20px);line-height:1;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}   /* ellipsis, never a mid-word clip on a narrow cell */
   .rt-cct{font-family:'Bebas Neue',sans-serif;color:var(--rc);font-size:clamp(17px,2.1vmin,34px);line-height:1.05}
 
@@ -1158,6 +1186,8 @@
           <div class="tk-cell tk-div" id="tkDivCell" hidden><span class="tkl">Diversion</span><span class="tkv" id="tkDiv">—</span></div>
           <div class="tk-cell tk-calls"><span class="tkl">Active calls</span><div class="tkslot" id="tkCalls"></div></div>
         </div>
+        <!-- Call notes — docked ABOVE the map so a run peek stays visible under it. Filled by ntOpen(). -->
+        <div class="ntdock" id="ntDock" hidden></div>
         <div class="drone-split">
           <div class="drone-video">
             <div class="drone-idle" id="droneIdle"><img alt="" hidden onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="idle-fallback" hidden>NO ACTIVE FEED</span></div>
@@ -2012,6 +2042,8 @@
        to the district frame. Reuses the focus machinery (frames alongside any live new-call hold);
        bypasses MIN_GAP/burst — a deliberate tap is not a dispatch storm. No-op while a drone owns
        the map. The run's pin is already plotted by the tally, so nothing is added or removed. */
+    /* the notes dock shortens the map tile — Leaflet cannot see a container resize on its own */
+    window.BC2FD_MAP_RESIZE=function(){ try{ map.invalidateSize({animate:false}); }catch(e){} };
     window.BC2FD_MAP_PEEK=function(lat,lng){
       if(lat==null||lng==null||!isFinite(lat)||!isFinite(lng)) return false;
       if(!pinsOn) return false;                     /* drone owns the map — tell the caller so the sheet can SAY so instead of silently closing */
@@ -3102,6 +3134,67 @@
     }
     function pruneUnits(calls){ var live={}; calls.forEach(function(c){ live[callKey(c)]=1; });   /* drop state for calls that left the board */
       Object.keys(callSeen).forEach(function(k){ if(!live[k]){ delete callSeen[k]; delete unitFU[k]; } }); }
+    /* ── CALL NOTES BANK (live-only) ──────────────────────────────────────────────────
+       The worker never stores the narrative, so once a call ages off the 15-minute live
+       window its notes exist nowhere. The board banks what it sees while it is running.
+       In page memory ONLY — never localStorage, never KV — so it is exactly as private as
+       the live feed and is gone on reload. Bounded so a long tour cannot grow it forever. */
+    var NOTE_MEM={}, NOTE_ORDER=[], NOTE_CAP=400;
+    function noteKey(c){ return String((c&&(c.cad_code||c.id))||"").trim(); }
+    function noteBank(c,onlyIfNotes){
+      var k=noteKey(c); if(!k) return;
+      var ns=Array.isArray(c.notes)?c.notes:[];
+      if(onlyIfNotes && !ns.length) return;   /* a stored row with no notes must NOT overwrite 'not retained' with a false 'no notes' */
+      var prev=NOTE_MEM[k];
+      if(prev && Array.isArray(prev.notes) && prev.notes.length>ns.length) ns=prev.notes;   /* a re-tone can arrive with a SHORTER log — keep the richer one, same rule the worker uses */
+      if(!prev){ NOTE_ORDER.push(k); while(NOTE_ORDER.length>NOTE_CAP){ var old=NOTE_ORDER.shift(); if(old!==k) delete NOTE_MEM[old]; } }
+      NOTE_MEM[k]={notes:ns, ty:c.type||"", ad:c.address||"", ts:ageBasis(c), cs:c.caseNo||"", le:c.leNo||""};
+    }
+    function noteCapture(calls,onlyIfNotes){
+      calls.forEach(function(c){ noteBank(c,onlyIfNotes); });
+      if(NT_KEY && NOTE_MEM[NT_KEY]) ntPaint();   /* dock open on a live call — new dispatcher notes appear as they land */
+    }
+    /* ── the dock ── */
+    var NT_KEY="", NT_FALL=null, NT_TIMER=null;
+    function ntSized(){ try{ if(window.BC2FD_MAP_RESIZE) window.BC2FD_MAP_RESIZE(); }catch(e){} }
+    function ntClose(){
+      NT_KEY=""; NT_FALL=null;
+      if(NT_TIMER){ clearTimeout(NT_TIMER); NT_TIMER=null; }
+      var d=document.getElementById("ntDock"); if(d){ d.hidden=true; d.innerHTML=""; }
+      setTimeout(ntSized,60);
+    }
+    function ntArm(){
+      if(NT_TIMER) clearTimeout(NT_TIMER);
+      var wall=!!(window.matchMedia && window.matchMedia("(min-width:1500px)").matches);
+      if(wall) NT_TIMER=setTimeout(ntClose,60000);   /* wall only: a safety board is never left covered by something someone walked away from */
+    }
+    function ntPaint(){
+      var d=document.getElementById("ntDock"); if(!d) return;
+      var m=NOTE_MEM[NT_KEY]||null, f=NT_FALL||{};
+      var ty=(m&&m.ty)||f.ty||"CALL", ad=(m&&m.ad)||f.ad||"", ts=(m&&m.ts)||f.ts||"";
+      var body;
+      if(m && m.notes && m.notes.length){
+        body=m.notes.map(function(n){ return '<div class="nt-row'+(n.s?" sys":"")+'">'+esc(n.x)+'</div>'; }).join("")+
+             ((m.cs||m.le)?('<div class="nt-foot">'+[m.cs?("CASE "+esc(m.cs)):"", m.le?("LE "+esc(m.le)):""].filter(Boolean).join(" &middot; ")+'</div>'):"");
+      } else if(m){
+        body='<div class="nt-none">No notes on this call.</div>';   /* we HAVE the call — dispatch simply sent no narrative */
+      } else {
+        body='<div class="nt-gone">Notes not retained &mdash; this run aged off the live feed before the board saw it. CAD narrative is not stored.</div>';
+      }
+      d.style.setProperty("--ndc", rtColor((RT_META[classify(ty)]||RT_META[""])[1]));
+      d.innerHTML='<div class="nt-hd"><span class="nt-dot"></span><span class="nt-ty">'+esc(ty)+'</span>'+
+        '<span class="nt-ad">'+esc(ad)+'</span><span class="nt-tm">'+esc(dropTime(ts))+'</span>'+
+        '<button type="button" class="nt-x" aria-label="Close notes">&#10005;</button></div>'+
+        '<div class="nt-body">'+body+'</div>';
+      var x=d.querySelector(".nt-x"); if(x) x.addEventListener("click",ntClose);
+    }
+    /* fallback carries what the RUN ROW knows, so the header still reads right for a call the
+       board never witnessed and whose notes are therefore gone. */
+    function ntOpen(key,fallback){
+      var d=document.getElementById("ntDock"); if(!d) return;
+      NT_KEY=String(key||""); NT_FALL=fallback||null;
+      d.hidden=false; ntPaint(); setTimeout(ntSized,60); ntArm();
+    }
     function freshOnly(calls){ return calls.filter(function(c){
       var ts=ageBasis(c);
       if(!ts) return true;                             /* no timestamp: keep (fail-visible) */
@@ -3136,7 +3229,7 @@
       var body=document.getElementById("callsBody"), pg=document.getElementById("callsPage");
       if(!body) return;
       stopRot();
-      if(Array.isArray(calls)){ lastCallsArgs=[state, calls]; calls=freshOnly(calls); calls.forEach(tenderCheck); }
+      if(Array.isArray(calls)){ lastCallsArgs=[state, calls]; noteCapture(calls,false); calls=freshOnly(calls); calls.forEach(tenderCheck); }   /* bank BEFORE the 15-min age-out — a row dropped here is a row whose notes are gone forever */
       if(state==="off"){ show(false); body.className="calls-body";
         body.innerHTML='<div class="idle">— Dispatch feed standby</div>'; if(pg) pg.hidden=true; return; }   /* relay not built/configured — tile stays, honest standby (not an all-clear) */
       show(true);
@@ -3166,7 +3259,7 @@
         var td=tenderCache[tenderKey(c)];
         var tdh= td==="need" ? '<span class="ctd need" title="No hydrant within 1,000 ft — tender/drafting water supply">TENDER OPS</span>'
                : td==="if"   ? '<span class="ctd if" title="No hydrant within 1,000 ft — tenders if this becomes a working fire">TENDER IF FIRE</span>' : '';
-        return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'">'+
+        return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'"'+(noteKey(c)?(' data-nk="'+esc(noteKey(c))+'"'):'')+'>'+
                '<span class="cw">'+dropTime(ts)+'</span>'+                          /* time — far left */
                '<span class="ct">'+esc(c.type||"CALL")+'</span>'+tdh+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
@@ -3176,6 +3269,13 @@
       pruneUnits(calls);
       rot=autoRotate(body, rows, pg, 7000);
     }
+    /* tap a live call row -> its CAD narrative, docked above the map */
+    (function(){ var b=document.getElementById("callsBody"); if(!b) return;
+      b.addEventListener("click",function(e){
+        var row=e.target.closest && e.target.closest(".call-e[data-nk]"); if(!row) return;
+        ntOpen(row.getAttribute("data-nk"),null);
+      });
+    })();
     function dropTime(ts){ try{ if(!ts) return ""; var d=new Date(ts); if(isNaN(d.getTime())) return "";
       return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}); }catch(e){ return ""; } }
     /* strobe engine: every 500ms purge expired fresh flags (survives page rotation re-inserts,
@@ -3302,7 +3402,9 @@
            flipped 281 N/S etc.) get a visible "no pin" label instead of a dead tap that looks broken */
         var geo=(c.lat!=null&&c.lng!=null&&!c.gs)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'';
         var ch=(c.chute>=1)?('<br><i class="rs-ch" title="chute: dispatch to first apparatus'+(c.chuteUnit?(' ('+rtEsc(c.chuteUnit)+')'):'')+'">'+Math.floor(c.chute/60)+':'+('0'+(c.chute%60)).slice(-2)+'</i>'):'';
-        return '<div class="rs-run'+(geo?' rs-go':' rs-nogeo')+'"'+geo+'><span class="rs-t">'+rtEsc(dow(c))+' '+rtEsc(hhmm(c))+ch+(geo?'':'<br><i class="rs-np">no pin</i>')+'</span>'+
+        var nk=String(c.cad_code||c.id||"");
+        var nat=' data-nk="'+rtEsc(nk)+'" data-ty="'+rtEsc(c.type||"")+'" data-ad="'+rtEsc(c.address||"")+'" data-ts="'+rtEsc(c.logged||c.started||"")+'"';
+        return '<div class="rs-run'+(geo?' rs-go':' rs-nogeo')+'"'+geo+nat+'><span class="rs-t">'+rtEsc(dow(c))+' '+rtEsc(hhmm(c))+ch+(geo?'':'<br><i class="rs-np">no pin</i>')+'</span>'+
                '<span class="rs-n">'+rtEsc(ty)+'</span>'+
                '<span class="rs-u">'+(function(){
                   var seen={}, out=[];
@@ -3337,14 +3439,18 @@
     (function(){
       var o=document.getElementById("rtSheet"); if(!o) return;
       o.addEventListener("click",function(e){
-        var run=e.target.closest && e.target.closest(".rs-run[data-lat]");
+        var run=e.target.closest && e.target.closest(".rs-run");
         if(run){
+          var nk=run.getAttribute("data-nk")||"";
+          var fall={ty:run.getAttribute("data-ty")||"", ad:run.getAttribute("data-ad")||"", ts:run.getAttribute("data-ts")||""};
+          /* no trustworthy coordinate: nothing to peek, so the notes ARE the answer */
+          if(!run.hasAttribute("data-lat")){ ntOpen(nk,fall); rtClose(); return; }
           /* Close the sheet ONLY when the peek actually took the map. When drone ops own the wall
              the peek is refused — flash the row with a "map busy" cue and keep the sheet open,
              instead of the old silent collapse that read as "zoom is broken". */
           var ok=false;
           try{ ok=!!(window.BC2FD_MAP_PEEK && window.BC2FD_MAP_PEEK(parseFloat(run.getAttribute("data-lat")),parseFloat(run.getAttribute("data-lng")))); }catch(err){}
-          if(ok){ rtClose(); return; }
+          if(ok){ ntOpen(nk,fall); rtClose(); return; }   /* the map is moving to the pin — the notes dock above it, never over it */
           run.classList.add("rs-busy");
           setTimeout(function(){ try{ run.classList.remove("rs-busy"); }catch(e2){} },1600);
           rtArm(); return; }
@@ -3419,6 +3525,7 @@
         .then(function(j){
           if(!j||!j.ok||!Array.isArray(j.calls)){ tallyFail(); return; }
           tallyOk=true; tallyFails=0; applyTallyVis();
+          noteCapture(j.calls,true);   /* the 48h log carries notes only once the worker is pasted with retention — banking them here needs no further board change */
           /* MAC121 auto-active: mutual-aid engine has no roster feed, so a dispatch IS the signal it's
              up. Any call in the 48h log carrying MAC121 (or MA121 — dispatch tones it both ways) lights
              the pill for 6h from that call; latest assignment wins. Scans the full log, not just this

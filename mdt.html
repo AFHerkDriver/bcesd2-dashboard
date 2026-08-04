@@ -1164,7 +1164,14 @@
     }
     if (!card.dataset.ll || !map) return;
     const p = card.dataset.ll.split(",").map(Number);
-    if (p.length === 2 && isFinite(p[0])) try { map.setView(p, 15.5); } catch (err) {}
+    if (p.length !== 2 || !isFinite(p[0])) return;
+    /* Tapping a call is a DELIBERATE look at that run, so it outranks GPS follow exactly like a
+       fresh dispatch does — the view stays on the call until the crew taps Center to come back.
+       This used to rely on setView happening to change the zoom, which fires zoomstart and broke
+       follow as a side effect; at 15.5 already (any second tap) no zoomstart fired, follow stayed
+       on, and the next fix a second later yanked the map back to the rig. */
+    avlBreakFollow();
+    try { map.setView(p, 15.5); } catch (err) {}
   });
 
   /* any tap on the PiP nudges a blocked video back to playing (harmless alongside the controls) */
