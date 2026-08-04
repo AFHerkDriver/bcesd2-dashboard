@@ -775,6 +775,39 @@
      stays "admin", so relabel only what reaches the screen. Diagnostics deliberately still prints
      worker errors raw: that panel's job is to show exactly what came back. */
   function admErr(e){ return String(e||'')==='admin only' ? 'Owner only.' : String(e||''); }
+  /* ── Roster order: rank top-down, then name within a rank.
+     Rank is NOT a stored field — the worker hands back a free-text `name` (and sorts it
+     alphabetically), so the rank is read off the front of that string here. Client-side on
+     purpose: no worker change, so no Cloudflare paste.
+     TEST ORDER IS LOAD-BEARING. "Asst Chief Vasquez" also starts matching a bare /^chief/,
+     so the compound chiefs MUST be tested before the plain one or every chief collapses to
+     the top of the list. The `n:` value is the display rank; the array order is the match
+     order, and the two deliberately differ. ── */
+  var ADM_RANKS=[
+    {n:2, re:/^(?:assistant|asst)\.?\s*chief\b/}, {n:2, re:/^a\/?c\b/},
+    {n:3, re:/^(?:division|div)\.?\s*chief\b/},   {n:3, re:/^d\/?c\b/},
+    {n:4, re:/^(?:battalion|batt|bn)\.?\s*chief\b/}, {n:4, re:/^b\/?c\b/},
+    {n:1, re:/^chief\b/},                          /* only reached once the compounds miss */
+    {n:5, re:/^(?:captain|capt|cpt)\b/},
+    {n:6, re:/^(?:lieutenant|lieut|lt)\b/}
+  ];
+  /* Returns the rank and the name with the rank stripped, so "Captain Alvarez" and "Capt Sanchez"
+     sort by surname rather than by how the rank happened to be spelled. Unranked names (a board
+     display, say) get 99 and fall to the bottom, alphabetically among themselves. */
+  function admRank(nm){
+    var s=String(nm==null?'':nm).trim().toLowerCase();
+    for(var i=0;i<ADM_RANKS.length;i++){
+      var m=ADM_RANKS[i].re.exec(s);
+      if(m) return {n:ADM_RANKS[i].n, rest:s.slice(m[0].length).replace(/^[\s.,]+/,'')};
+    }
+    return {n:99, rest:s};
+  }
+  function admCmp(a,b){
+    var ra=admRank(a&&a.name), rb=admRank(b&&b.name);
+    if(ra.n!==rb.n) return ra.n-rb.n;
+    var an=ra.rest||String((a&&a.name)||'').toLowerCase(), bn=rb.rest||String((b&&b.name)||'').toLowerCase();
+    return an.localeCompare(bn);
+  }
   function admMsg(t,bad){ var m=$g('admMsg'); if(!m) return; m.textContent=t||''; m.className='adm-msg'+(bad?' err':''); }
   function admPost(pin,body){
     body.pin=pin;
@@ -802,7 +835,8 @@
           ? 'PIN management isn&rsquo;t on the worker yet &mdash; paste build 13.'
           : (res.status===403 ? 'Owner PIN only.' : 'Couldn&rsquo;t load the PIN list.'))+'</div>';
         return; }
-      var ps=res.j.pins||[], s=$g('adminFoldSum');
+      var ps=(res.j.pins||[]).slice().sort(admCmp);   /* rank top-down, then name; slice so the response isn't mutated */
+      var s=$g('adminFoldSum');
       if(s) s.textContent='· '+ps.length+' with access';   /* textContent, so a real middot — an entity would render literally */
       box.innerHTML = ps.length ? ps.map(function(p){
         return '<div class="adm-row"><span class="adm-nm">'+admEsc(p.name)+'</span>'+
