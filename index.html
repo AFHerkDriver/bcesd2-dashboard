@@ -965,13 +965,6 @@
   /* never an ambiguous blank — say WHICH of the two empty cases this is */
   .nt-none{padding:7px 2px;font-size:clamp(10.5px,1.1vmin,14px);color:var(--dim)}
   .nt-gone{padding:7px 2px;font-size:clamp(10.5px,1.1vmin,14px);color:var(--amber);line-height:1.4}
-  /* Live-call notes: pinned under the tapped row. Body-level and fixed — .tile is
-     overflow:hidden, so a panel inside the tile would be clipped at its edge.
-     Below the run sheet's 2000 so that sheet still covers it, above Leaflet's controls. */
-  .ntpop{position:fixed;z-index:1600;display:flex;flex-direction:column;min-height:0;
-    border:1px solid var(--ndc,var(--dim));border-radius:9px;background:var(--panel2);
-    overflow:hidden;box-shadow:0 14px 40px rgba(0,0,0,.72)}
-  .ntpop[hidden]{display:none}
   .call-e[data-nk]{cursor:pointer}
   .call-e[data-nk]:hover{background:rgba(255,255,255,.045)}
   .rt-cnm{font-family:'Bebas Neue',sans-serif;letter-spacing:.5px;color:var(--rc);font-size:clamp(11px,1.25vmin,20px);line-height:1;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}   /* ellipsis, never a mid-word clip on a narrow cell */
@@ -2102,9 +2095,6 @@
   })();
 </script>
 
-<!-- Live-call notes, pinned under the tapped Active Calls row. Body level: the tile clips. -->
-<div class="ntpop" id="ntPop" hidden></div>
-
 <!-- Run detail sheet — opened by tapping a Runs by Type cell. Lives at body level so it is never
      clipped by a tile's overflow. Hidden until a cell is tapped; auto-dismisses on the wall. -->
 <div class="rs-wrap" id="rtSheet" hidden></div>
@@ -3175,27 +3165,13 @@
       if(NT_KEY && NOTE_MEM[NT_KEY]) ntPaint();   /* dock open on a live call — new dispatcher notes appear as they land */
     }
     /* ── the dock ── */
-    var NT_KEY="", NT_FALL=null, NT_TIMER=null, NT_LIVE=false, NT_EL=null, NT_ANCH="";   /* NT_LIVE: opened from Active Calls (operational) rather than the run tally (debrief). NT_ANCH: the row the live popup is pinned under. */
+    var NT_KEY="", NT_FALL=null, NT_TIMER=null, NT_LIVE=false;   /* NT_LIVE: opened from Active Calls (operational) rather than the run tally (debrief) */
     function ntSized(){ try{ if(window.BC2FD_MAP_RESIZE) window.BC2FD_MAP_RESIZE(); }catch(e){} }
     function ntClose(){
-      NT_KEY=""; NT_FALL=null; NT_LIVE=false; NT_EL=null; NT_ANCH="";
+      NT_KEY=""; NT_FALL=null; NT_LIVE=false;
       if(NT_TIMER){ clearTimeout(NT_TIMER); NT_TIMER=null; }
-      ["ntDock","ntPop"].forEach(function(id){ var e=document.getElementById(id); if(e){ e.hidden=true; e.innerHTML=""; } });
-      setTimeout(ntSized,60);   /* the dock shortens the map tile — Leaflet has to be told either way */
-    }
-    /* Pin the live popup just under its row. Re-run on every re-render and on the strobe tick so
-       it tracks the row; if the row has left the board there is nothing to be under, so close. */
-    function ntAnchor(){
-      if(!NT_LIVE || !NT_ANCH || !NT_EL) return;
-      var row=null, all=document.querySelectorAll("#callsBody .call-e[data-nk]");
-      for(var i=0;i<all.length;i++){ if(all[i].getAttribute("data-nk")===NT_ANCH){ row=all[i]; break; } }
-      if(!row){ ntClose(); return; }                    /* call cleared, or rotated to another page */
-      var r=row.getBoundingClientRect(), gap=6, pad=10;
-      NT_EL.style.left=Math.round(r.left)+"px";
-      NT_EL.style.width=Math.round(r.width)+"px";
-      NT_EL.style.top=Math.round(r.bottom+gap)+"px";
-      /* never run off the bottom of the screen — cap the height to what is left below the row */
-      NT_EL.style.maxHeight=Math.max(90, Math.round(window.innerHeight-r.bottom-gap-pad))+"px";
+      var d=document.getElementById("ntDock"); if(d){ d.hidden=true; d.innerHTML=""; }
+      setTimeout(ntSized,60);
     }
     function ntArm(){
       if(NT_TIMER) clearTimeout(NT_TIMER);
@@ -3203,7 +3179,7 @@
       if(wall) NT_TIMER=setTimeout(ntClose,60000);   /* wall only: a safety board is never left covered by something someone walked away from */
     }
     function ntPaint(){
-      var d=NT_EL; if(!d) return;   /* whichever container this open belongs to */
+      var d=document.getElementById("ntDock"); if(!d) return;
       var m=NOTE_MEM[NT_KEY]||null, f=NT_FALL||{};
       var ty=(m&&m.ty)||f.ty||"CALL", ad=(m&&m.ad)||f.ad||"", ts=(m&&m.ts)||f.ts||"";
       var body;
@@ -3224,16 +3200,12 @@
            historical, and a caveat there is noise on a wall board. */
         (NT_LIVE ? '<div class="nt-dis">Live relay &mdash; CAD caps notes near '+NOTE_CAD_CAP+' characters, so a long log is cut at the tail (marked &hellip;) and dispatch may still be adding. Refer to CAD for complete, current notes.</div>' : '');
       var x=d.querySelector(".nt-x"); if(x) x.addEventListener("click",ntClose);
-      ntAnchor();   /* content just changed height — re-pin before the crew sees it jump */
     }
     /* fallback carries what the RUN ROW knows, so the header still reads right for a call the
        board never witnessed and whose notes are therefore gone. */
     function ntOpen(key,fallback,live){
-      var k=String(key||"");
-      if(NT_KEY===k && NT_LIVE===!!live && NT_EL){ ntClose(); return; }   /* tap the same line again to put it away */
-      var d=document.getElementById(live?"ntPop":"ntDock"); if(!d) return;
-      ntClose();                                       /* only one of the two is ever up */
-      NT_KEY=k; NT_FALL=fallback||null; NT_LIVE=!!live; NT_EL=d; NT_ANCH=live?k:"";
+      var d=document.getElementById("ntDock"); if(!d) return;
+      NT_KEY=String(key||""); NT_FALL=fallback||null; NT_LIVE=!!live;
       d.hidden=false; ntPaint(); setTimeout(ntSized,60); ntArm();
     }
     function freshOnly(calls){ return calls.filter(function(c){
@@ -3309,10 +3281,8 @@
       });
       pruneUnits(calls);
       rot=autoRotate(body, rows, pg, 7000);
-      setTimeout(ntAnchor,0);   /* rows were just rebuilt — re-pin to the new element for the same call */
     }
-    window.addEventListener("resize", ntAnchor);
-    /* tap a live call row -> its CAD narrative, pinned under that row */
+    /* tap a live call row -> its CAD narrative, docked above the map */
     (function(){ var b=document.getElementById("callsBody"); if(!b) return;
       b.addEventListener("click",function(e){
         var row=e.target.closest && e.target.closest(".call-e[data-nk]"); if(!row) return;
@@ -3335,7 +3305,6 @@
         var ux=parseInt(ufr[j].getAttribute("data-ufx")||"0",10);
         if(ux && Date.now()>ux) ufr[j].classList.remove("fresh-u"); else any=true;
       }
-      ntAnchor();                        /* cheap re-pin on the tick already running here */
       if(any) b.classList.toggle("flashtick");
       else b.classList.remove("flashtick");
     }, 500);
