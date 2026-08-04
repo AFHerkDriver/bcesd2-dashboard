@@ -1,6 +1,6 @@
 # Session handoff — read this before your first edit
 
-**Last updated: 2026-08-04, at commit `782ea77` (v213).**
+**Last updated: 2026-08-04, at commit `9b3d1a4` — v213 merged to `main` and confirmed live.**
 
 ## How this file works — you are expected to replace it
 
@@ -33,14 +33,16 @@ repo root publishes it, because the repo root is the web root.
 
 | Thing | Where it is |
 |---|---|
-| Working branch | `claude/bc2fd-dashboard-remote-control-dcg4ii` — pushed, at `782ea77` (v213) |
-| `main` | `fe80e78` (v210) — **4 commits behind; this branch is NOT merged** |
-| **What the boards actually run** | **v210.** v211, v212 and v213 are all unmerged and NOT live. |
+| `main` | `9b3d1a4` — **up to date and deployed.** Actions run green. |
+| **What the boards actually run** | **v213**, verified live (`bc2fd-dash-v213` served). Nothing is unmerged. |
+| Working branch | `claude/bc2fd-dashboard-remote-control-dcg4ii` — fully merged into `main`, nothing unique left on it. Safe to branch fresh from `main`. |
 | Live worker | **build 13**, deployed 2026-08-04T05:11:42Z. Repo `worker.js` is byte-identical. **No paste pending.** |
 | SW cache | `bc2fd-dash-v213` |
 
-Pushing this branch does **not** deploy — Pages builds `main`. Merging is what reaches the wall
-boards. Do not merge without explicit confirmation from the user.
+**Deploy = merging to `main`.** Pages builds `main`; pushing a feature branch does not reach the
+wall boards. **Never merge to `main` without explicit confirmation from the user** — that push is
+what puts code in front of firefighters. The paired Cloudflare lane is separate: `worker.js` only
+goes live when a human pastes it into the dashboard.
 
 ## The branch name is a lie — REMOTE CONTROL IS NOT STARTED
 
@@ -120,8 +122,11 @@ Flagged; awaiting their call.
 
 ## Open
 
-- **Merge to `main`?** Not discussed. That is what puts v211–v213 on the boards. Confirm first.
-- **Diagnostics double-gate** (above) — user may want name-only.
+- **Diagnostics double-gate** (above) — user may want name-only. Raised, not yet answered.
+- **v213 is live and unexercised in the field.** The Owner Access card has only ever been driven
+  from a local preview with simulated data — the worker's CORS is locked to the Pages origin, so
+  localhost cannot unlock it for real. First real Owner sign-in is the true test. If the Access Log
+  or Diagnostics look wrong, suspect the class gate (Trap A) before anything else.
 - **Remote control** — unstarted. See above for the problem it must solve.
 - **Worker rate limiter** — parked; the Cloudflare `RL` binding was never created, so it is inert.
 
