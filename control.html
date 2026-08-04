@@ -327,7 +327,7 @@
       <span style="color:var(--dim)">&rsaquo;</span>
     </a>
 
-    <!-- Chute Times — admin-only gee-whiz: turnout stats from the 48h call log -->
+    <!-- Chute Times — turnout stats from the 48h call log. Visible to every officer, not admin-gated. -->
     <div class="card" id="chuteCard" style="display:none">
       <h2>Chute Times</h2>
       <div class="hint">Turnout measured dispatch &rarr; FIRST apparatus attaching, from the 48h call log. Calls where dispatch auto-assigned an apparatus can&rsquo;t be measured and are skipped. NFPA 1710 turnout benchmarks: 60s EMS / 80s fire at the 90th percentile.</div>
@@ -512,7 +512,8 @@
   function $g(id){ return document.getElementById(id); }
   function msg(txt, cls){ var m=$g('gateMsg'); if(m){ m.textContent=txt||''; m.className='gate-msg'+(cls?(' '+cls):''); } }
   function unlock(name, tier, pin){
-    if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadChuteStats(pin); loadTypeLog(pin); }   /* access log + chute gee-whiz are yours alone — admin PIN only */
+    if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadTypeLog(pin); }   /* access log + type log + reset are admin PIN only */
+    loadChuteStats(pin);   /* every officer sees chute times — the worker's /calls needs only a valid PIN, so this was never a data restriction, just a UI one */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
     /* Diagnostics card is OWNER-only — same identity gate as the token reminder */
     try{ if(String(name||'').trim().toLowerCase()==='capt sanchez' && window.wireDiag) window.wireDiag(pin); }catch(e){}
