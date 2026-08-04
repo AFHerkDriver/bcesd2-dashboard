@@ -105,7 +105,7 @@
   .diag-sum.allok{color:#34C759} .diag-sum.down{color:#FF3B30}
   .oosck{font-size:11px;font-family:'DM Mono',monospace;white-space:nowrap;color:var(--dim);align-self:center}
   .oosck.ok{color:#34C759} .oosck.bad{color:#FF3B30;font-weight:700}
-  /* Chute Times (admin gee-whiz) */
+  /* Chute Times (every officer — not Owner-gated) */
   .chute-body{font-family:'DM Mono',monospace;font-size:13px}
   .chute-hero{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 12px}
   .chute-hero .cb{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 14px;text-align:center;flex:1 1 100px}
@@ -115,8 +115,8 @@
   .chute-tbl td,.chute-tbl th{padding:5px 8px;border-top:1px solid var(--border);text-align:left;font-weight:400}
   .chute-tbl th{color:var(--dim);font-size:11px;letter-spacing:1px;text-transform:uppercase;border-top:none}
   .chute-tbl td.num{color:#2DD4BF}
-  /* Access Log (admin PIN only) — control-panel activity grouped by person, expandable */
-  #accCard{display:none}
+  /* Access Log (Owner PIN only) — control-panel activity grouped by person, expandable.
+     Hiding is handled by .adm-tool below, not an #id rule: an id would outrank the .on gate. */
   .acc-body{max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
   .acc-reset{margin-top:10px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);font-family:inherit;font-size:12px;letter-spacing:1px;padding:9px 14px;min-height:38px;cursor:pointer}
   .acc-reset:hover{border-color:var(--dim);color:var(--text)}
@@ -144,6 +144,32 @@
   .acc-line.bad .acc-txt{color:var(--red)}
   .acc-line .acc-ip{flex:0 0 auto;color:var(--dim);font-size:10px}
   .acc-empty{padding:12px 10px;color:var(--dim);font-size:12px;text-align:center}
+  /* Owner Access card */
+  /* Owner-only tools nested in the Owner Access card. Class-gated so the parent's fold rule
+     (.card.fold.clps > :not(h2), specificity 0-3-1) still beats .adm-tool.on (0-2-0) and folds
+     them away with the card. An inline display:block would win instead and leak them on screen. */
+  .adm-tool{display:none}
+  .adm-tool.on{display:block}
+  .adm-sec{margin:14px 0 6px;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim)}
+  .adm-list{margin:0;padding-left:18px}
+  .adm-list li{font-size:13px;line-height:1.5;margin-bottom:4px}
+  .adm-list b{color:var(--text)}
+  .adm-pins{border:1px solid var(--border);border-radius:8px;background:var(--bg);overflow:hidden}
+  .adm-row{display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--border)}
+  .adm-row:last-child{border-bottom:none}
+  .adm-nm{flex:1 1 auto;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .adm-tier{flex:0 0 auto;font-size:10px;letter-spacing:1px;text-transform:uppercase;border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--dim)}
+  .adm-tier.t-admin{color:var(--accent);border-color:var(--accent)}
+  .adm-when{flex:0 0 auto;font-size:11px;color:var(--dim)}
+  .adm-self{flex:0 0 auto;font-size:11px;color:var(--dim);font-style:italic}
+  .adm-rev{flex:0 0 auto;background:none;border:1px solid var(--border);border-radius:7px;color:var(--dim);font-family:inherit;font-size:11px;letter-spacing:.5px;padding:7px 10px;min-height:34px;cursor:pointer}
+  .adm-rev.armed{border-color:var(--red);color:var(--red)}
+  .adm-add{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+  .adm-add input,.adm-add select{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;padding:9px 10px;min-height:38px}
+  .adm-add #admPin{width:130px}
+  .adm-add #admName{flex:1 1 130px;min-width:0}
+  .adm-msg{margin-top:8px;font-size:12px;color:var(--dim);min-height:16px}
+  .adm-msg.err{color:var(--red)}
   .acc-empty.err{color:var(--amber)}
   .tag{font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:20px;border:1px solid var(--accent);
     color:var(--accent);background:rgba(255,107,53,.1)}
@@ -327,7 +353,7 @@
       <span style="color:var(--dim)">&rsaquo;</span>
     </a>
 
-    <!-- Chute Times — turnout stats from the 48h call log. Visible to every officer, not admin-gated. -->
+    <!-- Chute Times — turnout stats from the 48h call log. Visible to every officer, not Owner-gated. -->
     <div class="card" id="chuteCard" style="display:none">
       <h2>Chute Times</h2>
       <div class="hint">Turnout measured dispatch &rarr; FIRST apparatus attaching, from the 48h call log. Calls where dispatch auto-assigned an apparatus can&rsquo;t be measured and are skipped. NFPA 1710 turnout benchmarks: 60s EMS / 80s fire at the 90th percentile.</div>
@@ -472,26 +498,68 @@
     </div><!-- /setCard -->
 
 
-    <!-- Access Log — admin PIN only; who opened (or tried to open) this control panel -->
-    <div class="card" id="accCard">
-      <h2>Access Log</h2>
-      <div class="hint">Who&rsquo;s opened this control panel and what they changed &mdash; grouped by person, most-recently-active first. Tap a name to expand their logins (🔑) and board edits (✏️). Rejected PINs bucket under &ldquo;Unknown / failed.&rdquo; Admin PIN only.</div>
-      <div class="acc-body" id="accBody"><div class="acc-empty">Loading&hellip;</div></div>
-      <button type="button" class="acc-reset" id="accReset">Reset Log</button>
-    </div>
+    <!-- Owner Access — LAST card, Owner PIN only (stored tier value is still "admin"). Officers never
+         see it: the point is to answer "what do I have that they don't", to hand out access without the
+         Cloudflare KV editor, and to hold every Owner-only control on this page in ONE place. -->
+    <div class="card fold clps" id="adminCard" style="display:none">
+      <h2>&#128273; Owner Access <span class="fold-sum" id="adminFoldSum"></span></h2>
+      <div class="hint">Everything your PIN unlocks that an officer&rsquo;s does not, and who can sign in. Owner only &mdash; this card is hidden from every other tier.</div>
+      <div class="adm-sec">On this page</div>
+      <ul class="adm-list">
+        <li><b>Access Log</b> &mdash; who opened the panel, their logins and every board edit</li>
+        <li><b>Reset Log</b> &mdash; clear that log</li>
+        <li><b>Call Types Seen</b> &mdash; every CAD type the relay has ever sighted</li>
+        <li><b>Diagnostics</b> &mdash; your run dumps the FULL Active911 alert; an officer&rsquo;s shows a trimmed one</li>
+      </ul>
+      <div class="adm-sec">Metrics &amp; feed</div>
+      <ul class="adm-list">
+        <li><b>Rebuild metrics</b> &mdash; re-aggregate all history from the permanent archive under current rules, after a rules change</li>
+        <li><b>Metrics baseline</b> &mdash; hide history before a date. Non-destructive: it hides, it never deletes</li>
+        <li><b>Raw CAD feed</b> &mdash; exactly what Active911 sends, before the relay normalises it</li>
+        <li><b>Duplicate analysis</b> &mdash; the re-toned runs the deduper collapsed into one incident</li>
+      </ul>
+      <div class="adm-sec">Tiers</div>
+      <ul class="adm-list">
+        <li><b>board</b> &mdash; display only. Wall boards and MDTs read; they cannot write board state</li>
+        <li><b>officer</b> &mdash; everything else on this page: announcements, hospitals, hydrants, strike teams, fleet</li>
+        <li><b>Owner</b> &mdash; officer plus everything listed above</li>
+      </ul>
+      <div class="adm-sec">Access PINs</div>
+      <div class="hint">Adding takes effect immediately. <b>Revoking deletes the record outright</b> &mdash; the PIN stops working at once and cannot be put back, so issue a new one rather than trying to restore it. Their history in the access log is untouched. PINs are never shown again after you add them: write it down and hand it over. Every add and revoke is stamped into the access log with your name.</div>
+      <div class="adm-pins" id="admPins"><div class="acc-empty">Loading&hellip;</div></div>
+      <div class="adm-add">
+        <input id="admPin" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="PIN" maxlength="8">
+        <input id="admName" type="text" autocomplete="off" spellcheck="false" placeholder="Name" maxlength="60">
+        <!-- option value MUST stay "admin": the worker stores and checks that exact string -->
+        <select id="admTier"><option value="officer">Officer</option><option value="admin">Owner</option><option value="board">Board (display only)</option></select>
+        <button type="button" class="btn" id="admAdd">Add</button>
+      </div>
+      <div class="adm-msg" id="admMsg"></div>
 
-    <!-- Diagnostics — owner only, LAST card on the page: live health sweep of every data connection -->
-    <div class="card" id="diagCard" style="display:none">
-      <h2>🩺 Diagnostics</h2>
-      <div class="hint">Checks every connection the board depends on, from THIS device: worker routes, NWS (+ hourly), backup weather, flood sensors, burn ban, rain radar sources, county parcel &amp; hydrant services, map tiles, Firestore state, and the Firehawk schedule. Green = healthy; red = that source is down (the board fails loud on it, not silently).</div>
-      <button type="button" class="diag-btn" id="diagRun">Run Diagnostics</button>
-      <div class="diag-out" id="diagOut" hidden></div>
-    </div>
+      <!-- ── Owner-only controls, moved in from their own cards so everything the Owner PIN unlocks
+           lives in this one card. They keep their original ids, so all existing wiring is unchanged.
+           Visibility is CLASS-gated (.adm-tool/.on), never an inline display: an inline style would
+           outrank the parent's fold rule (.card.fold.clps > :not(h2)) and leave these on screen with
+           the card collapsed. ── -->
+      <div class="adv-sec adm-tool" id="accCard">
+        <h2>Access Log</h2>
+        <div class="hint">Who&rsquo;s opened this control panel and what they changed &mdash; grouped by person, most-recently-active first. Tap a name to expand their logins (🔑) and board edits (✏️). Rejected PINs bucket under &ldquo;Unknown / failed.&rdquo; Owner PIN only.</div>
+        <div class="acc-body" id="accBody"><div class="acc-empty">Loading&hellip;</div></div>
+        <button type="button" class="acc-reset" id="accReset">Reset Log</button>
+      </div>
 
-    <div class="card fold clps" id="typesCard" style="display:none">
-      <h2>Call Types Seen <span class="fold-sum" id="typesFoldSum"></span></h2>
-      <div class="hint">Every distinct CAD call type the relay has ever sighted — runs since Jul 21 from the permanent archive, announcements from Aug 1 onward. A–Z. Admin eyes only.</div>
-      <div id="typesBody" class="chute-body">Loading&hellip;</div>
+      <div class="adv-sec adm-tool" id="typesCard">
+        <h2>Call Types Seen <span class="fold-sum" id="typesFoldSum"></span></h2>
+        <div class="hint">Every distinct CAD call type the relay has ever sighted — runs since Jul 21 from the permanent archive, announcements from Aug 1 onward. A–Z. Owner eyes only.</div>
+        <div id="typesBody" class="chute-body">Loading&hellip;</div>
+      </div>
+
+      <div class="adv-sec adm-tool" id="diagCard">
+        <h2>🩺 Diagnostics</h2>
+        <div class="hint">Checks every connection the board depends on, from THIS device: worker routes, NWS (+ hourly), backup weather, flood sensors, burn ban, rain radar sources, county parcel &amp; hydrant services, map tiles, Firestore state, and the Firehawk schedule. Green = healthy; red = that source is down (the board fails loud on it, not silently).</div>
+        <button type="button" class="diag-btn" id="diagRun">Run Diagnostics</button>
+        <div class="diag-out" id="diagOut" hidden></div>
+      </div>
     </div>
 
     <!-- Sticky Save — always in reach at the bottom of the screen; the unsaved-orange ring rides here -->
@@ -512,7 +580,7 @@
   function $g(id){ return document.getElementById(id); }
   function msg(txt, cls){ var m=$g('gateMsg'); if(m){ m.textContent=txt||''; m.className='gate-msg'+(cls?(' '+cls):''); } }
   function unlock(name, tier, pin){
-    if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadTypeLog(pin); }   /* access log + type log + reset are admin PIN only */
+    if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadTypeLog(pin); loadAdmin(pin); }   /* access log + type log + reset + PIN roster are Owner-only (stored tier value stays "admin") */
     loadChuteStats(pin);   /* every officer sees chute times — the worker's /calls needs only a valid PIN, so this was never a data restriction, just a UI one */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
     /* Diagnostics card is OWNER-only — same identity gate as the token reminder */
@@ -539,6 +607,10 @@
     el.hidden=false;
   }
   function accEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  /* Label only. The STORED tier value stays "admin" everywhere — KV pin: records carry tier:"admin"
+     and the worker compares against that exact string, so this renames what the officer reads and
+     nothing else. Never feed this back into a request body or a tier comparison. */
+  function tierLabel(t){ return String(t)==='admin' ? 'Owner' : String(t==null?'':t); }
   /* Central time, matching the board — a login at 11:45 PM Central is 12:45 AM Eastern the NEXT day,
      so an officer reading the log from another coast would otherwise see the wrong DATE. */
   function accWhen(t){ try{ return new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'}); }catch(e){ return ''; } }
@@ -546,7 +618,7 @@
   function accLine(e){
     var isAction=(e.kind==='action'), bad=!isAction&&!e.ok, ip='', txt;
     if(isAction){ txt=e.action||'updated board state'; }
-    else if(e.ok){ txt='Signed in'+(e.tier&&e.tier!=='officer'?(' ('+e.tier+')'):''); }
+    else if(e.ok){ txt='Signed in'+(e.tier&&e.tier!=='officer'?(' ('+tierLabel(e.tier)+')'):''); }
     else { txt='Rejected — '+(ACC_REASON[e.reason]||'denied'); ip=e.ip||''; }
     return '<div class="acc-line'+(bad?' bad':'')+'">'+
            '<span class="acc-ico">'+(isAction?'✏️':'🔑')+'</span>'+
@@ -560,7 +632,7 @@
   function wireDiag(pin){
     var card=$g('diagCard'), btn=$g('diagRun'), out=$g('diagOut');
     if(!card||!btn||!out) return;
-    card.style.display='block';
+    card.classList.add('on');   /* class, not inline display — see .adm-tool */
     function T(ms){ try{ return AbortSignal.timeout(ms); }catch(e){ return undefined; } }
     var noteFail=function(n){};                                  /* rebound per run to collect failing names */
     function row(name,ok,val,ms){
@@ -588,7 +660,7 @@
       noteFail=function(n){ failNames.push(n); };
       function chk(p){ P.push(p.then(function(ok){ if(!ok) bad++; }).catch(function(){ bad++; })); }
       var FS_KEY2='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ';
-      var EXPECTED_WORKER=12;   /* the worker build this page shipped alongside — keep in step with WORKER_VERSION in worker.js */
+      var EXPECTED_WORKER=13;   /* the worker build this page shipped alongside — keep in step with WORKER_VERSION in worker.js */
       chk(jget(CTL_AUTH+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})}).then(function(r){
         var wv=r.j&&r.j.wv;
         return row('Worker build (Cloudflare paste)', wv===EXPECTED_WORKER,
@@ -653,7 +725,7 @@
       .then(function(r){ return r.ok?r.json():null; })
       .then(function(j){
         if(!j||!j.ok||!Array.isArray(j.types)) return;             /* stay hidden on failure — inventory, not safety */
-        card.style.display='block';
+        card.classList.add('on');   /* class, not inline display — see .adm-tool */
         if(!j.types.length){ body.textContent='Nothing sighted yet.'; return; }
         j.types.sort(function(a,b){ return String(a.ty).localeCompare(String(b.ty)); });   /* A–Z — an inventory reads like a dictionary, not a leaderboard */
         var fsum=$g('typesFoldSum'); if(fsum) fsum.textContent=j.types.length+' types';
@@ -695,16 +767,88 @@
         card.style.display='block';
       }).catch(function(){});
   }
+  /* ── OWNER ACCESS: the PIN roster. Nothing here ever holds a PIN — the worker hands back a
+     random id per record and takes that id to revoke, so this panel is safe to have on screen. ── */
+  var admArm={};
+  function admEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+  /* The worker answers a 403 with the literal body "admin only" — its tier value is unchanged and
+     stays "admin", so relabel only what reaches the screen. Diagnostics deliberately still prints
+     worker errors raw: that panel's job is to show exactly what came back. */
+  function admErr(e){ return String(e||'')==='admin only' ? 'Owner only.' : String(e||''); }
+  function admMsg(t,bad){ var m=$g('admMsg'); if(!m) return; m.textContent=t||''; m.className='adm-msg'+(bad?' err':''); }
+  function admPost(pin,body){
+    body.pin=pin;
+    return fetch(AUTH_URL+'/pins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(function(r){ return r.json().then(function(j){ return {status:r.status,j:j}; }); });
+  }
+  function loadAdmin(pin){
+    var c=$g('adminCard'); if(!c) return;
+    c.style.display='block';
+    var add=$g('admAdd');
+    if(add && !add.__w){ add.__w=1; add.addEventListener('click', function(){ admAdd(pin); }); }
+    var box=$g('admPins');
+    if(box && !box.__w){ box.__w=1; box.addEventListener('click', function(e){
+      var b=e.target.closest && e.target.closest('.adm-rev'); if(!b) return;
+      admRevoke(pin, b.getAttribute('data-rid'), b.getAttribute('data-rnm'), b);
+    }); }
+    admLoadPins(pin);
+  }
+  function admLoadPins(pin){
+    var box=$g('admPins'); if(!box) return;
+    box.innerHTML='<div class="acc-empty">Loading&hellip;</div>';
+    admPost(pin,{op:'list'}).then(function(res){
+      if(!res.j || !res.j.ok){
+        box.innerHTML='<div class="acc-empty err">'+((res.status===404||res.status===405)
+          ? 'PIN management isn&rsquo;t on the worker yet &mdash; paste build 13.'
+          : (res.status===403 ? 'Owner PIN only.' : 'Couldn&rsquo;t load the PIN list.'))+'</div>';
+        return; }
+      var ps=res.j.pins||[], s=$g('adminFoldSum');
+      if(s) s.textContent='· '+ps.length+' with access';   /* textContent, so a real middot — an entity would render literally */
+      box.innerHTML = ps.length ? ps.map(function(p){
+        return '<div class="adm-row"><span class="adm-nm">'+admEsc(p.name)+'</span>'+
+          '<span class="adm-tier t-'+admEsc(p.tier)+'">'+admEsc(tierLabel(p.tier))+'</span>'+   /* class keeps the raw tier (t-admin); only the label reads "Owner" */
+          '<span class="adm-when">'+(p.added?admEsc(String(p.added).slice(0,10)):'&mdash;')+'</span>'+
+          (p.self ? '<span class="adm-self">you</span>'
+                  : '<button type="button" class="adm-rev" data-rid="'+admEsc(p.id)+'" data-rnm="'+admEsc(p.name)+'">Revoke</button>')+
+          '</div>'; }).join('') : '<div class="acc-empty">No PINs found.</div>';
+    }).catch(function(){ box.innerHTML='<div class="acc-empty err">Couldn&rsquo;t reach the worker.</div>'; });
+  }
+  function admAdd(pin){
+    var np=($g('admPin').value||'').trim(), nm=($g('admName').value||'').trim(), tr=$g('admTier').value;
+    if(!/^\d{4,8}$/.test(np)){ admMsg('PIN must be 4-8 digits.',1); return; }
+    if(!nm){ admMsg('Give it a name \u2014 the access log is worthless without one.',1); return; }
+    admMsg('Adding\u2026');
+    admPost(pin,{op:'add',newPin:np,name:nm,tier:tr}).then(function(res){
+      if(!res.j || !res.j.ok){ admMsg(admErr(res.j&&res.j.error)||'Couldn\u2019t add that PIN.',1); return; }
+      $g('admPin').value=''; $g('admName').value='';
+      admMsg('Added '+nm+' as '+tr+'. Hand them the PIN now \u2014 it is never shown again.');
+      admLoadPins(pin);
+    }).catch(function(){ admMsg('Couldn\u2019t reach the worker.',1); });
+  }
+  /* two-tap, same as Reset Log: revoking locks someone out of a dispatch panel mid-shift */
+  function admRevoke(pin,id,nm,btn){
+    if(!admArm[id]){
+      admArm[id]=setTimeout(function(){ delete admArm[id]; try{ btn.textContent='Revoke'; btn.classList.remove('armed'); }catch(e){} },4000);
+      btn.textContent='Tap again'; btn.classList.add('armed'); return;
+    }
+    clearTimeout(admArm[id]); delete admArm[id];
+    admMsg('Revoking\u2026');
+    admPost(pin,{op:'revoke',id:id}).then(function(res){
+      if(!res.j || !res.j.ok){ admMsg(admErr(res.j&&res.j.error)||'Couldn\u2019t revoke that PIN.',1); admLoadPins(pin); return; }
+      admMsg('Revoked '+nm+'. That PIN stopped working immediately.');
+      admLoadPins(pin);
+    }).catch(function(){ admMsg('Couldn\u2019t reach the worker.',1); });
+  }
   function loadAccessLog(pin){
     var card=$g('accCard'), body=$g('accBody'); if(!card||!body) return;
-    card.style.display='block';
+    card.classList.add('on');   /* class, not inline display — see .adm-tool */
     body.innerHTML='<div class="acc-empty">Loading…</div>';
     fetch(AUTH_URL+'/accesslog?pin='+encodeURIComponent(pin)+'&n=200')
       .then(function(r){ return r.json().then(function(j){ return {status:r.status, j:j}; }); })
       .then(function(res){
         if(!res.j || !res.j.ok){
           body.innerHTML='<div class="acc-empty err">'+
-            (res.status===403 ? 'Access log is admin-only.'
+            (res.status===403 ? 'Access log is Owner-only.'
              : (res.status===404||res.status===405) ? 'Access log isn’t enabled on the worker yet.'
              : 'Couldn’t load the access log.')+'</div>';
           return;
