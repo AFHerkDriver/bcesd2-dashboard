@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 12;
+const WORKER_VERSION = 13;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1400,6 +1400,56 @@ export default {
        "avlroster" so edits are live on every board with no deploy. Reads allow any
        valid PIN (boards will consume the roster via /avl later); writes get the
        same board-tier wall as /state. */
+    /* ── POST /pins {pin, op:"list"|"add"|"revoke"} — ADMIN ONLY: station access PINs ──────
+       PIN records are KV keys named pin:<the pin>, so the key IS the credential and nothing
+       here ever returns one. Records carry a RANDOM id for revocation: a screenshot of the
+       admin panel gives an attacker nothing to type. Deliberately not even a masked "..17" —
+       two known digits cut a 4-digit space from 10,000 to 100, which the 8-per-5-minute
+       limiter no longer meaningfully protects.
+       POST rather than GET so an admin PIN never lands in a URL or a proxy log. */
+    if (req.method === "POST" && url.pathname === "/pins") {
+      let b = {}; try { b = await req.json(); } catch (e) {}
+      const gate = await pinGate(env, ip, b.pin, json);
+      if (gate.res) return gate.res;
+      if ((gate.who.tier || "") !== "admin") return json({ ok: false, error: "admin only" }, 403);
+      const me = String(b.pin || ""), op = String(b.op || "list");
+      const TIERS = ["officer", "admin", "board"];
+      if (op === "list" || op === "revoke") {
+        const ls = await env.PINS.list({ prefix: "pin:", limit: 200 });   /* a station holds tens of PINs, not thousands — bounded well inside the KV op budget */
+        const rows = [];
+        for (const k of ls.keys) {
+          const p = k.name.slice(4);
+          let rec = {}; try { rec = JSON.parse((await env.PINS.get(k.name)) || "{}"); } catch (e) {}
+          if (!rec.id) {   /* added by hand in the KV dashboard before this route existed — mint a stable handle, once */
+            rec.id = crypto.randomUUID().slice(0, 8);
+            try { await env.PINS.put(k.name, JSON.stringify(rec)); } catch (e) {}
+          }
+          rows.push({ key: k.name, p, id: rec.id, name: rec.name || "(unnamed)", tier: rec.tier || "officer", added: rec.added || null });
+        }
+        if (op === "list") {
+          rows.sort((x, y) => String(x.name).localeCompare(String(y.name)));
+          return json({ ok: true, pins: rows.map(r => ({ id: r.id, name: r.name, tier: r.tier, added: r.added, self: r.p === me })) }, 200);   /* r.p never leaves the worker */
+        }
+        const hit = rows.find(r => r.id === String(b.id || ""));
+        if (!hit) return json({ ok: false, error: "no such PIN" }, 404);
+        if (hit.p === me) return json({ ok: false, error: "that is the PIN you are signed in with — another admin has to revoke it" }, 400);   /* no self-lockout */
+        await env.PINS.delete(hit.key);
+        await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer", action: "REVOKED " + hit.tier + " access for " + hit.name });
+        return json({ ok: true }, 200);
+      }
+      if (op === "add") {
+        const np = String(b.newPin || "").trim(), nm = String(b.name || "").trim().slice(0, 60);
+        const tr = TIERS.indexOf(String(b.tier)) >= 0 ? String(b.tier) : "officer";
+        if (!/^\d{4,8}$/.test(np)) return json({ ok: false, error: "PIN must be 4-8 digits" }, 400);   /* same shape pinGate accepts, or the record would be unusable */
+        if (!nm) return json({ ok: false, error: "a name is required — the access log is worthless without one" }, 400);
+        if (await env.PINS.get("pin:" + np)) return json({ ok: false, error: "that PIN is already in use" }, 409);   /* never silently reassign someone else's PIN */
+        await env.PINS.put("pin:" + np, JSON.stringify({ name: nm, tier: tr, id: crypto.randomUUID().slice(0, 8), added: new Date().toISOString() }));
+        await logAccess(env, { kind: "action", ip, name: gate.who.name || "Officer", action: "ADDED " + tr + " access for " + nm });
+        return json({ ok: true }, 200);
+      }
+      return json({ ok: false, error: "bad op" }, 400);
+    }
+
     if (url.pathname === "/roster") {
       if (req.method === "GET") {
         const gate = await pinGate(env, ip, url.searchParams.get("pin"), json);
