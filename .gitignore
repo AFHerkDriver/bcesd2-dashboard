@@ -12,3 +12,7 @@ _handoff/
 
 # Claude Code local config — machine-specific, never commit.
 .claude/
+
+# Dev-only tooling deps (jsdom for the validation ritual). Never commit: GitHub Pages
+# serves this repo, and 1,840 vendored files would be published and bloat every clone.
+node_modules/
