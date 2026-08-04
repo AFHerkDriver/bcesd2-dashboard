@@ -143,6 +143,19 @@
 (function(){
   var AUTH='https://bc2fd-dash-auth.usafsentinel-45e.workers.dev';
   var $=function(id){return document.getElementById(id);};
+  /* ── Shared officer session with control.html / fleet.html ─────────────────────────────
+     sessionStorage (NOT localStorage) on purpose: the session dies with the tab, so walking
+     away from a station iPad ends it. Auto-unlock is NOT a weaker gate — this page holds no
+     data of its own; every figure comes from the worker's /metrics behind pinGate, and the
+     PIN is re-verified there on EVERY load. A hand-forged session entry buys nothing: the
+     worker rejects it and relock() below drops straight back to the gate. ── */
+  var SKEY='bc2fd_ctl_auth';
+  function sessionPin(){ try{ var a=JSON.parse(sessionStorage.getItem(SKEY)||'null'); return (a&&a.pin)||''; }catch(e){ return ''; } }
+  function relock(msg){
+    try{ sessionStorage.removeItem(SKEY); }catch(e){}          /* a dead PIN must not linger for the next page */
+    $('app').style.display='none'; $('gate').style.display='';  /* '' restores the stylesheet's flex, not a guessed value */
+    $('gmsg').textContent=msg||'Session expired — sign in again.'; $('gmsg').className='gmsg bad';
+  }
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function fmt(s){return Math.floor(s/60)+':'+('0'+Math.round(s%60)).slice(-2);}
   function pct(v,arr){arr=arr.slice().sort(function(a,b){return a-b;});if(!arr.length)return null;return arr[Math.min(arr.length-1,Math.ceil(arr.length*v)-1)];}
@@ -260,8 +273,9 @@
 
   function load(pin){
     fetch(AUTH+'/metrics?pin='+encodeURIComponent(pin))
-      .then(function(r){return r.json();})
-      .then(function(j){ if(!j||!j.ok){ $('stamp').innerHTML='<span class="err">⚠ Metrics unavailable — '+esc((j&&j.error)||'fetch failed')+'</span>'; return; }
+      .then(function(r){ if(r.status===401||r.status===403) return {__auth:false}; return r.json(); })   /* auth failure and outage are DIFFERENT: one re-gates, the other must shout */
+      .then(function(j){ if(j&&j.__auth===false){ relock('That PIN is no longer valid — sign in again.'); return; }
+        if(!j||!j.ok){ $('stamp').innerHTML='<span class="err">⚠ Metrics unavailable — '+esc((j&&j.error)||'fetch failed')+'</span>'; return; }
         try{ if(j.epoch){ var ed=new Date(j.epoch); var es=ed.toLocaleString('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
           var vh=$('volHint'); if(vh) vh.innerHTML='Permanent archive. <b>Reporting baseline: '+es+' Central</b> — earlier shakedown data is retained off the books. Announcements/burn-ban notices excluded. <b>Department metrics count in-district calls only</b> (official ESD 2/6 borders); cross-border responses given are tallied separately below and never dilute the stats.'; } }catch(e){}
         render(j.months||[]); })
@@ -273,11 +287,15 @@
     $('gmsg').textContent='Checking…'; $('gmsg').className='gmsg';
     fetch(AUTH+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin,scope:'control'})})
       .then(function(r){return r.json();})
-      .then(function(j){ if(j&&j.ok){ unlock(pin); } else { $('gmsg').textContent='Wrong PIN or display-only'; $('gmsg').className='gmsg bad'; } })
+      .then(function(j){ if(j&&j.ok){ try{ sessionStorage.setItem(SKEY, JSON.stringify({pin:pin, name:j.name||''})); }catch(e){}   /* hand the session to control/fleet/report so this is the last prompt */
+          unlock(pin); } else { $('gmsg').textContent='Wrong PIN or display-only'; $('gmsg').className='gmsg bad'; } })
       .catch(function(){ $('gmsg').textContent='Auth service unreachable — stays locked'; $('gmsg').className='gmsg bad'; });
   }
   $('ggo').addEventListener('click',submit);
   $('gpin').addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); });
+  /* Already signed in elsewhere this tab? Go straight in — load() re-verifies with the worker
+     and relock()s if the PIN has since been revoked, so this never skips a real check. */
+  (function(){ var p=sessionPin(); if(p) unlock(p); })();
   /* growth bars (static, from BCAD parcel analysis 2026-07-23) */
   (function(){
     var west=[["2019",4847],["2020",5712],["2021",7024],["2022",5605],["2023",5062],["2024",5771]];
