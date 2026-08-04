@@ -959,6 +959,9 @@
   .nt-row:last-child{border-bottom:none}
   .nt-row.sys{color:var(--dim)}                       /* system/status line, not a caller-scene note */
   .nt-foot{margin-top:5px;font-size:clamp(9px,.95vmin,12px);letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  /* pinned OUTSIDE the scrolling body — a caveat you can scroll away from is not a caveat */
+  .nt-dis{flex:0 0 auto;padding:5px 10px;border-top:1px solid var(--border);background:var(--panel);
+    font-size:clamp(9px,.95vmin,12px);line-height:1.35;color:var(--dim)}
   /* never an ambiguous blank — say WHICH of the two empty cases this is */
   .nt-none{padding:7px 2px;font-size:clamp(10.5px,1.1vmin,14px);color:var(--dim)}
   .nt-gone{padding:7px 2px;font-size:clamp(10.5px,1.1vmin,14px);color:var(--amber);line-height:1.4}
@@ -3140,25 +3143,32 @@
        In page memory ONLY — never localStorage, never KV — so it is exactly as private as
        the live feed and is gone on reload. Bounded so a long tour cannot grow it forever. */
     var NOTE_MEM={}, NOTE_ORDER=[], NOTE_CAP=400;
+    /* Active911 caps the whole `details` string near this, verified against live payloads
+       2026-07-31 (see the CAD NOTES PARSER header in worker.js) — a long note log is cut
+       mid-word at the tail, and the parser marks those entries with an ellipsis. THIS is the
+       limit a crew sees on a live call; the worker's 400/60 figures only bound the stored copy. */
+    var NOTE_CAD_CAP=450;
     function noteKey(c){ return String((c&&(c.cad_code||c.id))||"").trim(); }
     function noteBank(c,onlyIfNotes){
       var k=noteKey(c); if(!k) return;
       var ns=Array.isArray(c.notes)?c.notes:[];
       if(onlyIfNotes && !ns.length) return;   /* a stored row with no notes must NOT overwrite 'not retained' with a false 'no notes' */
+      if(onlyIfNotes && NOTE_MEM[k] && NOTE_MEM[k].src==="live") return;   /* the 48h row is a TRIMMED copy of what we already hold in full — never downgrade a live capture */
       var prev=NOTE_MEM[k];
       if(prev && Array.isArray(prev.notes) && prev.notes.length>ns.length) ns=prev.notes;   /* a re-tone can arrive with a SHORTER log — keep the richer one, same rule the worker uses */
       if(!prev){ NOTE_ORDER.push(k); while(NOTE_ORDER.length>NOTE_CAP){ var old=NOTE_ORDER.shift(); if(old!==k) delete NOTE_MEM[old]; } }
-      NOTE_MEM[k]={notes:ns, ty:c.type||"", ad:c.address||"", ts:ageBasis(c), cs:c.caseNo||"", le:c.leNo||""};
+      NOTE_MEM[k]={notes:ns, ty:c.type||"", ad:c.address||"", ts:ageBasis(c), cs:c.caseNo||"", le:c.leNo||"",
+                   src:(prev&&prev.notes===ns)?prev.src:(onlyIfNotes?"log":"live")};   /* track which copy we kept, so the richer-log rule cannot silently relabel it */
     }
     function noteCapture(calls,onlyIfNotes){
       calls.forEach(function(c){ noteBank(c,onlyIfNotes); });
       if(NT_KEY && NOTE_MEM[NT_KEY]) ntPaint();   /* dock open on a live call — new dispatcher notes appear as they land */
     }
     /* ── the dock ── */
-    var NT_KEY="", NT_FALL=null, NT_TIMER=null;
+    var NT_KEY="", NT_FALL=null, NT_TIMER=null, NT_LIVE=false;   /* NT_LIVE: opened from Active Calls (operational) rather than the run tally (debrief) */
     function ntSized(){ try{ if(window.BC2FD_MAP_RESIZE) window.BC2FD_MAP_RESIZE(); }catch(e){} }
     function ntClose(){
-      NT_KEY=""; NT_FALL=null;
+      NT_KEY=""; NT_FALL=null; NT_LIVE=false;
       if(NT_TIMER){ clearTimeout(NT_TIMER); NT_TIMER=null; }
       var d=document.getElementById("ntDock"); if(d){ d.hidden=true; d.innerHTML=""; }
       setTimeout(ntSized,60);
@@ -3185,14 +3195,17 @@
       d.innerHTML='<div class="nt-hd"><span class="nt-dot"></span><span class="nt-ty">'+esc(ty)+'</span>'+
         '<span class="nt-ad">'+esc(ad)+'</span><span class="nt-tm">'+esc(dropTime(ts))+'</span>'+
         '<button type="button" class="nt-x" aria-label="Close notes">&#10005;</button></div>'+
-        '<div class="nt-body">'+body+'</div>';
+        '<div class="nt-body">'+body+'</div>'+
+        /* ONLY on a live call. The run tally is for debrief — the reader already knows it is
+           historical, and a caveat there is noise on a wall board. */
+        (NT_LIVE ? '<div class="nt-dis">Live relay &mdash; CAD caps notes near '+NOTE_CAD_CAP+' characters, so a long log is cut at the tail (marked &hellip;) and dispatch may still be adding. Refer to CAD for complete, current notes.</div>' : '');
       var x=d.querySelector(".nt-x"); if(x) x.addEventListener("click",ntClose);
     }
     /* fallback carries what the RUN ROW knows, so the header still reads right for a call the
        board never witnessed and whose notes are therefore gone. */
-    function ntOpen(key,fallback){
+    function ntOpen(key,fallback,live){
       var d=document.getElementById("ntDock"); if(!d) return;
-      NT_KEY=String(key||""); NT_FALL=fallback||null;
+      NT_KEY=String(key||""); NT_FALL=fallback||null; NT_LIVE=!!live;
       d.hidden=false; ntPaint(); setTimeout(ntSized,60); ntArm();
     }
     function freshOnly(calls){ return calls.filter(function(c){
@@ -3273,7 +3286,7 @@
     (function(){ var b=document.getElementById("callsBody"); if(!b) return;
       b.addEventListener("click",function(e){
         var row=e.target.closest && e.target.closest(".call-e[data-nk]"); if(!row) return;
-        ntOpen(row.getAttribute("data-nk"),null);
+        ntOpen(row.getAttribute("data-nk"),null,true);    /* Active Calls -> operational view, carries the caveat */
       });
     })();
     function dropTime(ts){ try{ if(!ts) return ""; var d=new Date(ts); if(isNaN(d.getTime())) return "";
@@ -3444,13 +3457,13 @@
           var nk=run.getAttribute("data-nk")||"";
           var fall={ty:run.getAttribute("data-ty")||"", ad:run.getAttribute("data-ad")||"", ts:run.getAttribute("data-ts")||""};
           /* no trustworthy coordinate: nothing to peek, so the notes ARE the answer */
-          if(!run.hasAttribute("data-lat")){ ntOpen(nk,fall); rtClose(); return; }
+          if(!run.hasAttribute("data-lat")){ ntOpen(nk,fall,false); rtClose(); return; }   /* run tally -> debrief view, no caveat */
           /* Close the sheet ONLY when the peek actually took the map. When drone ops own the wall
              the peek is refused — flash the row with a "map busy" cue and keep the sheet open,
              instead of the old silent collapse that read as "zoom is broken". */
           var ok=false;
           try{ ok=!!(window.BC2FD_MAP_PEEK && window.BC2FD_MAP_PEEK(parseFloat(run.getAttribute("data-lat")),parseFloat(run.getAttribute("data-lng")))); }catch(err){}
-          if(ok){ ntOpen(nk,fall); rtClose(); return; }   /* the map is moving to the pin — the notes dock above it, never over it */
+          if(ok){ ntOpen(nk,fall,false); rtClose(); return; }   /* the map is moving to the pin — the notes dock above it, never over it */
           run.classList.add("rs-busy");
           setTimeout(function(){ try{ run.classList.remove("rs-busy"); }catch(e2){} },1600);
           rtArm(); return; }
