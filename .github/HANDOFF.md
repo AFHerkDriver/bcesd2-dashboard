@@ -1,12 +1,33 @@
 # Session handoff — read this before your first edit
 
-> **Where this file lives.** It is committed on the working branch so any session — including a
-> cloud session with a fresh clone — can read it. GitHub Pages serves `main`, so this file is NOT
-> publicly served today. **It would be published if merged to `main`** (the repo root is the web
-> root). It holds no PINs or tokens, and everything it describes is already readable in the public
-> `control.html`. Delete or relocate it before merging if you'd rather it stay private.
+**Last updated: 2026-08-04, at commit `782ea77` (v213).**
 
-Last updated: 2026-08-04.
+## How this file works — you are expected to replace it
+
+This is a **living snapshot, not a log.** It describes what is true right now, so a session that
+has never seen this repo can act without guessing.
+
+- **Read it first**, before your first edit. Then verify it — see "Trust but verify" below.
+- **When your work is done, REWRITE it.** Replace the state wholesale with what is true when you
+  finish. Do not append your session onto the end; a file that only grows stops being readable and
+  starts being archaeology. Git history is the log — this file is the current state.
+- **Delete anything that is no longer true.** A stale line here is worse than no line: every
+  collision this repo has suffered came from a stale copy that looked current.
+- If nothing meaningful changed, leave it alone. Don't churn it for its own sake.
+
+**Trust but verify.** This file was accurate when written and may not be now. Cheap checks:
+
+```bash
+git branch --show-current && git fetch origin && git status -sb
+curl -s https://afherkdriver.github.io/bcesd2-dashboard/sw.js | grep -o 'bc2fd-dash-v[0-9]*' | head -1   # what the boards actually run
+md5sum worker.js _handoff/worker-PASTE-into-cloudflare.js                                                # paste copy must match
+```
+
+**Where this file lives, and why.** `.github/` is the one folder GitHub Pages does **not** serve
+(verified: `.github/workflows/validate.yml` returns 404 while `CLAUDE.md` returns 200). So this file
+rides on `main` where every session — including a cloud session with a fresh clone — will find it,
+without ever being published on a public safety site. **Keep it in `.github/`.** Moving it to the
+repo root publishes it, because the repo root is the web root.
 
 ## State
 

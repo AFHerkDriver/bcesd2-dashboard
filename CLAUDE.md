@@ -5,11 +5,13 @@ PWA, deployed to GitHub Pages. People rely on this in the field — **prioritize
 firefighter and public safety in every technical choice. Fail loud, never a false
 all-clear.**
 
-> **Read [HANDOFF.md](HANDOFF.md) before your first edit** (when present on the branch).
-> It carries live state — which branch is real, what the boards actually run, what the
-> deployed worker build is — plus the traps that concurrent sessions keep springing on
-> each other. Several sessions work this repo in parallel and have clobbered each other's
-> shipped work; that file is how a session finds out what is already true.
+> **Read [.github/HANDOFF.md](.github/HANDOFF.md) before your first edit.** It carries live
+> state — which branch is real, what the boards actually run, what the deployed worker build
+> is — plus the traps concurrent sessions keep springing on each other. Several sessions work
+> this repo in parallel and have clobbered each other's shipped work; that file is how a
+> session finds out what is already true. **Verify it before trusting it, and rewrite it when
+> your work is done** — replace the state, don't append. It lives in `.github/` because that
+> is the one folder GitHub Pages does not serve; moving it to the repo root publishes it.
 
 ## Files (what each one is)
 - `index.html` — the wall board itself (the big TV display).
