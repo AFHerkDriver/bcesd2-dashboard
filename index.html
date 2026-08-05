@@ -367,6 +367,16 @@
     box-shadow:0 3px 14px rgba(0,0,0,.55);border:1px solid var(--border)}
   .leaflet-popup-content{font-family:'DM Mono',monospace;font-size:13px;line-height:1.5}
   .leaflet-popup-close-button{color:var(--dim)}
+  /* ── TxDOT camera popup ───────────────────────────────────────────────────────────────
+     The snapshot sizes to the POPUP, never the other way round. It used to carry a fixed
+     max-width:320px while Leaflet's content box is the popup's maxWidth MINUS its own
+     margins — so the picture always outgrew the card and spilled past the right edge.
+     width:100% pins it to whatever room the popup actually has, at any zoom. */
+  .cam-pop{min-width:220px}
+  .cam-pop b{color:#58A6FF;font-weight:500}
+  .cam-slot{display:block;margin-top:5px}
+  .cam-shot{display:block;width:100%;height:auto;border-radius:8px;background:#000}
+  .cam-ts{display:block;margin-top:5px;color:var(--dim);font-size:10px;font-variant-numeric:tabular-nums}
   .hyd-pop b{color:#58A6FF;font-weight:500}
   .hyd-pop .hp-sz{color:var(--amber)}
   .hyd-pop .hp-oos{color:var(--red);font-weight:600}
@@ -1490,7 +1500,9 @@
         iconSize:[26,26],iconAnchor:[13,13]});   /* dept camera badge */
       j.cams.forEach(function(c){
         L.marker([c.la,c.ln],{icon:ic,keyboard:false,zIndexOffset:-400})
-          .bindPopup('<div style="min-width:200px"><b>'+String(c.id).replace(/[<>&]/g,"")+'</b><br><span class="cam-slot" data-cam="'+String(c.id).replace(/[<>&"]/g,"")+'">loading snapshot\u2026</span></div>',{maxWidth:340})
+          /* maxWidth 420 (was 340): a traffic snapshot is read from across the bay, and the image now
+             scales to whatever the popup gives it, so the card and the picture can never disagree. */
+          .bindPopup('<div class="cam-pop"><b>'+String(c.id).replace(/[<>&]/g,"")+'</b><span class="cam-slot" data-cam="'+String(c.id).replace(/[<>&"]/g,"")+'">loading snapshot\u2026</span></div>',{maxWidth:420})
           .addTo(camWallLayer);
       });
       layersCtl.addOverlay(camWallLayer,"Cameras");
@@ -1504,7 +1516,7 @@
         fetch("https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/camsnap?pin="+encodeURIComponent(pin)+"&id="+encodeURIComponent(id))
           .then(function(r){return r.json();}).then(function(j){
             if(!j||!j.ok||!j.jpeg||!/^[A-Za-z0-9+/=]+$/.test(j.jpeg)) throw 0;   /* base64 or nothing — this lands in a src attribute */
-            slot.innerHTML='<img style="max-width:320px;border-radius:8px" src="data:image/jpeg;base64,'+j.jpeg+'"><br><span style="color:var(--dim);font-size:10px">'+String(j.ts||"").replace(/[<>&]/g,"")+"</span>";
+            slot.innerHTML='<img class="cam-shot" alt="Latest snapshot" src="data:image/jpeg;base64,'+j.jpeg+'"><span class="cam-ts">'+String(j.ts||"").replace(/[<>&]/g,"")+"</span>";
           }).catch(function(){ slot.textContent="snapshot unavailable"; });
       }catch(e){}
     });
