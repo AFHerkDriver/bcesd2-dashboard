@@ -26,26 +26,42 @@ PWA-capable, deployed on GitHub Pages.
 (flagged), and fetch-failure (bold error). A panel never shows an ambiguous dash or a
 silent all-clear, because on a fire board a false "all clear" is worse than a visible error.
 
-## Files
+## Pages
+
+| Page | Purpose |
+|---|---|
+| `index.html` | The wall dashboard — the 4K station TV board |
+| `control.html` | Officer control panel (phone/tablet), PIN-gated |
+| `mdt.html` | MDT Lite — the in-cab map and unit view |
+| `fleet.html` | Fleet GPS roster — registration → callsign → view mode (Samsara AVL) |
+| `metrics.html` | District metrics |
+| `report.html` | Monthly command report |
+| `unit-demo.html` | Unit marker demo — the approved AVL marker spec |
+
+## Supporting files
 
 | File | Purpose |
 |---|---|
-| `index.html` | The wall dashboard |
-| `control.html` | Officer control panel (phone/tablet) |
-| `sw.js` | Service worker — network-first for HTML, caches the app shell |
+| `sw.js` | Service worker — network-first for HTML, precaches the app shell |
 | `worker.js` | Cloudflare Worker: PIN gate, Active911 relay, weather proxy, board-state writes |
+| `tools/validate.js` | Validation suite — syntax checks and a headless render smoke |
 | `manifest.webmanifest`, `icon-*.png` | PWA install assets |
+| `vendor/` | Leaflet and hls.js, vendored so the map draws with zero CDN reachability |
 | `.nojekyll` | Required — stops GitHub Pages running Jekyll |
 
 ## Deploy — two separate targets
 
-- `index.html`, `control.html`, `sw.js` → **`git push`** to this repo (GitHub Pages serves `main`).
-- `worker.js` → **pasted manually into the Cloudflare dashboard** for worker `bc2fd-dash-auth`.
-  A `git push` does **not** deploy the worker.
+- **The board** (`index.html`, `control.html`, `sw.js`, assets) → **`git push`** to this repo.
+  GitHub Pages serves `main`, so merging to `main` is what puts code in front of firefighters.
+- **The worker** (`worker.js`) → deployed separately to the Cloudflare worker `bc2fd-dash-auth`.
+  **A `git push` does not deploy the worker.** The copy in this repo is the source of truth;
+  the deployed script is verified against it rather than the other way around.
 
 **On every board deploy:** bump the `CACHE` constant in `sw.js` (`bc2fd-dash-vNN` → `vNN+1`).
 That bump is what makes an open wall board install the new version and reload itself — without
-it, the TV keeps serving the old HTML.
+it, the TV keeps serving the old HTML. This applies to any page in the `SHELL` precache list,
+which includes `control.html`, `mdt.html`, `fleet.html`, `metrics.html` and `report.html` —
+not just `index.html`.
 
 ## Configuration
 
