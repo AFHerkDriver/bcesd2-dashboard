@@ -145,7 +145,9 @@
   .acc-line .acc-ip{flex:0 0 auto;color:var(--dim);font-size:10px}
   .acc-empty{padding:12px 10px;color:var(--dim);font-size:12px;text-align:center}
   /* Owner Access card */
-  /* Owner-only tools nested in the Owner Access card. Class-gated so the parent's fold rule
+  /* Gated tools: the Owner-TIER ones nested in the Owner Access card (#accCard, #typesCard) and the
+     name-gated #diagCard, which is a top-level card so it does NOT inherit the Owner card's tier
+     reveal. Class-gated so that for the nested pair the parent's fold rule
      (.card.fold.clps > :not(h2), specificity 0-3-1) still beats .adm-tool.on (0-2-0) and folds
      them away with the card. An inline display:block would win instead and leak them on screen. */
   .adm-tool{display:none}
@@ -498,6 +500,18 @@
     </div><!-- /setCard -->
 
 
+    <!-- Diagnostics — gated on the token owner's NAME ONLY, deliberately NOT on tier, and therefore
+         deliberately NOT nested inside the Owner Access card: anything inside that card inherits its
+         admin-tier reveal, which would mean the owner holding an officer-tier PIN silently loses the
+         health sweep on the surface they own. Class-gated (.adm-tool/.on) like every other gated
+         block — never an inline display, so there is one visibility idiom on this page, not two. -->
+    <div class="card adm-tool" id="diagCard">
+      <h2>🩺 Diagnostics</h2>
+      <div class="hint">Checks every connection the board depends on, from THIS device: worker routes, NWS (+ hourly), backup weather, flood sensors, burn ban, rain radar sources, county parcel &amp; hydrant services, map tiles, Firestore state, and the Firehawk schedule. Green = healthy; red = that source is down (the board fails loud on it, not silently).</div>
+      <button type="button" class="diag-btn" id="diagRun">Run Diagnostics</button>
+      <div class="diag-out" id="diagOut" hidden></div>
+    </div>
+
     <!-- Owner Access — LAST card, Owner PIN only (stored tier value is still "admin"). Officers never
          see it: the point is to answer "what do I have that they don't", to hand out access without the
          Cloudflare KV editor, and to hold every Owner-only control on this page in ONE place. -->
@@ -509,7 +523,7 @@
         <li><b>Access Log</b> &mdash; who opened the panel, their logins and every board edit</li>
         <li><b>Reset Log</b> &mdash; clear that log</li>
         <li><b>Call Types Seen</b> &mdash; every CAD type the relay has ever sighted</li>
-        <li><b>Diagnostics</b> &mdash; your run dumps the FULL Active911 alert; an officer&rsquo;s shows a trimmed one</li>
+        <li><b>Relay trace</b> (the worker&rsquo;s /diag URL) &mdash; your PIN dumps the FULL Active911 alert; an officer&rsquo;s shows a trimmed one</li>
       </ul>
       <div class="adm-sec">Metrics &amp; feed</div>
       <ul class="adm-list">
@@ -536,8 +550,10 @@
       </div>
       <div class="adm-msg" id="admMsg"></div>
 
-      <!-- ── Owner-only controls, moved in from their own cards so everything the Owner PIN unlocks
-           lives in this one card. They keep their original ids, so all existing wiring is unchanged.
+      <!-- ── Owner-TIER controls, moved in from their own cards so everything an admin-tier PIN
+           unlocks lives in this one card. They keep their original ids, so all existing wiring is
+           unchanged. Diagnostics is NOT here on purpose — it is gated on the owner's name, not on
+           tier, so nesting it would have made it tier-gated by inheritance.
            Visibility is CLASS-gated (.adm-tool/.on), never an inline display: an inline style would
            outrank the parent's fold rule (.card.fold.clps > :not(h2)) and leave these on screen with
            the card collapsed. ── -->
@@ -554,12 +570,6 @@
         <div id="typesBody" class="chute-body">Loading&hellip;</div>
       </div>
 
-      <div class="adv-sec adm-tool" id="diagCard">
-        <h2>🩺 Diagnostics</h2>
-        <div class="hint">Checks every connection the board depends on, from THIS device: worker routes, NWS (+ hourly), backup weather, flood sensors, burn ban, rain radar sources, county parcel &amp; hydrant services, map tiles, Firestore state, and the Firehawk schedule. Green = healthy; red = that source is down (the board fails loud on it, not silently).</div>
-        <button type="button" class="diag-btn" id="diagRun">Run Diagnostics</button>
-        <div class="diag-out" id="diagOut" hidden></div>
-      </div>
     </div>
 
     <!-- Sticky Save — always in reach at the bottom of the screen; the unsaved-orange ring rides here -->
@@ -583,7 +593,11 @@
     if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadTypeLog(pin); loadAdmin(pin); }   /* access log + type log + reset + PIN roster are Owner-only (stored tier value stays "admin") */
     loadChuteStats(pin);   /* every officer sees chute times — the worker's /calls needs only a valid PIN, so this was never a data restriction, just a UI one */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
-    /* Diagnostics card is OWNER-only — same identity gate as the token reminder */
+    /* Diagnostics is gated on the token owner's NAME ONLY — same identity gate as the token
+       reminder above, and deliberately NOT on tier. Do not add a tier check here, and do not move
+       #diagCard back inside #adminCard: either one re-imposes admin tier, and the owner signing in
+       on an officer-tier PIN would silently lose the health sweep on the surface they own — found
+       out at the worst possible moment. tools/behavior.js fails loudly if either creeps back. */
     try{ if(String(name||'').trim().toLowerCase()==='capt sanchez' && window.wireDiag) window.wireDiag(pin); }catch(e){}
     /* MAC121 dispatch prefill needs the PIN (this unlock) AND loaded state — retry covers the race */
     try{ var pf=function(){ try{ window.macAutoPrefill&&window.macAutoPrefill(); }catch(e){} try{ window.xsAutoPrefill&&window.xsAutoPrefill(); }catch(e){} };

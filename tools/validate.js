@@ -89,7 +89,7 @@ ok("asset existence — every referenced png/json is present");
 /* 5 — jsdom smoke */
 let jsdom = null;
 try { jsdom = require("jsdom"); } catch (e) {}
-if (!jsdom) { console.log("note  jsdom not installed — smoke skipped (CI installs it; local: npm i --no-save jsdom)"); }
+if (!jsdom) { console.log("SKIP  jsdom not installed — render smoke did NOT run. This is not a pass. (npm i --no-save jsdom)"); }
 else {
   const { JSDOM } = jsdom;
   for (const page of ["index.html", "control.html", "mdt.html", "fleet.html"]) {
@@ -119,5 +119,17 @@ else {
   }
 }
 
-console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL CHECKS PASS");
-process.exit(failures ? 1 : 0);
+/* 6 — behavioral regressions the four checks above structurally cannot see: the Owner Access card's
+   class-gated visibility, the "admin" tier string round trip, the roster rank sort, and the
+   name-only Diagnostics gate. Drives the real page in jsdom. See tools/behavior.js. */
+require("./behavior.js").run()
+  .then((behFailures) => {
+    failures += behFailures;
+    console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL CHECKS PASS");
+    process.exit(failures ? 1 : 0);
+  })
+  .catch((e) => {
+    console.error("FAIL  behavioral suite crashed: " + ((e && e.stack) || e));
+    console.log("\n" + (failures + 1) + " FAILURE(S)");
+    process.exit(1);
+  });
