@@ -22,13 +22,24 @@ all-clear.**
 
 ## Deploy targets (critical — two different systems)
 - `index.html`, `control.html`, `sw.js` → **`git push`** to this repo (GitHub Pages).
-- `worker.js` → **paste manually into the Cloudflare dashboard** for worker
-  `bc2fd-dash-auth`. A `git push` does NOT deploy the worker.
+- `worker.js` → **deployed to Cloudflare by Claude, asking the user before every single deploy**
+  (worker `bc2fd-dash-auth`). A `git push` does NOT deploy the worker — it is a separate lane and
+  a separate action, every time.
   **`worker.js` in this repo is the SOURCE OF TRUTH** (as of 2026-07-19) — Claude authors and
-  maintains it here; the user pastes it into Cloudflare. Edit the repo copy, validate, then hand
-  over a paste-ready file. Never hand-edit in the dashboard, or the two drift apart again — that
-  drift previously left the repo copy missing `/state` and `/accesslog` entirely, and pasting it
-  back would have deleted the authenticated write path and the whole access log.
+  maintains it here. Edit the repo copy, validate, then deploy *that file*. Never hand-edit in the
+  Cloudflare dashboard, or the two drift apart again — that drift previously left the repo copy
+  missing `/state` and `/accesslog` entirely, and pushing it back would have deleted the
+  authenticated write path and the whole access log.
+  **Confirm before every deploy. No standing permission**: one "yes" covers one deploy, never the
+  next. This is the push that puts code in front of firefighters.
+  Cloudflare is also **readable** from a session — `workers_list` gives `bc2fd-dash-auth`'s
+  `modified_on`, which is the cheapest "did production move under me?" signal there is. Check it
+  before editing `worker.js`. Do **not** fetch the deployed script for a byte diff: it is ~175k
+  chars and it is *bundled*, so it never matches the repo source. Compare `WORKER_VERSION` and
+  route markers instead. See `.github/REMOTE-CONTROL.md`.
+  *(Changed 2026-08-04: this used to be a manual copy-paste into the Cloudflare dashboard, and the
+  worker lane used to be invisible from a session. Both are now false. Paste-ready copies under
+  `_handoff/` are obsolete — a stale one already caused a near-miss.)*
 
 ## Golden rules
 1. **Pull live before editing.** Other sessions touch this codebase. Fetch the deployed
@@ -47,11 +58,24 @@ all-clear.**
    a silent all-clear — especially anything safety-related (weather, dispatch, airspace).
 
 ## Validation ritual (run before every push)
-1. `node --check` on each `<script>` block (extract and check them).
-2. Headless render smoke (jsdom) to catch runtime crashes syntax checks miss.
-3. Behavioral checks on any pure logic you changed (tally, unit parsing, etc.).
-4. Confirm the deployed file is non-empty AND the GitHub Actions run is green
-   (commit truth ≠ serve truth). `.nojekyll` must exist in the repo root.
+
+```bash
+npm i --no-save jsdom     # WITHOUT this the render smoke and the behavioral suite do NOT run
+node tools/validate.js    # this is the whole ritual; CI runs the same command
+```
+
+What it covers: `node --check` on every inline `<script>`, a byte lint, the SW-bump guard, asset
+existence, a jsdom render smoke, and `tools/behavior.js` — behavioral regressions the other checks
+structurally cannot see (the Owner card's class-gated visibility, the `"admin"` tier string round
+trip, the roster rank sort, the name-only Diagnostics gate). It drives the real page in jsdom rather
+than grepping for strings.
+
+Still yours to check by hand, because no script can: the deployed file is non-empty AND the GitHub
+Actions run is green (**commit truth ≠ serve truth**). `.nojekyll` must exist in the repo root.
+
+**If you change `tools/behavior.js`, run `node tools/prove-behavior.js`.** It breaks a copy of the
+repo on purpose in each documented way and asserts the suite goes red. A regression test that has
+quietly stopped detecting its regression is a false all-clear — the one thing rule 5 forbids.
 
 ## Layout notes
 - The wall renders at effective **1920×1080**. The TV tier is `@media (min-width:1500px)`
@@ -63,7 +87,19 @@ all-clear.**
   is the accessibility lever — legible at distance.
 
 ## Local preview note
-Live data (weather, dispatch, drones) will NOT populate from `localhost` — the worker's
-CORS is locked to the GitHub Pages origin. Layout still renders fully in empty/loading
-states, which is what you tune locally. (Ask if you want a localhost dev origin added to
-the worker to get live data in local preview.)
+**Live data DOES populate from `localhost`.** Worker build 13 reflects any
+`http(s)://localhost` or `127.0.0.1` origin on any port, so a local preview behaves like the wall:
+real PIN, real dispatch, real weather, real drones. Verified live 2026-08-04 —
+`OPTIONS /verify` with `Origin: http://localhost:8080` answers
+`Access-Control-Allow-Origin: http://localhost:8080`.
+
+This matters more than it looks: it means officer- and Owner-tier surfaces can be exercised **for
+real** from a local preview before anything ships, instead of against stubbed responses.
+
+Two things that are still true, and are often confused with the above:
+- CORS here is **response-header only** — the worker never rejects a request by origin. CORS is a
+  browser rule, not an access rule, so `curl` and node scripts reach every route regardless.
+- Every route is still **PIN-gated**. Relaxing the browser origin check opened nothing.
+
+*(This section previously said the opposite. It was stale — the localhost reflection has been in
+the worker since before build 13.)*
