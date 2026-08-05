@@ -22,9 +22,19 @@ all-clear.**
 
 ## Deploy targets (critical — two different systems)
 - `index.html`, `control.html`, `sw.js` → **`git push`** to this repo (GitHub Pages).
-- `worker.js` → **deployed to Cloudflare by Claude, asking the user before every single deploy**
-  (worker `bc2fd-dash-auth`). A `git push` does NOT deploy the worker — it is a separate lane and
-  a separate action, every time.
+- `worker.js` → **pasted into the Cloudflare dashboard by a human** (worker `bc2fd-dash-auth`).
+  A `git push` does NOT deploy the worker — it is a separate lane and a separate action, every time.
+  **Paste from the repo-root `worker.js`, never from `_handoff/` — those copies go stale silently
+  and a stale one has already caused a near-miss.**
+  *Why not automated (tested 2026-08-05, do not re-litigate):* the Cloudflare API write permission
+  is real — a `PUT` of an empty script reached Cloudflare's **script validator** (`10021: script
+  body must not be empty`), which is past authn/authz. What blocks it is getting the 180 KB of
+  source into the request. The `cloudflare-api` execute sandbox has a blanket egress block — a
+  bare `fetch` to raw.githubusercontent, GitHub Pages, jsDelivr and Statically **all returned 403**,
+  four unrelated hosts, so it reaches the Cloudflare API and nothing else. The only remaining route
+  is inlining the source into the tool call, which means escaping 180 KB of JS full of regex,
+  backticks and quotes — one bad escape ships a corrupted dispatch relay. Not worth it.
+  If you automate this later, the missing piece is a fetchable source, not permission.
   **`worker.js` in this repo is the SOURCE OF TRUTH** (as of 2026-07-19) — Claude authors and
   maintains it here. Edit the repo copy, validate, then deploy *that file*. Never hand-edit in the
   Cloudflare dashboard, or the two drift apart again — that drift previously left the repo copy
@@ -37,9 +47,10 @@ all-clear.**
   before editing `worker.js`. Do **not** fetch the deployed script for a byte diff: it is ~175k
   chars and it is *bundled*, so it never matches the repo source. Compare `WORKER_VERSION` and
   route markers instead. See `.github/REMOTE-CONTROL.md`.
-  *(Changed 2026-08-04: this used to be a manual copy-paste into the Cloudflare dashboard, and the
-  worker lane used to be invisible from a session. Both are now false. Paste-ready copies under
-  `_handoff/` are obsolete — a stale one already caused a near-miss.)*
+  *(History: on 2026-08-04 this was changed to say Claude deploys the worker directly, on the
+  strength of the write-permission probe alone. That was premature and is corrected above —
+  permission was never the blocker. The genuinely new thing is that the worker lane is no longer
+  **invisible** from a session: read access makes drift a mechanical check instead of a guess.)*
 
 ## Golden rules
 1. **Pull live before editing.** Other sessions touch this codebase. Fetch the deployed
