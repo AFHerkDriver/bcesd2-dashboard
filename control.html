@@ -105,6 +105,16 @@
   .diag-sum.allok{color:#34C759} .diag-sum.down{color:#FF3B30}
   .oosck{font-size:11px;font-family:'DM Mono',monospace;white-space:nowrap;color:var(--dim);align-self:center}
   .oosck.ok{color:#34C759} .oosck.bad{color:#FF3B30;font-weight:700}
+  /* Unconfirmed = the estimated return passed and NOBODY HAS LOOKED YET. Amber, never green: the
+     flag stays up on both boards until a human confirms. Clearing it is a decision, not a clock. */
+  .list-row.oos-unc{flex-wrap:wrap;border-left:3px solid #FFB020;padding-left:8px}
+  .oos-uncbar{flex:1 1 100%;margin-top:6px;font-size:12px;line-height:1.45;color:#FFB020;
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .oos-uncbar b{color:#FFD08A}
+  .oosconf{font-family:inherit;font-size:12px;padding:6px 10px;min-height:34px;border-radius:7px;
+    cursor:pointer;background:none;border:1px solid #FFB020;color:#FFB020}
+  .oosconf.back{border-color:#34C759;color:#34C759}
+  .oosconf:focus-visible{outline:2px solid var(--text);outline-offset:2px}
   /* Chute Times (every officer — not Owner-gated) */
   .chute-body{font-family:'DM Mono',monospace;font-size:13px}
   .chute-hero{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 12px}
@@ -1335,6 +1345,18 @@ function expireSweep(){                                     /* control mirrors t
   var before=state.writeins.length;
   state.writeins=state.writeins.filter(function(u){ return !past(u.exp); });
   if(state.writeins.length!==before){ renderWi(); changed=true; }
+  /* HYDRANTS DELIBERATELY BREAK THE "expired = reverted" RULE USED ABOVE. An apparatus whose window
+     lapses really is back in service — someone crewed it. A hydrant whose estimated repair date
+     lapses is only a date that passed; nobody has laid eyes on it. Auto-clearing the flag would put
+     water on the board that may not exist, and a crew would find out at a working fire. So an
+     expired hydrant STAYS flagged (both boards keep the red slashed pin, no board change needed)
+     and is only marked unconfirmed here, which raises a confirm prompt on this panel.
+     Do NOT "fix" this into a revert to match the units above — the inconsistency is the point. */
+  var hyd=false;
+  (state.oosHydrants||[]).forEach(function(x){
+    if(x && typeof x==='object' && x.exp && past(x.exp)){ x.unc=1; x.exp=''; hyd=true; }
+  });
+  if(hyd){ try{ renderOOS(); }catch(e){} changed=true; }
   updateExpVis();
   return changed;
 }
@@ -1453,9 +1475,17 @@ function loadHydDb(){ if(HYDN||HYDN_REQ) return; HYDN_REQ=true;
     if(j&&Array.isArray(j.h)){ HYDN=[]; j.h.forEach(function(h){ HYDN.push([h[4]?hydNormC(h[4]):'',String(h[0])]); });   /* every plug, address or not — number flags must validate against the address-less ones too */
       try{ renderOOS(); }catch(e){} }
   }).catch(function(){}); }
+/* An OOS entry is EITHER a legacy plain string OR {addr,exp,unc}. Both shapes ship together and
+   need no board change: index.html and mdt.html already read `x.addr!=null ? x.addr : x`. Always
+   go through these — never index the array element directly, or a legacy string silently becomes
+   an object with no addr and the flag stops matching any plug. */
+function oosAddr(x){ return (x && typeof x==='object') ? String(x.addr||'') : String(x||''); }
+function oosObj(i){ var x=state.oosHydrants[i];
+  if(!x || typeof x!=='object'){ x={addr:String(x||''),exp:'',unc:0}; state.oosHydrants[i]=x; }
+  return x; }
 function setOOSBadge(i){
   var el=document.querySelector('[data-oosck="'+i+'"]'); if(!el) return;
-  var f=hydNormC(state.oosHydrants[i]||'');
+  var f=hydNormC(oosAddr(state.oosHydrants[i]));
   if(!f||f.length<4){ el.className='oosck'; el.textContent=''; return; }
   if(!HYDN){ el.className='oosck'; el.textContent='…'; return; }
   var n=0,id='',byNum=false,m=/^HYD(\d+)$/.exec(f);
@@ -1476,15 +1506,21 @@ function renderOOS(){
   if(!Array.isArray(state.oosHydrants)) state.oosHydrants=[];
   loadHydDb();
   state.oosHydrants.forEach(function(a,i){
-    var row=document.createElement('div'); row.className='list-row';
-    row.innerHTML='<input type="text" data-oos="'+i+'" value="'+esc(a||'')+'" placeholder="Address or hydrant number" style="flex:1 1 220px;min-width:0">'+
+    var o=(a&&typeof a==='object')?a:null, unc=!!(o&&o.unc);
+    var row=document.createElement('div'); row.className='list-row'+(unc?' oos-unc':'');
+    row.innerHTML='<input type="text" data-oos="'+i+'" value="'+esc(oosAddr(a))+'" placeholder="Address or hydrant number" style="flex:1 1 220px;min-width:0">'+
       '<span class="oosck" data-oosck="'+i+'"></span>'+
-      '<button class="wdel oosdel" data-oosdel="'+i+'">✕</button>';
+      '<input type="datetime-local" data-oosexp="'+i+'" value="'+esc((o&&o.exp)||'')+'" title="Estimated back in service (optional) — when it passes the hydrant STAYS flagged and asks you to confirm" style="flex:1 1 200px;min-width:0">'+
+      '<button class="wdel oosdel" data-oosdel="'+i+'">✕</button>'+
+      (unc?('<div class="oos-uncbar"><b>Estimated return has passed.</b> Still flagged OOS on both boards until someone confirms &mdash; nobody has looked at it yet.'+
+            '<button class="oosconf back" data-oosback="'+i+'">Confirmed back in service</button>'+
+            '<button class="oosconf" data-oosstill="'+i+'">Still out</button></div>'):'');
     box.appendChild(row);
   });
   state.oosHydrants.forEach(function(a,i){ setOOSBadge(i); });
-  var s=$('oosFoldSum'); if(s){ var n=state.oosHydrants.length;
-    s.textContent=n?('· '+n+' OOS'):'· none'; s.className='fold-sum'+(n?' bad':''); }
+  var s=$('oosFoldSum'); if(s){ var n=state.oosHydrants.length,
+    u=state.oosHydrants.filter(function(x){ return x&&typeof x==='object'&&x.unc; }).length;
+    s.textContent=n?('· '+n+' OOS'+(u?(' · '+u+' to confirm'):'')):'· none'; s.className='fold-sum'+(n?' bad':''); }
 }
 function renderWi(){
   var box=$('wiList'); if(!box) return; box.innerHTML='';
@@ -1507,6 +1543,9 @@ document.addEventListener('click', function(e){
   if(e.target.id==='addWi'){ state.writeins.push({name:'',mode:'on',exp:''}); renderWi(); return; }
   if(e.target.id==='addOOS'){ if(!Array.isArray(state.oosHydrants)) state.oosHydrants=[]; state.oosHydrants.push(''); renderOOS(); return; }
   var od=e.target.closest&&e.target.closest('.oosdel'); if(od){ state.oosHydrants.splice(+od.getAttribute('data-oosdel'),1); renderOOS(); return; }
+  /* Confirming a hydrant back in service is the ONLY thing that clears the flag — never a clock. */
+  var ob=e.target.closest&&e.target.closest('[data-oosback]'); if(ob){ state.oosHydrants.splice(+ob.getAttribute('data-oosback'),1); renderOOS(); return; }
+  var os=e.target.closest&&e.target.closest('[data-oosstill]'); if(os){ var oo=oosObj(+os.getAttribute('data-oosstill')); oo.unc=0; oo.exp=''; renderOOS(); return; }
   var wd=e.target.closest&&e.target.closest('.wdel'); if(wd){ state.writeins.splice(+wd.getAttribute('data-wi'),1); renderWi(); return; }
   var sb=e.target.closest&&e.target.closest('.wiseg button'); if(sb){ var seg=sb.parentElement, i=+seg.getAttribute('data-wi');
     state.writeins[i].mode=sb.getAttribute('data-v'); seg.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===sb);}); return; }
@@ -1515,11 +1554,18 @@ document.addEventListener('input', function(e){
   var t=e.target, wi=t.getAttribute&&t.getAttribute('data-wi'), wf=t.getAttribute&&t.getAttribute('data-wf');
   if(wi!=null&&wf){ state.writeins[+wi][wf]=t.value; }
   var oi=t.getAttribute&&t.getAttribute('data-oos');
-  if(oi!=null){ state.oosHydrants[+oi]=t.value; setOOSBadge(+oi); }
+  /* shape-preserving: a bare assignment here would flatten an {addr,exp,unc} entry back to a string
+     the instant someone corrected a typo, silently dropping its expiry and its unconfirmed flag. */
+  if(oi!=null){ var ox=state.oosHydrants[+oi];
+    if(ox && typeof ox==='object') ox.addr=t.value; else state.oosHydrants[+oi]=t.value;
+    setOOSBadge(+oi); }
 });
 document.addEventListener('change', function(e){
   var t=e.target, ux=t.getAttribute&&t.getAttribute('data-ux');
   if(ux){ var p=ux.split(':'); (p[0]==='t'?state.tExp:state.aExp)[p[1]]=t.value; return; }
+  /* setting a fresh estimate clears "unconfirmed" — the officer has re-dated it on purpose */
+  var oe=t.getAttribute&&t.getAttribute('data-oosexp');
+  if(oe!=null){ var oo=oosObj(+oe); oo.exp=t.value; if(t.value) oo.unc=0; renderOOS(); return; }
   var wi=t.getAttribute&&t.getAttribute('data-wi'), wf=t.getAttribute&&t.getAttribute('data-wf');
   if(wi!=null&&wf){ state.writeins[+wi][wf]=t.value; return; }
   var hid=t.getAttribute&&t.getAttribute('data-hid');

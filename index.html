@@ -370,6 +370,11 @@
   .hyd-pop b{color:#58A6FF;font-weight:500}
   .hyd-pop .hp-sz{color:var(--amber)}
   .hyd-pop .hp-oos{color:var(--red);font-weight:600}
+  /* Unconfirmed OOS: flagged, the estimate lapsed, nobody has verified it. Amber and legible at
+     every zoom, because the whole point is that a crew sees it and goes to check. The pin art is
+     the OOS red hue-shifted to amber — no new asset; replace with drawn art when there's time. */
+  .hyd-pop .hp-unc{color:#FFB020;font-weight:600}
+  .hyd-unc{filter:hue-rotate(34deg) saturate(1.25) brightness(1.12)}
   /* ── PHASE 3 · DRONE TAKEOVER ─────────────────────────────────────────────────────────
      The tile becomes the whole wall through position:fixed, so nothing in the grid moves.
      That is not a style preference: the feeds are IFRAMES, and reparenting an iframe reloads
@@ -611,7 +616,10 @@
     .wx-tile{flex:none;width:100%}
     .sched-tile{flex:none;min-height:300px}                  /* room for the two stacked halves (was 80 — too short for the split) */
     .sched-half:not(.rt-half):has(#schedList:empty){display:none}   /* nothing scheduled -> the half disappears entirely (err text still shows: the list is non-empty then) */
-    .sched-tile:has(.sched-half:not(.rt-half):has(#schedList:empty)){min-height:170px}   /* tile shrinks to just the Runs keypad */
+    /* the :not() guard is REQUIRED, not belt-and-braces: :has() takes the specificity of its most
+       specific argument, so #schedList here scores an id and would beat the .ntdock min-height rule
+       below — in exactly the empty-schedule case that rule was written to rescue. */
+    .sched-tile:has(.sched-half:not(.rt-half):has(#schedList:empty)):not(:has(.ntdock:not([hidden]))){min-height:170px}   /* tile shrinks to just the Runs keypad — unless notes are open in it */
     .lcol > .calls-tile{flex:none;min-height:120px}          /* was collapsing to 0 on the phone */
     .tally{flex-wrap:wrap;justify-content:center}            /* phone: 7 station chips wrap instead of overflowing off the right edge */
     .tally .tchip2{flex:0 0 auto}
@@ -644,7 +652,8 @@
     .lcol > .calls-tile:has(.callsclear) .callsclear{font-size:15px;padding:6px 0}   /* quiet one-liner, tally below stays the point */
     .sched-split{flex-direction:column;gap:10px}             /* phone: stack events over the run-type tally; the two halves split the tile height evenly */
     .rt-half{border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:8px}
-    .sched-tile:not(:has(.sched-list > *)):not(:has(.rt-cell:not(.rt-zero))){display:none}   /* hide only when there are no events AND no logged runs (all keypad tiles zero) */
+    .sched-tile:not(:has(.sched-list > *)):not(:has(.rt-cell:not(.rt-zero))):not(:has(.ntdock:not([hidden]))){display:none}   /* hide only when there are no events AND no logged runs (all keypad tiles zero) — but NEVER while call notes are open in it, or a tap would open them into a hidden tile and read as "nothing happened" */
+    .sched-tile:has(.ntdock:not([hidden])){min-height:200px}   /* phone: the tile may have collapsed to almost nothing — give the notes room to be read */
     .rrow > .nws-tile:not(:has(.alert-lane > *)):not(:has(.heat-band > *)):not(:has(.fw-body > *)):not(:has(.floodband:not([hidden]))){display:none}   /* no alerts / heat / red flag / flood (keeps NWS-unavailable + red-flag-unknown). Strike pills moved to the Hospital tile, so they no longer keep this tile alive. */
   }
 
@@ -875,6 +884,7 @@
   .sched-page{font-family:'DM Mono',monospace;font-size:clamp(9px,.8vmin,13px);color:var(--dim);letter-spacing:1px;position:absolute;right:10px;top:50%;transform:translateY(-50%)}
   .sched-page[hidden]{display:none}
   /* Sched tile split: scheduled events (left) + call-type run tally (right) */
+  .sched-tile{position:relative}   /* positioning anchor for the call-notes dock, which covers this tile while open */
   .sched-split{display:flex;gap:clamp(8px,1vmin,18px);flex:1 1 auto;min-height:0}
   .sched-half{flex:1 1 0;display:flex;flex-direction:column;min-width:0;min-height:0}
   .rt-half{border-left:1px solid var(--border);padding-left:clamp(8px,1vmin,18px)}
@@ -937,40 +947,58 @@
   .rs-a{grid-area:a;font-size:clamp(10px,1.05vmin,14px);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rs-empty{padding:22px 14px;text-align:center;color:var(--dim);font-size:13px}
   /* ── Call notes dock ──────────────────────────────────────────────────────────────
-     Opened by tapping an Active Calls row or a run in the detail sheet. It sits ABOVE the
-     map section instead of over it: a run tap also peeks the map at that pin for 15 s, and a
-     centred card would have hidden exactly what the tap moved. The map shrinks, the pin stays. */
-  .ntdock{flex:0 0 auto;display:flex;flex-direction:column;min-height:0;max-height:min(42%,340px);
-    margin-bottom:clamp(4px,.5vmin,9px);border:1px solid var(--ndc,var(--dim));border-radius:9px;
+     Opened by tapping an Active Calls row or a run in the detail sheet. ANCHORED INSIDE the
+     Scheduled Events tile, covering it for the 15 s the notes are up — the same 15 s the map
+     holds its peek at that call's pin, so the two now expire together instead of the notes
+     outliving the zoom by 45 s. Out of the map column entirely, so the map no longer shrinks
+     while you read: the pin the tap moved to stays full size the whole time. */
+  .ntdock{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;min-height:0;
+    border:1px solid var(--ndc,var(--dim));border-radius:9px;
     background:var(--panel2);overflow:hidden}
   .ntdock[hidden]{display:none}
   .nt-hd{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--border)}
   .nt-dot{flex:0 0 auto;width:9px;height:9px;border-radius:3px;background:var(--ndc,var(--dim))}
-  .nt-ty{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;letter-spacing:1.2px;font-size:clamp(12px,1.35vmin,21px);
+  .nt-ty{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;letter-spacing:1.2px;font-size:clamp(15px,1.7vmin,27px);
     color:var(--ndc,var(--text));white-space:nowrap}
-  .nt-ad{flex:1 1 auto;min-width:0;font-size:clamp(10px,1.05vmin,14px);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .nt-tm{flex:0 0 auto;font-size:clamp(9.5px,1vmin,13px);color:var(--dim);font-variant-numeric:tabular-nums}
+  .nt-ad{flex:1 1 auto;min-width:0;font-size:clamp(12px,1.3vmin,19px);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nt-tm{flex:0 0 auto;font-size:clamp(11px,1.15vmin,16px);color:var(--dim);font-variant-numeric:tabular-nums}
+  /* the peek did not take the map — amber and stated, never a silent non-zoom */
+  .nt-mb{flex:0 0 auto;font-size:clamp(10px,1.05vmin,15px);letter-spacing:1px;color:var(--amber);
+    border:1px solid var(--amber);border-radius:5px;padding:1px 6px;white-space:nowrap}
   .nt-x{flex:0 0 auto;background:none;border:1px solid var(--border);border-radius:7px;color:var(--dim);
     font-family:inherit;font-size:12px;line-height:1;padding:5px 8px;min-height:32px;min-width:34px;cursor:pointer;-webkit-appearance:none;appearance:none}
   .nt-x:hover{color:var(--text);border-color:var(--dim)}
   .nt-x:focus-visible{outline:2px solid var(--text);outline-offset:2px}
   .nt-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:5px 10px}
-  .nt-row{font-size:clamp(10.5px,1.1vmin,15px);line-height:1.35;color:var(--text);padding:3px 0;border-bottom:1px solid rgba(48,54,61,.5)}
+  /* Sized UP for the wall: the narrative is the thing you actually read, and you read it from
+     across the bay with 15 s on the clock. The tile-wide dock affords the extra size. */
+  .nt-row{font-size:clamp(13px,1.5vmin,21px);line-height:1.4;color:var(--text);padding:4px 0;border-bottom:1px solid rgba(48,54,61,.5)}
   .nt-row:last-child{border-bottom:none}
   .nt-row.sys{color:var(--dim)}                       /* system/status line, not a caller-scene note */
-  .nt-foot{margin-top:5px;font-size:clamp(9px,.95vmin,12px);letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .nt-foot{margin-top:6px;font-size:clamp(10.5px,1.1vmin,15px);letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
   /* pinned OUTSIDE the scrolling body — a caveat you can scroll away from is not a caveat */
-  .nt-dis{flex:0 0 auto;padding:5px 10px;border-top:1px solid var(--border);background:var(--panel);
-    font-size:clamp(9px,.95vmin,12px);letter-spacing:1.2px;text-transform:uppercase;color:var(--dim)}
+  .nt-dis{flex:0 0 auto;padding:6px 10px;border-top:1px solid var(--border);background:var(--panel);
+    font-size:clamp(10.5px,1.1vmin,15px);letter-spacing:1.2px;text-transform:uppercase;color:var(--dim)}
   /* never an ambiguous blank — say WHICH of the two empty cases this is */
-  .nt-none{padding:7px 2px;font-size:clamp(10.5px,1.1vmin,14px);color:var(--dim)}
-  .nt-gone{padding:7px 2px;font-size:clamp(10.5px,1.1vmin,14px);color:var(--amber);line-height:1.4}
+  .nt-none{padding:8px 2px;font-size:clamp(13px,1.4vmin,20px);color:var(--dim)}
+  .nt-gone{padding:8px 2px;font-size:clamp(13px,1.4vmin,20px);color:var(--amber);line-height:1.4}
+  /* The 15 s auto-close, made VISIBLE. A panel that disappears on its own must read as deliberate,
+     not as the board dropping something — so the remaining time is on screen the whole way down.
+     ntPaint() sets a negative animation-delay from NT_T0, so a live repaint mid-window resumes the
+     bar where it was instead of snapping back to full and lying about how long is left. */
+  .nt-cd{flex:0 0 auto;height:3px;background:var(--ndc,var(--dim));opacity:.6;
+    transform-origin:left center;animation:ntcd var(--ntms,15s) linear forwards}
+  @keyframes ntcd{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+  /* Reduced motion still needs a countdown. A bar frozen at full width followed by the panel simply
+     vanishing is the EXACT failure this bar exists to prevent. Step it once per second instead —
+     far less motion than a continuous slide, and it still reads as a clock running out. */
+  @media (prefers-reduced-motion:reduce){ .nt-cd{animation:ntcd var(--ntms,15s) steps(15,end) forwards} }
   /* Repeat address. Quiet purple, the MDT's been-here-before palette: context, not alarm —
      it must not compete with the call-type colour or the TENDER OPS badge. */
   .call-e .crpt{flex:0 0 auto;color:#C9A2FF;font-size:clamp(9px,.95vmin,13px);letter-spacing:.4px;
     border:1px solid rgba(201,162,255,.45);border-radius:5px;padding:0 5px;white-space:nowrap}
-  .nt-hist{padding:4px 2px 7px;margin-bottom:4px;border-bottom:1px solid rgba(48,54,61,.55);
-    font-size:clamp(10px,1.05vmin,14px);line-height:1.35;color:#C9A2FF}
+  .nt-hist{padding:5px 2px 8px;margin-bottom:5px;border-bottom:1px solid rgba(48,54,61,.55);
+    font-size:clamp(12px,1.3vmin,19px);line-height:1.4;color:#C9A2FF}
   .nt-hist b{color:#E2CCFF}
   .call-e[data-nk]{cursor:pointer}
   .call-e[data-nk]:hover{background:rgba(255,255,255,.045)}
@@ -1127,6 +1155,8 @@
     </div>
     <!-- Shift schedule — officer-set via control.html; vertical list, auto-paging on overflow -->
     <div class="tile sched-tile">
+      <!-- Call notes — anchored IN this tile, covering it while open. Filled by ntOpen(). -->
+      <div class="ntdock" id="ntDock" hidden></div>
       <div class="sched-split">
         <div class="sched-half">
           <div class="head"><span class="name">Scheduled Events</span><span class="sched-page" id="schedPage" hidden></span><span class="stamp src" id="schedStamp">Loading&hellip;</span></div>
@@ -1196,8 +1226,6 @@
           <div class="tk-cell tk-div" id="tkDivCell" hidden><span class="tkl">Diversion</span><span class="tkv" id="tkDiv">—</span></div>
           <div class="tk-cell tk-calls"><span class="tkl">Active calls</span><div class="tkslot" id="tkCalls"></div></div>
         </div>
-        <!-- Call notes — docked ABOVE the map so a run peek stays visible under it. Filled by ntOpen(). -->
-        <div class="ntdock" id="ntDock" hidden></div>
         <div class="drone-split">
           <div class="drone-video">
             <div class="drone-idle" id="droneIdle"><img alt="" hidden onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="idle-fallback" hidden>NO ACTIVE FEED</span></div>
@@ -1799,8 +1827,10 @@
        them under the call pins (marker pane 600) and over the address labels (450). */
     map.createPane("hydPane"); map.getPane("hydPane").style.zIndex=455;
     function hEsc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-    function hydPop(h,oos){ return '<div class="hyd-pop"><b>HYD '+hEsc(h[0])+'</b>'+
-      (oos?' <span class="hp-oos">OUT OF SERVICE</span>':(h[5]?' <span class="hp-oos">PRIVATE</span>':''))+
+    function hydPop(h,oos,unc){ return '<div class="hyd-pop"><b>HYD '+hEsc(h[0])+'</b>'+
+      /* still says OUT OF SERVICE when unconfirmed — the amber only adds "go verify it", it never
+         softens the verdict. A popup that read "maybe out" would be the false all-clear itself. */
+      (oos?(' <span class="hp-oos">OUT OF SERVICE</span>'+(unc?' <span class="hp-unc">CHECK STATUS</span>':'')):(h[5]?' <span class="hp-oos">PRIVATE</span>':''))+
       (h[4]?'<br>'+hEsc(h[4]):'')+
       '<br><span class="hp-sz">'+((h[1]||0)?h[1]+'&Prime; main':'main size unknown')+'</span></div>'; }
     var hydLayer=L.layerGroup().addTo(map), HYD_Z=16.2, hydPainted="";
@@ -1813,6 +1843,12 @@
     /* Officer-flagged OUT-OF-SERVICE hydrants (control.html list, matched by address) render the red
        slashed pin a size up — a plug you can't count on must out-shout the ones you can. */
     var hydIconOOS=L.icon({iconUrl:"hydrant-marker-oos.png",iconRetinaUrl:"hydrant-marker-oos@2x.png",iconSize:[26,26],iconAnchor:[13,26]});
+    /* UNCONFIRMED — the officer's estimated return date passed and nobody has laid eyes on the plug.
+       It stays OUT OF SERVICE for every purpose, tender logic included; it is drawn AMBER instead of
+       red purely so crews can see at a glance which plugs still need checking, then clear them from
+       the control panel. It is never drawn blue — an unverified hydrant is not water you have.
+       Hue-shifted from the OOS art so no new asset is needed; swap in drawn amber art later. */
+    var hydIconUNC=L.icon({iconUrl:"hydrant-marker-oos.png",iconRetinaUrl:"hydrant-marker-oos@2x.png",iconSize:[26,26],iconAnchor:[13,26],className:"hyd-unc"});
     /* suffix synonyms canonicalize BEFORE stripping — an officer's "Applewhite Road" must match
        the db's "APPLEWHITE RD"; both sides of every comparison pass through here */
     function hydNorm(s){ return String(s||"").toUpperCase()
@@ -1821,12 +1857,18 @@
                 HIGHWAY:"HWY",CIRCLE:"CIR",COURT:"CT",PLACE:"PL",COVE:"CV",BEND:"BND",CROSSING:"XING",EXPRESSWAY:"EXPY"}[m]; })
       .replace(/[^A-Z0-9]/g,""); }
     window.OOS_HYD=window.OOS_HYD||[];
+    /* OOS_UNC is a SUBSET of OOS_HYD: flagged plugs whose estimated return date lapsed with nobody
+       verifying them. It changes the pin COLOUR ONLY. Every out-of-service verdict — including the
+       tender water-supply scan — still reads OOS_HYD, so an unconfirmed plug is treated as no water.
+       Amber is a request to go look, never a downgrade of the flag. */
+    window.OOS_UNC=window.OOS_UNC||[];
     /* SHARED MATCHER CONTRACT (same rule on MDT + control): "HYD 494658" pins ONE plug by
        number; a bare number matches the hydrant id exactly OR anchors at the address start;
-       street-name flags match anywhere. Number flags reach plugs with no address on file. */
-    function hydIsOOS(addr,id){
+       street-name flags match anywhere. Number flags reach plugs with no address on file.
+       One body, two lists — the contract must never fork between red and amber. */
+    function hydMatchList(list,addr,id){
       var a=hydNorm(addr), hid=String(id==null?"":id);
-      for(var i=0;i<window.OOS_HYD.length;i++){ var o=window.OOS_HYD[i];
+      for(var i=0;i<list.length;i++){ var o=list[i];
         if(!o||o.length<4) continue;
         var m=/^HYD(\d+)$/.exec(o);
         if(m){ if(hid===m[1]) return true; continue; }
@@ -1835,6 +1877,8 @@
         if(a&&a.indexOf(o)>=0) return true; }
       return false;
     }
+    function hydIsOOS(addr,id){ return hydMatchList(window.OOS_HYD,addr,id); }
+    function hydIsUNC(addr,id){ return hydMatchList(window.OOS_UNC,addr,id); }
     window.HYD_ISOOS=hydIsOOS;                        /* the tender scan lives in another module — same verdicts, one matcher */
     /* onBoardState is declared ~800 lines BELOW this module (var — hoisted undefined here). The old
        try{onBoardState(...)}catch{} threw at init and SWALLOWED it, so the OOS subscription never
@@ -1844,8 +1888,13 @@
     (function hookOOS(){
       if(typeof onBoardState!=="function"){ setTimeout(hookOOS,400); return; }
       onBoardState(function(ok,st){                              /* officer OOS list changes repaint the pins */
-        var next=((st&&st.oosHydrants)||[]).map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
-        if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)){ window.OOS_HYD=next; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} try{ if(window.TENDER_RECHECK) window.TENDER_RECHECK(); }catch(e){} }
+        var raw=((st&&st.oosHydrants)||[]);
+        var next=raw.map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
+        /* the amber subset — entries whose estimate lapsed unverified. Legacy string entries have no
+           unc field and are simply never amber, so an older saved state keeps behaving exactly as before. */
+        var unc=raw.filter(function(x){ return x&&typeof x==="object"&&x.unc; })
+                   .map(function(x){ return hydNorm(x.addr); }).filter(Boolean);
+        if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)||JSON.stringify(unc)!==JSON.stringify(window.OOS_UNC)){ window.OOS_HYD=next; window.OOS_UNC=unc; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} try{ if(window.TENDER_RECHECK) window.TENDER_RECHECK(); }catch(e){} }
       });
     })();
     function hydUpdate(){
@@ -1873,8 +1922,9 @@
       var H=window.HYDB.h;
       for(var i=0;i<H.length;i++){ var h=H[i];
         if(!hydIsOOS(h[4],h[0])) continue;            /* number flags reach plugs with no address on file */
-        L.marker([h[2],h[3]],{icon:hydIconOOS,keyboard:false})
-          .bindPopup(hydPop(h,true),{maxWidth:260}).addTo(oosLayer);
+        var unc=hydIsUNC(h[4],h[0]);                  /* amber: flagged, estimate lapsed, nobody has verified it */
+        L.marker([h[2],h[3]],{icon:unc?hydIconUNC:hydIconOOS,keyboard:false})
+          .bindPopup(hydPop(h,true,unc),{maxWidth:260}).addTo(oosLayer);
       }
     }
     /* ── LOW-WATER CROSSING PINS — the HALT/BexarFlood watched crossings on the MAP (the Program
@@ -3177,18 +3227,23 @@
       if(NT_KEY && NOTE_MEM[NT_KEY]) ntPaint();   /* dock open on a live call — new dispatcher notes appear as they land */
     }
     /* ── the dock ── */
-    var NT_KEY="", NT_FALL=null, NT_TIMER=null, NT_LIVE=false;   /* NT_LIVE: opened from Active Calls (operational) rather than the run tally (debrief) */
+    var NT_KEY="", NT_FALL=null, NT_TIMER=null, NT_LIVE=false, NT_T0=0, NT_MAP="";   /* NT_LIVE: opened from Active Calls (operational) rather than the run tally (debrief). NT_T0: when this open began, so a repaint resumes the countdown instead of restarting it. NT_MAP: "" the map moved, "busy" drone ops own it, "nopin" no trustworthy fix — a zoom that DID NOT HAPPEN must never look like a zoom that broke */
     function ntSized(){ try{ if(window.BC2FD_MAP_RESIZE) window.BC2FD_MAP_RESIZE(); }catch(e){} }
     function ntClose(){
-      NT_KEY=""; NT_FALL=null; NT_LIVE=false;
+      NT_KEY=""; NT_FALL=null; NT_LIVE=false; NT_MAP="";
       if(NT_TIMER){ clearTimeout(NT_TIMER); NT_TIMER=null; }
       var d=document.getElementById("ntDock"); if(d){ d.hidden=true; d.innerHTML=""; }
       setTimeout(ntSized,60);
     }
+    /* 15 s, every tier. The notes now live in the Scheduled Events tile and are paired with the map
+       peek, which also expires at 15 s — they open together and clear together, instead of the notes
+       outliving the zoom by 45 s. Was 60 s and wall-only; "a safety board is never left covered by
+       something someone walked away from" only got stronger once the notes started covering a tile.
+       Closing early always works: the X, or Escape. */
+    var NT_MS=15000;
     function ntArm(){
       if(NT_TIMER) clearTimeout(NT_TIMER);
-      var wall=!!(window.matchMedia && window.matchMedia("(min-width:1500px)").matches);
-      if(wall) NT_TIMER=setTimeout(ntClose,60000);   /* wall only: a safety board is never left covered by something someone walked away from */
+      NT_TIMER=setTimeout(ntClose,NT_MS);
     }
     function ntPaint(){
       var d=document.getElementById("ntDock"); if(!d) return;
@@ -3209,21 +3264,28 @@
         body='<div class="nt-gone">Notes not retained &mdash; this run aged off the live feed before the board saw it. CAD narrative is not stored.</div>';
       }
       d.style.setProperty("--ndc", rtColor((RT_META[classify(ty)]||RT_META[""])[1]));
+      d.style.setProperty("--ntms", NT_MS+"ms");   /* the bar's duration IS the timer's duration — one constant, never two that can silently drift apart */
       d.innerHTML='<div class="nt-hd"><span class="nt-dot"></span><span class="nt-ty">'+esc(ty)+'</span>'+
         '<span class="nt-ad">'+esc(ad)+'</span><span class="nt-tm">'+esc(dropTime(ts))+'</span>'+
+        /* say so when the map did NOT move. The run sheet already refuses to fail silently on a busy
+           map (.rs-busy); a live call deserves the same honesty, or a refused zoom reads as a bug. */
+        (NT_MAP?('<span class="nt-mb">'+(NT_MAP==="busy"?"MAP BUSY &middot; DRONE OPS":"NO PIN")+'</span>'):'')+
         '<button type="button" class="nt-x" aria-label="Close notes">&#10005;</button></div>'+
         '<div class="nt-body">'+hs+body+'</div>'+
         /* ONLY on a live call. The run tally is for debrief — the reader already knows it is
            historical, and a caveat there is noise on a wall board. One short line: this is read
            at a glance across a bay, and a paragraph of caveat is a paragraph nobody reads. */
-        (NT_LIVE ? '<div class="nt-dis">Refer to CAD for full call notes</div>' : '');
+        (NT_LIVE ? '<div class="nt-dis">Refer to CAD for full call notes</div>' : '')+
+        /* countdown to the auto-close. Negative delay = resume, not restart: a live call repainting
+           with fresh dispatcher notes must not make the bar claim a full 15 s it does not have. */
+        '<div class="nt-cd" style="animation-delay:-'+Math.max(0,Date.now()-(NT_T0||Date.now()))+'ms"></div>';
       var x=d.querySelector(".nt-x"); if(x) x.addEventListener("click",ntClose);
     }
     /* fallback carries what the RUN ROW knows, so the header still reads right for a call the
        board never witnessed and whose notes are therefore gone. */
-    function ntOpen(key,fallback,live){
+    function ntOpen(key,fallback,live,mapst){
       var d=document.getElementById("ntDock"); if(!d) return;
-      NT_KEY=String(key||""); NT_FALL=fallback||null; NT_LIVE=!!live;
+      NT_KEY=String(key||""); NT_FALL=fallback||null; NT_LIVE=!!live; NT_MAP=mapst||""; NT_T0=Date.now();
       d.hidden=false; ntPaint(); setTimeout(ntSized,60); ntArm();
     }
     function freshOnly(calls){ return calls.filter(function(c){
@@ -3290,7 +3352,9 @@
         var td=tenderCache[tenderKey(c)];
         var tdh= td==="need" ? '<span class="ctd need" title="No hydrant within 1,000 ft — tender/drafting water supply">TENDER OPS</span>'
                : td==="if"   ? '<span class="ctd if" title="No hydrant within 1,000 ft — tenders if this becomes a working fire">TENDER IF FIRE</span>' : '';
-        return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'"'+(noteKey(c)?(' data-nk="'+esc(noteKey(c))+'"'):'')+'>'+
+        /* coordinates ride the row so a tap can peek the map — same gate the run tally uses:
+           a c.gs (soft-geocoded) fix is not trustworthy enough to zoom a wall board to. */
+        return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'"'+(noteKey(c)?(' data-nk="'+esc(noteKey(c))+'"'):'')+((c.lat!=null&&c.lng!=null&&!c.gs)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'')+'>'+
                '<span class="cw">'+dropTime(ts)+'</span>'+                          /* time — far left */
                '<span class="ct">'+esc(c.type||"CALL")+'</span>'+tdh+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
@@ -3301,13 +3365,23 @@
       pruneUnits(calls);
       rot=autoRotate(body, rows, pg, 7000);
     }
-    /* tap a live call row -> its CAD narrative, docked above the map */
+    /* tap a live call row -> its CAD narrative in the Scheduled Events tile, and the map peeks that
+       call's pin for the same 15 s the notes are up. The peek is best-effort: it is refused while
+       drone ops own the map, and a refused zoom must NEVER swallow the notes — the narrative is what
+       the tap asked for. (The run tally does the opposite and holds its sheet open on refusal, because
+       there the peek IS the answer.) */
     (function(){ var b=document.getElementById("callsBody"); if(!b) return;
       b.addEventListener("click",function(e){
         var row=e.target.closest && e.target.closest(".call-e[data-nk]"); if(!row) return;
-        ntOpen(row.getAttribute("data-nk"),null,true);    /* Active Calls -> operational view, carries the caveat */
+        var mst="";
+        if(!row.hasAttribute("data-lat")) mst="nopin";    /* soft-geocoded or no fix — the run sheet labels these too */
+        else { try{ mst=(window.BC2FD_MAP_PEEK && window.BC2FD_MAP_PEEK(parseFloat(row.getAttribute("data-lat")),parseFloat(row.getAttribute("data-lng")))) ? "" : "busy"; }catch(err){ mst="busy"; } }
+        ntOpen(row.getAttribute("data-nk"),null,true,mst);    /* Active Calls -> operational view, carries the caveat */
       });
     })();
+    /* Escape closes the notes, same key that closes the run sheet, so one reflex covers both.
+       Registered once at load; a no-op whenever nothing is open. */
+    document.addEventListener("keydown",function(e){ if(e.key==="Escape" && NT_KEY) ntClose(); });
     function dropTime(ts){ try{ if(!ts) return ""; var d=new Date(ts); if(isNaN(d.getTime())) return "";
       return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:CT_ZONE}); }catch(e){ return ""; } }
     /* strobe engine: every 500ms purge expired fresh flags (survives page rotation re-inserts,
