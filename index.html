@@ -1689,14 +1689,34 @@
       return L.tileLayer("https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/"+id+"/{z}/{x}/{y}.png",
         {pane:"radarPane",opacity:0,maxZoom:19,updateWhenIdle:true,updateWhenZooming:false,keepBuffer:2});
     });
+    /* The six frames ride in ONE group so the layers control has a single thing to switch. Radar was
+       previously auto-only — it appeared during storms and there was no way to call it up otherwise,
+       which is no good when you want to look at a cell before it earns an alert. */
+    var radarGroup=L.layerGroup(radarLayers);
     var radar={ _on:false, _anim:null, _fi:RADAR_FRAMES.length-1 };
-    function radarShow(on){
-      if(on===radar._on) return; radar._on=on;
-      radarLayers.forEach(function(l){ try{ on?map.addLayer(l):map.removeLayer(l); }catch(e){} });
+    var radarProg=false;      /* true only while WE toggle, so the control listener ignores our own events */
+    function radarAnim(on){
       if(on){ radar._fi=RADAR_FRAMES.length-1; radarStep();
-        radar._anim=setInterval(radarStep, 500); }
+        if(!radar._anim) radar._anim=setInterval(radarStep, 500); }
       else if(radar._anim){ clearInterval(radar._anim); radar._anim=null; }
     }
+    function radarShow(on){
+      if(on===radar._on) return; radar._on=on;
+      radarProg=true;
+      try{ on?map.addLayer(radarGroup):map.removeLayer(radarGroup); }catch(e){}
+      radarProg=false;
+      radarAnim(on);
+    }
+    /* Ticking the box yourself has to drive the animator too — Leaflet adds the group straight to the
+       map without going through radarShow, and a radar that renders but never sweeps looks frozen. */
+    map.on("overlayadd", function(e){
+      if(radarProg || e.layer!==radarGroup) return;
+      radarManual=true; radar._on=true; radarAnim(true);
+    });
+    map.on("overlayremove", function(e){
+      if(radarProg || e.layer!==radarGroup) return;
+      radarManual=false; radar._on=false; radarAnim(false);
+    });
     var radarHold=0;
     function radarStep(){
       if(radarHold>0){ radarHold--; return; }                      /* dwell on the newest frame */
@@ -1705,7 +1725,7 @@
       radarLayers[radar._fi].setOpacity(0.5);
       if(radar._fi===RADAR_FRAMES.length-1) radarHold=3;           /* ~1.5 s on "now" */
     }
-    var radarBucket=0;
+    var radarBucket=0, radarManual=null, radarLastStorm=null;   /* radarManual: null = the board decides, true/false = you did */
     function stormActive(){
       if(window.FLOOD_ACTIVE) return true;
       /* Match the EVENT TEXT, not band classes — "Heat Advisory" wears the default warning class, and
@@ -1715,12 +1735,19 @@
       return false;
     }
     function radarTick(){
-      var want=false; try{ want=stormActive(); }catch(e){}
-      radarShow(want);
-      if(want){ var bk=Math.floor(Date.now()/300000);
+      var storm=false; try{ storm=stormActive(); }catch(e){}
+      /* A manual choice holds until the WEATHER itself changes, then the board takes the layer back.
+         So a radar someone lit on a clear afternoon clears itself when the next front arrives or
+         passes — nobody has to remember to untick it, and the wall is never left painted for a day. */
+      if(radarLastStorm!==null && storm!==radarLastStorm) radarManual=null;
+      radarLastStorm=storm;
+      if(radarManual===null) radarShow(storm);
+      /* refresh whenever radar is UP, auto or manual — a hand-lit radar must never go stale on screen */
+      if(radar._on){ var bk=Math.floor(Date.now()/300000);
         if(bk!==radarBucket){ radarBucket=bk;                       /* fresh frame set every 5 min */
           radarLayers.forEach(function(l,i){ try{ l.setUrl("https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/"+RADAR_FRAMES[i]+"/{z}/{x}/{y}.png?_="+bk); }catch(e){} }); } }
     }
+    layersCtl.addOverlay(radarGroup,"Storm Radar");   /* now switchable by hand, not storms-only */
     setTimeout(radarTick,15000); setInterval(radarTick,60000);
     /* ── WIND FLOW — windy.com-style particle streamlines over the district. The field is an IDW
        blend of the 5 station winds (window.WX_WINDS from the weather module), flowing TO (met dir
