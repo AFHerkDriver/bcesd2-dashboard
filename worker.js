@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 13;
+const WORKER_VERSION = 14;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -2258,7 +2258,15 @@ export default {
                Read back via GET /hydrantlog. */
             try {
               const hydTxt = ((c.type || "") + " " + ((c.notes || []).map(n => n.x).join(" | "))).trim();
-              if (/HYDRANT/i.test(hydTxt) && (c.cad_code || c.id)) {
+              /* WIDENED (build 14). The old net was the literal word HYDRANT and it banked NOTHING —
+                 verified 2026-08-05: zero hyd: rows, and zero matches across 84 retained calls and 37
+                 call types. Nobody knows yet how this dispatch words hydrant traffic, so the net is
+                 cast wide ON PURPOSE: a false positive costs one KV row, a miss is UNRECOVERABLE
+                 because the narrative is only retained 48 h and this is the sole permanent record.
+                 Deliberately NOT matched: bare "PLUG" (an OB call's mucus plug would bank every time)
+                 and bare "OUT OF SERVICE" (that is apparatus, all day long). \bHYD\b will not fire on
+                 HYDRATED/HYDRAULIC. Narrow this only once real messages show what the wording is. */
+              if (/HYDRANT|\bHYD\b|\bFDC\b|FLOW TEST|WATER MAIN|MAIN BREAK|STANDPIPE|FIRE PLUG|DRAFT SITE/i.test(hydTxt) && (c.cad_code || c.id)) {
                 await env.PINS.put("hyd:" + (c.cad_code || c.id), JSON.stringify({
                   t: c.logged, ty: c.type || "", ad: c.address || "",
                   tx: (c.notes || []).map(n => n.x).join(" | ").slice(0, 500) }));
