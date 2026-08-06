@@ -1048,6 +1048,12 @@
   .tchip.dep .tcl{display:block;margin:0 auto;font-size:clamp(10px,1.15vmin,17px);letter-spacing:.5px;line-height:1.1;
     color:var(--text);text-transform:uppercase;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tchip.dep .tcl:empty{display:none}
+  /* The deployed face CENTERS its pills in the tile. The home grid is three fixed columns, which
+     is right when the tile is full — but one deployment in that grid sits alone in the LEFT cell
+     with two empty cells beside it, reading as a mistake. Flex centers whatever count exists;
+     min-width keeps each chip at home-grid-cell width so the two faces still match. */
+  .teams-body.depface{display:flex;flex-wrap:wrap;justify-content:center;align-content:center}
+  .teams-body.depface .tchip{flex:0 1 auto;min-width:calc(33.33% - clamp(4px,.4vmin,7px));max-width:100%}
   #teamsHead.dep-tap{cursor:pointer}   /* no underline cue — at TV size it read as stray dashed lines under the header */
   /* Fire Weather tile */
   /* "safe center": centered when the forecast fits, but falls back to top-aligned when the tile is
@@ -3956,7 +3962,7 @@
         /* SAME pill language as the home face — the ember .dep variant sits beside green staffed and
            red OOS as a third state, in the same grid, so the two faces read as one tile. Type rides
            IN the pill ("B121 · TIFMAS"), location on a second line under it. */
-        body.className="teams-body";
+        body.className="teams-body depface";
         body.innerHTML=dep.map(function(u){
           var ty=String(u.depTy||"").trim();
           return '<div class="tchip dep"><span class="tcn">'+esc2(String(u.name).trim().toUpperCase())+(ty?(' &middot; '+esc2(ty.toUpperCase())):'')+'</span>'+
