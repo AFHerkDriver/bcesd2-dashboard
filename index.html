@@ -1249,7 +1249,10 @@
 
       <!-- Drone Video — dedicated section (was the NWS slot). Stream fills the whole tile.
            Overlay show/hide + 30s grace handled by the drone module. -->
-      <div class="tile drone-tile">
+      <!-- dt-district in the MARKUP, not only from JS: the map owns the whole tile until a drone is
+           actually flying. Without it the idle video pane held ~58% of the tile from first paint and
+           only released when droneLayout() ran — which never happens if board state is unreachable. -->
+      <div class="tile drone-tile dt-district">
         <div class="head"><span class="name" id="droneTileName">District Map</span><span class="stamp src" id="droneStamp"></span></div>
         <!-- Takeover strip — hidden until the tile goes full-wall. Mirrors what the board is already
              showing, so it cannot drift from the tiles it stands in for. -->
@@ -1590,7 +1593,12 @@
        Framing fits the pins rather than the fixed 121-125 box: runs land at 161/162 too, and
        a pin outside the frame is a pin nobody sees. Falls back to the station framing when
        there is nothing to show. ── */
-    var pinLayer=L.layerGroup().addTo(map), pinPts=[], pinsOn=false, hadDrones=false;
+    /* pinsOn defaults TRUE: the district map is the RESTING state of this tile, and drone ops are the
+       exception. It used to default false, which meant that until something explicitly called
+       BC2FD_MAP_MODE the board refused to plot call pins and refused every map peek — so a wall with
+       no drone up behaved as though one were flying. That is what the 2026-08-05 Firestore outage
+       exposed: the code path that clears it runs off board state, so losing state left the map dead. */
+    var pinLayer=L.layerGroup().addTo(map), pinPts=[], pinsOn=true, hadDrones=false;
     /* ── ADDRESS LABELS — Bexar County appraisal parcels (Situs). Dispatch-grade "every address":
        past ADDR_Z the viewport's parcels are fetched from the county GIS (maps.bexar.org, CORS
        verified) and each lot is labeled with its house number, like the CAD map. Client-side
@@ -3100,6 +3108,12 @@
       if(nm) nm.textContent = active ? "Drone Live Feed" : "District Map";
       try{ if(window.BC2FD_MAP_MODE) window.BC2FD_MAP_MODE(!active); }catch(e){}
     }
+    /* Settle into the resting state ONCE at startup, independently of board state and the drone relay.
+       droneLayout was previously reachable only through render(), which runs off those two feeds — so
+       when Firestore went over quota on 2026-08-05 the tile never settled: the map kept a fraction of
+       the width, pins never plotted, and every call tap answered "MAP BUSY - DRONE OPS" with nothing
+       flying. A live drone still flips it to feed mode the moment one is detected. */
+    droneLayout(false);
     function render(streams, bannerOnly){
       var ov=document.getElementById("droneOverlay"), badge=document.getElementById("droneBadge");
       if(!ov) return;
