@@ -1003,12 +1003,33 @@
     avlBreakFollow();                                /* the call owns the view now; Center brings the crew back when they choose */
     reframe();
   }
+  /* Sonar rings are tracked with a wall-clock expiry and swept by the dispatch poll — NOT left to a
+     setTimeout. iOS freezes timers in a backgrounded tab, so a ring dropped before the screen slept
+     outlived its 62 s cleanup while the poll kept rebuilding callLayer from the live list: wake the
+     cab and you get a ripple with no pin and no card under it. The pin layer is rebuilt every poll,
+     so the ring has to be swept on the same clock or the two disagree. */
+  const sonarMk = {};   /* id -> { mk, exp } */
   function sonarDrop(c, col) {
     if (!freshLayer) return;
+    if (sonarMk[c.id]) { try { freshLayer.removeLayer(sonarMk[c.id].mk); } catch (e) {} }   /* never stack two rings on one call */
     const mk = L.marker([c.lat, c.lng], { interactive: false, keyboard: false,
       icon: L.divIcon({ className: "pin-sonar-wrap", iconSize: [0, 0],
         html: '<div class="pin-sonar" style="--sonar:' + col + '"><span></span><span></span></div>' }) }).addTo(freshLayer);
-    setTimeout(() => { try { freshLayer.removeLayer(mk); } catch (e) {} }, 62000);   /* rings stop themselves at 30 cycles; this removes the DOM */
+    sonarMk[c.id] = { mk, exp: Date.now() + 62000 };   /* rings stop animating at 30 cycles; this removes the DOM */
+  }
+  /* Drop any ring that has expired OR whose call is no longer live. liveIds is the set the poll just
+     rendered pins for, so a ring can never outlive the pin it belongs to. */
+  function sonarSweep(liveIds) {
+    if (!freshLayer) return;
+    const now = Date.now();
+    for (const id in sonarMk) {
+      const s = sonarMk[id];
+      if (!s) { delete sonarMk[id]; continue; }
+      if (now >= s.exp || (liveIds && !liveIds.has(id))) {
+        try { freshLayer.removeLayer(s.mk); } catch (e) {}
+        delete sonarMk[id];
+      }
+    }
   }
   const isApp = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
   /* call-type palette — SAME colors as the wall's Runs by Type keypad, so the two screens speak
@@ -1201,6 +1222,9 @@
            flashing pin + sonar + governed focus; settled calls the radius-7 solid pin. */
         if (!callLayer) return;                     /* map failed to boot: the call band above still works — a dead MAP must not trip the FEED DOWN banner */
         callLayer.clearLayers();
+        /* the ring layer is swept on the SAME pass that rebuilds the pins, so the two can never
+           disagree — that mismatch is what left a ripple on screen with nothing under it */
+        sonarSweep(new Set(live.map(c => String(c.id))));
         const nowMs = Date.now();
         live.forEach(c => {
           if (c.lat == null || c.lng == null) return;
