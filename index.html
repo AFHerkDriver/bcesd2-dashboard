@@ -1045,22 +1045,24 @@
      "B121 · TIFMAS" in the pill, location under it — the location is the reason the crew looks, so
      it gets full text colour and the TYPE half takes any ellipsis. The chip grows for the second
      line; min-height keeps it pill-proportioned when the location is blank. */
+  /* Deployed pills are FULL-WIDTH ROWS, not centered chips. They carry two lines of real data
+     (callsign + type, then location), and there will only ever be a handful — so the tile stacks
+     them and lets each span the container. Text is flush-left for the same reason: down a column of
+     rows the eye runs the callsigns off one edge instead of hunting centred text on every line. */
   .tchip.dep{border-color:var(--accent);background:rgba(255,107,53,.14);
-    flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    flex-direction:column;align-items:stretch;justify-content:center;text-align:left;
     gap:clamp(1px,.2vmin,3px);height:auto;min-height:clamp(30px,3.1vmin,50px);
-    padding:clamp(3px,.4vmin,7px) clamp(5px,.6vmin,9px)}
-  /* both lines are CENTERED like every other pill — explicit margin:auto on the blockified spans,
-     because relying on the parent's align-items alone is what let them hug the left edge */
-  .tchip.dep .tcn{color:var(--accent);display:block;margin:0 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  .tchip.dep .tcl{display:block;margin:0 auto;font-size:clamp(10px,1.15vmin,17px);letter-spacing:.5px;line-height:1.1;
+    padding:clamp(3px,.45vmin,8px) clamp(8px,.9vmin,14px)}
+  .tchip.dep .tcn{color:var(--accent);display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .tchip.dep .tcl{display:block;font-size:clamp(10px,1.15vmin,17px);letter-spacing:.5px;line-height:1.1;
     color:var(--text);text-transform:uppercase;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tchip.dep .tcl:empty{display:none}
-  /* The deployed face CENTERS its pills in the tile. The home grid is three fixed columns, which
-     is right when the tile is full — but one deployment in that grid sits alone in the LEFT cell
-     with two empty cells beside it, reading as a mistake. Flex centers whatever count exists;
-     min-width keeps each chip at home-grid-cell width so the two faces still match. */
-  .teams-body.depface{display:flex;flex-wrap:wrap;justify-content:center;align-content:center}
-  .teams-body.depface .tchip{flex:0 1 auto;min-width:calc(33.33% - clamp(4px,.4vmin,7px));max-width:100%}
+  /* Stacked full-width rows — no columns. The home face's 3-column grid is right for one-word
+     pills; these carry a callsign, a deployment type and a location, and there will only ever be a
+     few, so each takes the whole width. Vertically centred as a block so two rows do not sit
+     stranded at the top of the tile. */
+  .teams-body.depface{display:flex;flex-direction:column;justify-content:safe center;align-items:stretch}
+  .teams-body.depface .tchip{flex:0 0 auto;width:100%;max-width:100%}
   #teamsHead.dep-tap{cursor:pointer}   /* no underline cue — at TV size it read as stray dashed lines under the header */
   /* Fire Weather tile */
   /* "safe center": centered when the forecast fits, but falls back to top-aligned when the tile is
