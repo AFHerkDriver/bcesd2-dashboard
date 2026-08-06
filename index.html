@@ -1033,17 +1033,23 @@
   .trow.on{border-left-color:var(--green);background:rgba(52,199,89,.08)}
   .trow.on .ts{color:var(--green)}
   .teams-body.err .trow .ts{color:var(--amber)}
-  /* DEPLOYED face — the units tile's alternate view (10 s out of every 50) while any unit is
+  /* DEPLOYED face — the units tile's alternate view (15 s out of every 60) while any unit is
      committed elsewhere (TIFMAS etc.). Ember and loud on purpose: a rig 400 miles away must never
-     read as quietly available, and the rotation exists so the room keeps being reminded. */
-  .teams-body.dep{display:flex;flex-direction:column;justify-content:safe center;gap:clamp(6px,.8vmin,12px)}
-  .dep-hd{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;letter-spacing:2.5px;color:var(--accent);font-size:clamp(13px,1.5vmin,22px)}
-  .dep-row{display:flex;align-items:baseline;gap:clamp(8px,1vmin,16px);border:1px solid var(--accent);border-radius:9px;
-    background:rgba(255,107,53,.10);padding:clamp(5px,.7vmin,10px) clamp(8px,1vmin,14px)}
+     read as quietly available, and the rotation exists so the room keeps being reminded.
+     Grid AUTO-FITS: one deployment spans the tile, several fall into columns, nothing clips. */
+  .teams-body.dep{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));
+    align-content:safe center;gap:clamp(6px,.8vmin,12px)}
+  .dep-row{display:flex;flex-direction:column;gap:clamp(2px,.3vmin,5px);min-width:0;border:1px solid var(--accent);
+    border-radius:9px;background:rgba(255,107,53,.10);padding:clamp(5px,.7vmin,10px) clamp(8px,1vmin,14px)}
+  .dep-top{display:flex;align-items:baseline;gap:clamp(8px,1vmin,16px);min-width:0}
   .dep-cs{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(17px,2vmin,30px);color:var(--accent);line-height:1}
-  .dep-ty{flex:0 0 auto;font-size:clamp(11px,1.2vmin,17px);letter-spacing:1.2px;text-transform:uppercase;color:var(--text);white-space:nowrap}
-  .dep-loc{flex:1 1 auto;margin-left:auto;text-align:right;font-size:clamp(11px,1.2vmin,17px);color:var(--dim);
-    text-transform:uppercase;letter-spacing:.6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dep-ty{flex:1 1 auto;min-width:0;font-size:clamp(11px,1.2vmin,17px);letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* location on its own line — the reason the crew looks at this face at all */
+  .dep-loc{font-size:clamp(12px,1.35vmin,19px);color:var(--text);text-transform:uppercase;letter-spacing:.6px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #teamsHead.dep-tap{cursor:pointer}
+  #teamsHead.dep-tap .name{text-decoration:underline dotted rgba(255,107,53,.55);text-underline-offset:3px}   /* quiet cue that the header flips the tile */
   /* Fire Weather tile */
   /* "safe center": centered when the forecast fits, but falls back to top-aligned when the tile is
      tight (red-flag + heat day, 3-row grid) so the SOONEST hours never clip — only the latest do. */
@@ -1152,7 +1158,7 @@
       <div class="ero" id="eroBand" hidden></div>
     </div>
     <div class="tile teams-tile">
-      <div class="head"><span class="name">Specialty Units &amp; OOS</span><span class="stamp src" id="teamsStamp"></span></div>
+      <div class="head" id="teamsHead"><span class="name">Specialty Units &amp; OOS</span><span class="stamp src" id="teamsStamp"></span></div>
       <div class="teams-body" id="teamsBody"></div>
     </div>
     </div><!-- /wxrow -->
@@ -3942,15 +3948,24 @@
       }
       depCount=dep.length;
       if(!dep.length) depPhase=false;                            /* last deployment cleared mid-cycle -> snap home, never a blank face */
+      var hd=document.getElementById("teamsHead"), hdName=hd?hd.querySelector(".name"):null;
+      if(hd){ hd.classList.toggle("dep-tap", dep.length>0); hd.title=dep.length?"Tap to flip between faces":""; }
       if(depPhase && dep.length){
+        /* the HEADER carries the face label — "Deployed Units" here, back to the usual on the home
+           face — so no in-body banner steals row space */
+        if(hdName) hdName.textContent="Deployed Units";
         body.className="teams-body dep";
-        body.innerHTML='<div class="dep-hd">DEPLOYED</div>'+dep.map(function(u){
-          return '<div class="dep-row"><span class="dep-cs">'+esc2(String(u.name).trim().toUpperCase())+'</span>'+
-                 '<span class="dep-ty">'+esc2(String(u.depTy||"DEPLOYED").trim())+'</span>'+
-                 '<span class="dep-loc">'+esc2(String(u.depLoc||"").trim())+'</span></div>';
+        /* location on its OWN line under callsign+type — "Lubbock TX" must never be the thing that
+           gets ellipsised away; the grid auto-fits, so one deployment gets the full tile width and
+           several fall into columns without anything clipping */
+        body.innerHTML=dep.map(function(u){
+          return '<div class="dep-row"><div class="dep-top"><span class="dep-cs">'+esc2(String(u.name).trim().toUpperCase())+'</span>'+
+                 '<span class="dep-ty">'+esc2(String(u.depTy||"DEPLOYED").trim())+'</span></div>'+
+                 '<div class="dep-loc">'+esc2(String(u.depLoc||"").trim())+'</div></div>';
         }).join("");
         return;
       }
+      if(hdName) hdName.textContent="Specialty Units & OOS";
       var PILL_ORDER={"BC161":"B0"};                             /* manual tweak: Battalion 161 (BC161) sorts just ahead of B121 (Brush), rest alphabetical */
       items.sort(function(a,b){ return String(PILL_ORDER[a.label]||a.label).localeCompare(String(PILL_ORDER[b.label]||b.label), undefined, {numeric:true}); });   /*alphabetize the pills */
       body.innerHTML=items.map(function(it){ return chip(it.label, it.cls); }).join("");
@@ -3960,13 +3975,22 @@
     onBoardState(function(ok,st){ stOk=ok; stSt=st; render(); });
     setInterval(render, 60000);                            /* expiry sweep between polls */
     /* DEPLOYED rotation (dept ask 2026-08-05): while any unit is committed elsewhere, the tile
-       shows its deployed face 10 s out of every 50. Timer runs always and no-ops when nobody is
-       deployed, so a deployment appearing mid-shift starts rotating without any re-arm logic. */
+       shows its deployed face 15 s out of every 60 (45 home / 15 deployed). Timer runs always and
+       no-ops when nobody is deployed, so a deployment appearing mid-shift starts rotating without
+       any re-arm logic. */
     setInterval(function(){
       if(!depCount || stOk!==true) return;                 /* nothing deployed, or state unreadable: the err face must stay up */
       depPhase=true; render();
-      setTimeout(function(){ depPhase=false; render(); }, 10000);
-    }, 50000);
+      setTimeout(function(){ depPhase=false; render(); }, 15000);
+    }, 60000);
+    /* tap the tile header to flip between faces on demand — same guard as the rotation; the next
+       auto-cycle simply carries on from whichever face is showing */
+    (function(){ var hd=document.getElementById("teamsHead"); if(!hd) return;
+      hd.addEventListener("click", function(){
+        if(!depCount || stOk!==true) return;
+        depPhase=!depPhase; render();
+      });
+    })();
   })();
 
   /* ── Shift Scheduled Events — officer-set state.calendar:[{date?,time,end?,desc}].
