@@ -138,6 +138,14 @@ function parseNotes(details) {
        read at a glance. ONLY the negative form is dropped: a real "Caution Note: ..." carries
        exactly the kind of warning this board exists to show, and must always survive. */
     if (/^no\s+caution\s+notes?\.?$/i.test(e)) return;
+    /* Nurse-line handoff boilerplate — 10 occurrences across the banked calls, in 3 wordings
+       including one cut mid-word by Active911's ~450-char cap ("...for **pre-arrival i…"). It is
+       call-routing procedure, not scene information, so it is anchored on the PREFIX to catch every
+       truncation. The second pattern is a net for the same boilerplate if the provider is ever
+       renamed. Neither can match a note that merely mentions a hospital: both require the
+       "transferred to" opener. */
+    if (/^transferred to allegiance\b/i.test(e)) return;
+    if (/^transferred to\b.{0,40}\bpre-?arrival instructions?\b/i.test(e)) return;
     push(e, 0);                                                             /* a real dispatcher/caller note */
   };
   parts.forEach(classify);
@@ -160,7 +168,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 17;
+const WORKER_VERSION = 18;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
