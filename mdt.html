@@ -111,7 +111,11 @@
   /* AVL chip lives INSIDE #ctrls as a flex sibling of the District button — it inherits the corner
      placement, the 8px gap, and the pip-split lift for free, and can never cover the buttons.
      40px+ tall: the file's gloved-thumb floor applies to this tap target too. */
-  #avlChip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 999px; padding: 8px 14px; font-size: 14px; color: #8B949E; display: none; align-items: center; gap: 8px; min-height: 40px; box-sizing: border-box; cursor: pointer; }
+  /* Unit tracking wears the standard pill too — was a 999px lozenge at 14px, which read as a
+     different family beside the chips. Squared to 10px and matched on type size and weight.
+     Padding stays 8px/14px, a hair more than a chip: this one is TAPPABLE and the extra couple of
+     pixels of target matter more in a moving cab than perfect height parity. */
+  #avlChip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 500; color: #8B949E; display: none; align-items: center; gap: 8px; min-height: 40px; box-sizing: border-box; cursor: pointer; }
   #avlChip b { color: #E6EDF3; }
   #avlChip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* never the reason the row overflows */
   #avlChip .avld { width: 9px; height: 9px; border-radius: 50%; background: #3FB950; flex: none; }
@@ -245,14 +249,17 @@
   #rail { margin-left: auto; pointer-events: auto; display: flex; flex-direction: column; gap: 6px;
           align-items: flex-end; max-width: 34vw; flex: 0 0 auto; }
   .chip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 10px; padding: 7px 12px;
-          font-size: 12px; color: #8B949E; text-align: right; }
+          font-size: 12px; font-weight: 500; color: #8B949E; text-align: right; }
   /* Every chip carries a border in ITS OWN state colour, so the rail reads as one set rather than
      one lit chip beside grey ones. The border is the status: green fine, amber caution, red bad,
      neutral when a chip is just reporting. The layers control is deliberately NOT touched — it is
      Leaflet's own furniture, not one of ours. */
+  /* WEIGHT LIVES ON THE BASE, not per state. bad/warn used to declare font-weight:500 while ok and
+     the neutral state inherited 400, so a green pill rendered visibly lighter than an amber one
+     sitting beside it — same object, two different typefaces to the eye. */
   .chip.ok { color: #3FB950; border-color: rgba(63,185,80,.55); box-shadow: 0 0 0 1px rgba(63,185,80,.14); }
-  .chip.bad { color: #F85149; border-color: #F85149; font-weight: 500; box-shadow: 0 0 0 1px rgba(248,81,73,.20); }
-  .chip.warn { color: #FFC107; border-color: rgba(255,193,7,.65); font-weight: 500; box-shadow: 0 0 0 1px rgba(255,193,7,.16); }
+  .chip.bad { color: #F85149; border-color: #F85149; box-shadow: 0 0 0 1px rgba(248,81,73,.20); }
+  .chip.warn { color: #FFC107; border-color: rgba(255,193,7,.65); box-shadow: 0 0 0 1px rgba(255,193,7,.16); }
   .chip:not(.ok):not(.bad):not(.warn) { border-color: rgba(139,148,158,.55); box-shadow: 0 0 0 1px rgba(139,148,158,.12); }
   .chip .sub { display: block; font-size: 10px; color: #8B949E; font-weight: 400; }
   /* #avlChip sits in the same row and is tappable — matched border weight so the row is coherent */
