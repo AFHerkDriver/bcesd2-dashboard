@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════
    BC2FD STATION DASHBOARD — SERVICE WORKER
-   CACHE: bc2fd-dash-v219   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
+   CACHE: bc2fd-dash-v220   ← BUMP THIS ON EVERY DEPLOY (v1 → v2 → …)
    The bump is what makes the wall TV self-update: new bytes here →
    browser installs the new SW → skipWaiting/claim → the board's
    controllerchange listener silently reloads. No hands on the TV.
@@ -12,7 +12,7 @@
    own fail-loud semantics.
    ═══════════════════════════════════════════════════════════════════ */
 
-var CACHE = 'bc2fd-dash-v219';
+var CACHE = 'bc2fd-dash-v220';
 /* drone-broken.png is precached deliberately: it is the art shown when the relay is UNREACHABLE,
    so fetching it on demand would mean requesting it at exactly the moment the network is failing.
    Its pair is precached too so the two states swap without a flash on first failure. */
@@ -20,7 +20,7 @@ var SHELL = ['./', 'cameras.json', 'index.html', 'control.html', 'metrics.html',
              'vendor/leaflet-1.9.4.js', 'vendor/leaflet-1.9.4.css', 'vendor/hls-1.5.15.min.js',
              'vendor/images/layers.png', 'vendor/images/layers-2x.png',   /* the layers-control button IS an image — vendoring the css without these broke the button on every map */
              'helo-med.png', 'helo-med@2x.png', 'helo-air.png', 'helo-air@2x.png',
-             'roadclosure.png', 'roadclosure@2x.png',
+             'roadclosure.png', 'roadclosure@2x.png', 'disabled-vehicle.png', 'disabled-vehicle@2x.png',
              'ownship.png', 'ownship@2x.png',
              'le-eagle.png', 'le-eagle@2x.png', 'le-dps.png', 'le-dps@2x.png', 'le-poacher.png', 'le-poacher@2x.png',
              'le-tanker.png', 'le-tanker@2x.png', 'le-airattack.png', 'le-airattack@2x.png', 'le-fireair.png', 'le-fireair@2x.png',

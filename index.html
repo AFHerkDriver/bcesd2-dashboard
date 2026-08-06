@@ -1377,11 +1377,22 @@
           if(!j||!j.ok) return;
           rwWallLayer.clearLayers();
           var rwIc=L.icon({iconUrl:"roadclosure.png",iconRetinaUrl:"roadclosure@2x.png",iconSize:[24,24],iconAnchor:[12,12]});
+          /* Disabled vehicles get their own badge — a stalled rig in a live lane is a different
+             problem from a crash, and crews want to know which one they are rolling up on. */
+          var dvIc=L.icon({iconUrl:"disabled-vehicle.png",iconRetinaUrl:"disabled-vehicle@2x.png",iconSize:[24,24],iconAnchor:[12,12]});
+          /* TransGuide's own strings, read off the live feed 2026-08-05: "DisabledVehicle" and
+             "Stall" — both are a stopped vehicle to whoever is responding, so both take the badge.
+             Punctuation/space-stripped so a later "Disabled Vehicle" or "DISABLED_VEHICLE" still hits. */
+          var isDV=function(ty){ return /^(disabledvehicle|stall|stalledvehicle)$/.test(String(ty||"").toLowerCase().replace(/[\s_-]/g,"")); };
           (j.items||[]).forEach(function(it){
-            var mk2=it.k==="incident"
-              ? L.circleMarker([it.la,it.ln],{radius:6,color:"#0D1117",weight:2,fillColor:"#FF8C42",fillOpacity:.95})
-              : L.marker([it.la,it.ln],{icon:rwIc,keyboard:false});
-            mk2.bindPopup('<b>'+String(it.ty).replace(/[<>&]/g,"").toUpperCase()+'</b><br>'+String(it.tx).replace(/[<>&]/g,""),{maxWidth:250})
+            var mk2=isDV(it.ty)
+              ? L.marker([it.la,it.ln],{icon:dvIc,keyboard:false})
+              : it.k==="incident"
+                ? L.circleMarker([it.la,it.ln],{radius:6,color:"#0D1117",weight:2,fillColor:"#FF8C42",fillOpacity:.95})
+                : L.marker([it.la,it.ln],{icon:rwIc,keyboard:false});
+            /* TxDOT ships CamelCase event types; split them so the popup reads DISABLED VEHICLE
+               rather than DISABLEDVEHICLE. Applies to every type, not just this one. */
+            mk2.bindPopup('<b>'+String(it.ty).replace(/[<>&]/g,"").replace(/([a-z])([A-Z])/g,"$1 $2").toUpperCase()+'</b><br>'+String(it.tx).replace(/[<>&]/g,""),{maxWidth:250})
               .addTo(rwWallLayer);
           });
         }).catch(function(){});
