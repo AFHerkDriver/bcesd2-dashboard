@@ -236,10 +236,9 @@
      to be a one-off with a grey border and green text, which read as a different kind of object
      sitting next to them. The pill IS the house style now; new status surfaces should reuse
      .chip / .chip.ok / .chip.warn / .chip.bad rather than inventing another box. */
-  #noCalls { pointer-events: none; align-self: flex-start;
-             background: rgba(13,17,23,.94); border: 1px solid rgba(63,185,80,.55); border-radius: 10px;
-             box-shadow: 0 0 0 1px rgba(63,185,80,.14);
-             padding: 7px 12px; font-size: 12px; color: #3FB950; }
+  /* Everything visual comes from .chip.ok — this rule holds ONLY what is specific to sitting in
+     the call band. Re-declaring the pill here is what let it drift out of step in the first place. */
+  #noCalls { pointer-events: none; align-self: flex-start; text-align: left; }
 
   /* right rail chips — LIVE INSIDE the call band's flex row (margin-left:auto), so call cards and
      the facilities/weather chips can never overlap: the cards shrink, the chips keep their corner */
@@ -1088,7 +1087,10 @@
 
   function renderBand() {
     Object.keys(cardLvl).forEach(id => { if (!lastTop.some(c => c.id === id)) delete cardLvl[id]; });   /* a call that aged off must not hand its collapse state on */
-    if (!lastTop.length) { $("callBand").innerHTML = '<div id="noCalls">NO ACTIVE CALLS · live</div>'; return; }
+    /* a real .chip.ok, not a lookalike — same object as the rail chips, so it follows the standard
+       automatically if that ever changes. Green already means "checked and clear", which is what
+       the old "· live" suffix was doing by hand. */
+    if (!lastTop.length) { $("callBand").innerHTML = '<div id="noCalls" class="chip ok">NO ACTIVE CALLS</div>'; return; }
     if (!phoneMode() || lastTop.length === 1) { $("callBand").innerHTML = lastTop.map(c => buildCard(c, false)).join(""); return; }
     expandedIds.forEach(id => { if (!lastTop.some(c => c.id === id)) expandedIds.delete(id); });   /* prune calls that aged off */
     if (!lastTop.some(c => expandedIds.has(c.id))) expandedIds.add(lastTop[0].id);                 /* never a band of all slim bars */
