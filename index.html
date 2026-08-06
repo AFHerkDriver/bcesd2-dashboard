@@ -1039,11 +1039,14 @@
      it gets full text colour and the TYPE half takes any ellipsis. The chip grows for the second
      line; min-height keeps it pill-proportioned when the location is blank. */
   .tchip.dep{border-color:var(--accent);background:rgba(255,107,53,.14);
-    flex-direction:column;gap:clamp(1px,.2vmin,3px);height:auto;min-height:clamp(30px,3.1vmin,50px);
+    flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    gap:clamp(1px,.2vmin,3px);height:auto;min-height:clamp(30px,3.1vmin,50px);
     padding:clamp(3px,.4vmin,7px) clamp(5px,.6vmin,9px)}
-  .tchip.dep .tcn{color:var(--accent);max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  .tchip.dep .tcl{font-size:clamp(10px,1.15vmin,17px);letter-spacing:.5px;line-height:1.1;color:var(--text);
-    text-transform:uppercase;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* both lines are CENTERED like every other pill — explicit margin:auto on the blockified spans,
+     because relying on the parent's align-items alone is what let them hug the left edge */
+  .tchip.dep .tcn{color:var(--accent);display:block;margin:0 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .tchip.dep .tcl{display:block;margin:0 auto;font-size:clamp(10px,1.15vmin,17px);letter-spacing:.5px;line-height:1.1;
+    color:var(--text);text-transform:uppercase;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tchip.dep .tcl:empty{display:none}
   #teamsHead.dep-tap{cursor:pointer}   /* no underline cue — at TV size it read as stray dashed lines under the header */
   /* Fire Weather tile */
