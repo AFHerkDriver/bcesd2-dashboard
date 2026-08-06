@@ -1049,13 +1049,21 @@
      (callsign + type, then location), and there will only ever be a handful — so the tile stacks
      them and lets each span the container. Text is flush-left for the same reason: down a column of
      rows the eye runs the callsigns off one edge instead of hunting centred text on every line. */
+  /* TWO COLUMNS: callsign left, spanning both rows and sized to dominate; deployment type over
+     location on the right. The callsign is what you scan for down a stack, so it carries the ember
+     and the size; the location stays plain white so the callsign keeps the emphasis. */
   .tchip.dep{border-color:var(--accent);background:rgba(255,107,53,.14);
-    flex-direction:column;align-items:stretch;justify-content:center;text-align:left;
-    gap:clamp(1px,.2vmin,3px);height:auto;min-height:clamp(30px,3.1vmin,50px);
-    padding:clamp(3px,.45vmin,8px) clamp(8px,.9vmin,14px)}
-  .tchip.dep .tcn{color:var(--accent);display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  .tchip.dep .tcl{display:block;font-size:clamp(10px,1.15vmin,17px);letter-spacing:.5px;line-height:1.1;
-    color:var(--text);text-transform:uppercase;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    flex-direction:row;align-items:center;justify-content:space-between;text-align:left;
+    gap:clamp(8px,1vmin,18px);height:auto;min-height:clamp(30px,3.1vmin,50px);
+    padding:clamp(4px,.5vmin,9px) clamp(8px,.9vmin,14px)}
+  .tchip.dep .dcs{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;line-height:1;
+    color:var(--accent);font-size:clamp(20px,2.5vmin,40px)}
+  .tchip.dep .dmeta{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;align-items:flex-end;
+    text-align:right;gap:clamp(1px,.2vmin,3px)}
+  .tchip.dep .dty{max-width:100%;font-size:clamp(10px,1.1vmin,16px);letter-spacing:1.2px;line-height:1.1;
+    color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tchip.dep .dloc{max-width:100%;font-size:clamp(11px,1.25vmin,18px);letter-spacing:.5px;line-height:1.1;
+    color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tchip.dep .tcl:empty{display:none}
   /* Stacked full-width rows — no columns. The home face's 3-column grid is right for one-word
      pills; these carry a callsign, a deployment type and a location, and there will only ever be a
@@ -4017,10 +4025,12 @@
            red OOS as a third state, in the same grid, so the two faces read as one tile. Type rides
            IN the pill ("B121 · TIFMAS"), location on a second line under it. */
         body.className="teams-body depface";
+        /* Two columns: the callsign owns the left and spans both rows, deployment type and location
+           stack on the right. The callsign is the thing you scan for down a stack of rows. */
         body.innerHTML=dep.map(function(u){
-          var ty=String(u.depTy||"").trim();
-          return '<div class="tchip dep"><span class="tcn">'+esc2(String(u.name).trim().toUpperCase())+(ty?(' &middot; '+esc2(ty.toUpperCase())):'')+'</span>'+
-                 '<span class="tcl">'+esc2(String(u.depLoc||"").trim().toUpperCase())+'</span></div>';
+          return '<div class="tchip dep"><span class="dcs">'+esc2(String(u.name).trim().toUpperCase())+'</span>'+
+                 '<span class="dmeta"><span class="dty">'+esc2(String(u.depTy||"DEPLOYED").trim().toUpperCase())+'</span>'+
+                 '<span class="dloc">'+esc2(String(u.depLoc||"").trim().toUpperCase())+'</span></span></div>';
         }).join("");
         return;
       }
