@@ -1,0 +1,41 @@
+# Cloudflare deploy config for the BC2FD dispatch worker.
+#
+#   npx wrangler deploy --dry-run    # prints what WOULD ship — always run this first
+#   npx wrangler deploy              # real deploy; needs explicit user confirmation, every time
+#
+# READ THIS BEFORE EDITING. `wrangler deploy` PRESERVES SECRETS but DELETES any other binding
+# that is not declared here. Drop the PINS block and the next deploy takes out the PIN gate,
+# board state and the whole access log. Every value below was read from the live worker on
+# 2026-08-06 (GET /workers/scripts/bc2fd-dash-auth/settings) rather than guessed:
+#
+#   kv_namespace  PINS            -> 33d2503982e94ccaafc6424b5c778fab  (DASH_PINS)
+#   service       FHAUTH          -> firehawk-auth, environment "production"
+#   plain_text    ALLOWED_ORIGIN  -> https://afherkdriver.github.io
+#   secret_text   A911_REFRESH_TOKEN, A911_REFRESH_TOKEN_#, A911_REFRESH_TOKEN_2, DRONE_FEED
+#                 (NOT listed here — wrangler keeps existing secrets, and they must never
+#                  live in a tracked file)
+#
+# If you add a binding in the Cloudflare dashboard, add it here in the same commit or the
+# following deploy will silently remove it.
+
+name = "bc2fd-dash-auth"
+main = "worker.js"
+compatibility_date = "2026-07-17"        # matches production; changing it changes runtime behaviour
+workers_dev = true                       # this worker is served from workers.dev, not a custom route
+
+[[kv_namespaces]]
+binding = "PINS"
+id = "33d2503982e94ccaafc6424b5c778fab"
+
+[[services]]
+binding = "FHAUTH"
+service = "firehawk-auth"
+environment = "production"
+
+[vars]
+ALLOWED_ORIGIN = "https://afherkdriver.github.io"
+
+# The worker has observability on in production with invocation logs persisted. Declared so a
+# deploy cannot quietly turn logging off.
+[observability]
+enabled = true

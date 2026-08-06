@@ -345,6 +345,9 @@
   <div id="callBand"></div>
   <div id="rail">
     <div class="chip" id="hospChip" style="display:none">hospitals &hellip;</div>
+    <!-- Burn bans — our county plus the ring we run mutual aid into. The cab is where "can we
+         burn / are THEY under a ban" gets decided, and the answer changes at a county line. -->
+    <div class="chip" id="burnChip" style="display:none"></div>
     <div class="chip" id="wxChip" style="display:none"></div>
   </div>
 </div>
@@ -774,6 +777,50 @@
   const wKick = () => { if (!wraf) wraf = requestAnimationFrame(wStep); };
 
   /* ── NWS ALERTS — direct api.weather.gov; chip + storm trigger for radar/crossings ── */
+  /* ── BURN BANS — Bexar plus the ring we run mutual aid into. Straight from Texas A&M Forest
+     Service (gis.tfs.tamu.edu), which reflects our origin in CORS so the cab reads it directly —
+     no worker route, no relay. Verified live 2026-08-06: 254 counties, BurnBan is "Yes"/"No",
+     StartDate is epoch ms or null.
+     NOTE the app-config URL on the public TFS viewer (tfsgis.../BurnBan/MapServer) is DEAD —
+     "Service not started". The FeatureServer below is what that viewer's webmap actually uses.
+     The chip is ALWAYS shown, unlike the diversion chip that hides when all-clear: a burn ban is a
+     standing condition crews ask about, and silence would be ambiguous between "no bans" and "feed
+     dead". Green states plainly that the check ran and came back clear. ── */
+  const BURN_URL = "https://gis.tfs.tamu.edu/arcgis/rest/services/EOC/BurnBan/FeatureServer/0/query";
+  const BURN_HOME = "BEXAR";
+  const BURN_RING = ["MEDINA", "ATASCOSA", "WILSON", "GUADALUPE", "COMAL", "KENDALL", "BANDERA"];
+  function loadBurn() {
+    const chip = $("burnChip");
+    if (!chip) return;
+    const names = [BURN_HOME, ...BURN_RING].map(n => "'" + n + "'").join(",");
+    const q = BURN_URL + "?where=" + encodeURIComponent("UPPER(County) IN (" + names + ")") +
+      "&outFields=County,BurnBan,StartDate&returnGeometry=false&f=json";
+    fetch(q).then(r => { if (!r.ok) throw 0; return r.json(); }).then(j => {
+      if (j && j.error) throw 0;
+      const rows = (j.features || []).map(f => f.attributes || {});
+      if (!rows.length) throw 0;                      /* an empty answer is not "no bans" */
+      const banned = (nm) => rows.some(a => String(a.County || "").toUpperCase() === nm && /^y/i.test(String(a.BurnBan || "")));
+      const home = banned(BURN_HOME);
+      const ring = BURN_RING.filter(banned);
+      chip.style.display = "";
+      if (home) {                                     /* our own county — the loudest case */
+        chip.className = "chip bad";
+        chip.innerHTML = "BURN BAN &mdash; BEXAR CO" +
+          (ring.length ? "<span class='sub'>also " + esc(ring.join(", ")) + "</span>" : "");
+      } else if (ring.length) {                       /* not us, but somewhere we get called into */
+        chip.className = "chip warn";
+        chip.innerHTML = "BURN BAN &mdash; " + esc(ring.join(", ")) +
+          "<span class='sub'>Bexar Co is clear</span>";
+      } else {
+        chip.className = "chip ok";
+        chip.textContent = "NO BURN BANS";
+      }
+    }).catch(() => {                                  /* fail loud: never let a dead feed read as "no bans" */
+      chip.style.display = "";
+      chip.className = "chip bad";
+      chip.innerHTML = "BURN BAN STATUS UNKNOWN<span class='sub'>TFS unreachable &mdash; verify before authorizing a burn</span>";
+    });
+  }
   function loadWx() {
     fetch("https://api.weather.gov/alerts/active?zone=TXZ205,TXC029", { headers: { "Accept": "application/geo+json" } })
       .then(r => r.ok ? r.json() : null).then(j => {
@@ -1713,6 +1760,9 @@
     setInterval(() => {
       if (document.visibilityState === "visible" && !document.hidden) loadState();
     }, 15000);
+    loadBurn(); setInterval(() => {
+      if (document.visibilityState === "visible" && !document.hidden) loadBurn();
+    }, 30 * 60 * 1000);   /* bans change at most once a day — 30 min is generous, and gated like loadState */
     loadWx(); setInterval(loadWx, 10 * 60 * 1000);
     cxPins(); setInterval(cxPins, 5 * 60 * 1000);
     setInterval(tourLoad, 5 * 60 * 1000);   /* no-ops while the Tour Calls overlay is off; tourStart recomputed each pass so the 0700 reset lands */
