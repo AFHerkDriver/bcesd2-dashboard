@@ -115,6 +115,11 @@
     cursor:pointer;background:none;border:1px solid #FFB020;color:#FFB020}
   .oosconf.back{border-color:#34C759;color:#34C759}
   .oosconf:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+  /* Deployed write-ins: the checkbox rides the staffed row; the detail line opens beneath it */
+  .widep{display:flex;align-items:center;gap:6px;font-size:13px;color:#FF6B35;white-space:nowrap;cursor:pointer;min-height:34px}
+  .widep input{width:18px;height:18px;accent-color:#FF6B35;cursor:pointer}
+  .wideprow{flex:1 1 100%;display:flex;gap:8px;margin-top:6px;padding-left:8px;border-left:3px solid #FF6B35}
+  .list-row.widep-open{flex-wrap:wrap}   /* the detail line is full-width, so this row must be allowed to wrap */
   /* Chute Times (every officer — not Owner-gated) */
   .chute-body{font-family:'DM Mono',monospace;font-size:13px}
   .chute-hero{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 12px}
@@ -684,7 +689,7 @@
       noteFail=function(n){ failNames.push(n); };
       function chk(p){ P.push(p.then(function(ok){ if(!ok) bad++; }).catch(function(){ bad++; })); }
       var FS_KEY2='AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ';
-      var EXPECTED_WORKER=14;   /* the worker build this page shipped alongside — keep in step with WORKER_VERSION in worker.js */
+      var EXPECTED_WORKER=15;   /* the worker build this page shipped alongside — keep in step with WORKER_VERSION in worker.js */
       chk(jget(CTL_AUTH+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})}).then(function(r){
         var wv=r.j&&r.j.wv;
         return row('Worker build (Cloudflare paste)', wv===EXPECTED_WORKER,
@@ -1525,11 +1530,16 @@ function renderOOS(){
 function renderWi(){
   var box=$('wiList'); if(!box) return; box.innerHTML='';
   state.writeins.forEach(function(u,i){
-    var row=document.createElement('div'); row.className='list-row';
+    var dep=!!u.dep && u.mode!=='oos';   /* deployed is a flavour of IN SERVICE — OOS hides the fields but keeps the data, so a rig that breaks down mid-deployment gets its deployment back when repaired */
+    var row=document.createElement('div'); row.className='list-row'+(dep?' widep-open':'');
     row.innerHTML='<input type="text" data-wi="'+i+'" data-wf="name" value="'+esc(u.name||'')+'" placeholder="Callsign (e.g. E62)" style="flex:1 1 120px;min-width:0">'+
       '<div class="seg red wiseg" style="flex:1 1 170px;min-width:150px;max-width:240px" data-wi="'+i+'"><button data-v="on"'+(u.mode!=='oos'?' class="on"':'')+'>Staffed</button><button data-v="oos"'+(u.mode==='oos'?' class="on"':'')+'>OOS</button></div>'+
       '<input type="datetime-local" data-wi="'+i+'" data-wf="exp" value="'+esc(u.exp||'')+'" title="Expires (optional)" style="flex:1 1 200px;min-width:0">'+
-      '<button class="wdel" data-wi="'+i+'">✕</button>';
+      (u.mode!=='oos'?('<label class="widep"><input type="checkbox" data-wi="'+i+'" data-wf="dep"'+(u.dep?' checked':'')+'> Deployed</label>'):'')+
+      '<button class="wdel" data-wi="'+i+'">✕</button>'+
+      /* deployment detail — its own full-width line so the row above stays scannable */
+      (dep?('<div class="wideprow"><input type="text" data-wi="'+i+'" data-wf="depTy" value="'+esc(u.depTy||'')+'" placeholder="Deployment type (e.g. TIFMAS)" style="flex:1 1 180px;min-width:0">'+
+            '<input type="text" data-wi="'+i+'" data-wf="depLoc" value="'+esc(u.depLoc||'')+'" placeholder="Location (e.g. Lubbock TX)" style="flex:2 1 240px;min-width:0"></div>'):'');
     box.appendChild(row);
   });
 }
@@ -1548,7 +1558,7 @@ document.addEventListener('click', function(e){
   var os=e.target.closest&&e.target.closest('[data-oosstill]'); if(os){ var oo=oosObj(+os.getAttribute('data-oosstill')); oo.unc=0; oo.exp=''; renderOOS(); return; }
   var wd=e.target.closest&&e.target.closest('.wdel'); if(wd){ state.writeins.splice(+wd.getAttribute('data-wi'),1); renderWi(); return; }
   var sb=e.target.closest&&e.target.closest('.wiseg button'); if(sb){ var seg=sb.parentElement, i=+seg.getAttribute('data-wi');
-    state.writeins[i].mode=sb.getAttribute('data-v'); seg.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===sb);}); return; }
+    state.writeins[i].mode=sb.getAttribute('data-v'); renderWi(); return; }   /* full re-render: the Deployed checkbox + detail line follow the mode */
 });
 document.addEventListener('input', function(e){
   var t=e.target, wi=t.getAttribute&&t.getAttribute('data-wi'), wf=t.getAttribute&&t.getAttribute('data-wf');
@@ -1567,6 +1577,7 @@ document.addEventListener('change', function(e){
   var oe=t.getAttribute&&t.getAttribute('data-oosexp');
   if(oe!=null){ var oo=oosObj(+oe); oo.exp=t.value; if(t.value) oo.unc=0; renderOOS(); return; }
   var wi=t.getAttribute&&t.getAttribute('data-wi'), wf=t.getAttribute&&t.getAttribute('data-wf');
+  if(wi!=null&&wf==='dep'){ state.writeins[+wi].dep=t.checked?1:0; renderWi(); return; }   /* checkbox: 1/0, then re-render to reveal/hide the detail line */
   if(wi!=null&&wf){ state.writeins[+wi][wf]=t.value; return; }
   var hid=t.getAttribute&&t.getAttribute('data-hid');
   if(hid){ var v=t.value; if(v==='OPEN'){ delete state.hospitals[hid]; } else { state.hospitals[hid]=v; }

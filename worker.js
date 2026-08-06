@@ -151,11 +151,37 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 14;
+const WORKER_VERSION = 15;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
 function addrKey(ad) { return String(ad || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").replace(/\s+/g, " ").trim(); }
+/* STATION FILTER for the been-here-before tracker (dept ask 2026-08-05: "we tend to get a lot of
+   randomly tagged things to the stations" — station 123 had three ZFMO rows under the key "123",
+   from CAD addresses like "& 123"). Two layers, because CAD is inconsistent two different ways:
+     1. bare-number keys: an "address" that is only digits carries no street at all — it is a station
+        or box tag, never a place someone lives. This catches the observed junk.
+     2. proximity: a trusted fix within 120 m of a station door is the station apron/lot — this
+        catches a FUTURE mis-tag that carries the station's real street address, which we cannot
+        list here because CAD's spelling of it has never been observed.
+   Applied on BOTH the write and the read path, so the legacy junk rows already in KV stop
+   displaying immediately, without waiting for a KV cleanup. A real repeat-caller directly adjacent
+   to a station is the accepted cost — losing one "been here before" chip beats a station's own
+   apron wearing a repeat-address flag on the wall. */
+const STATION_PTS = [[29.392122,-98.709906],[29.454183,-98.755111],[29.505141,-98.782267],
+                     [29.405115,-98.701876],[29.413373,-98.785885],[29.49202,-98.74346],
+                     [29.21967,-98.45806],[29.17785,-98.42410]];   /* 120,121,122,123,124,125,161,162 — same fixes the board plots */
+const HIST_KY = 110574, HIST_KX = 96900;              /* m/deg at 29.4N, same constants as the tender scan */
+function histSkip(ak, la, ln) {
+  if (!ak || /^\d+$/.test(ak)) return true;           /* empty or digits-only: station/box tag, not an address */
+  if (la != null && ln != null && isFinite(la) && isFinite(ln)) {
+    for (const s of STATION_PTS) {
+      const dy = (s[0] - la) * HIST_KY, dx = (s[1] - ln) * HIST_KX;
+      if (dy * dy + dx * dx < 120 * 120) return true;
+    }
+  }
+  return false;
+}
 
 let heloMem = { at: 0, out: null };   /* /helos in-isolate cache — see the route for why KV can't do this */
 let avlMem = { units: {}, kvAt: 0 };
@@ -2310,7 +2336,9 @@ export default {
                      attaches this so the cab sees "3rd call at this address" with the priors. */
                   if (isNewInc) { try {
                     const ak2 = addrKey(c.address);
-                    if (ak2) {
+                    /* soft-geocoded fixes (c.gs) don't get a proximity say — only trusted coords can
+                       veto; a bad geocode near a station must not suppress a real repeat address */
+                    if (ak2 && !histSkip(ak2, c.gs ? null : c.lat, c.gs ? null : c.lng)) {
                       let ah = { n: 0, r: [] };
                       const rawA = await env.PINS.get("addr:" + ak2);
                       if (rawA) { try { const pa = JSON.parse(rawA); if (pa && typeof pa.n === "number") ah = pa; } catch (e) {} }
@@ -2405,7 +2433,7 @@ export default {
         /* attach the been-here-before context — one read per LIVE call, a handful per poll */
         for (const c of calls) { try {
           const ak3 = addrKey(c.address);
-          if (!ak3) continue;
+          if (!ak3 || histSkip(ak3, c.gs ? null : c.lat, c.gs ? null : c.lng)) continue;   /* station rows never display, including the legacy junk already banked */
           const rawA = await env.PINS.get("addr:" + ak3);
           if (!rawA) continue;
           const ah = JSON.parse(rawA);

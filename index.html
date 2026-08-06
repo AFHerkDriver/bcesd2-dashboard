@@ -1033,6 +1033,17 @@
   .trow.on{border-left-color:var(--green);background:rgba(52,199,89,.08)}
   .trow.on .ts{color:var(--green)}
   .teams-body.err .trow .ts{color:var(--amber)}
+  /* DEPLOYED face — the units tile's alternate view (10 s out of every 50) while any unit is
+     committed elsewhere (TIFMAS etc.). Ember and loud on purpose: a rig 400 miles away must never
+     read as quietly available, and the rotation exists so the room keeps being reminded. */
+  .teams-body.dep{display:flex;flex-direction:column;justify-content:safe center;gap:clamp(6px,.8vmin,12px)}
+  .dep-hd{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;letter-spacing:2.5px;color:var(--accent);font-size:clamp(13px,1.5vmin,22px)}
+  .dep-row{display:flex;align-items:baseline;gap:clamp(8px,1vmin,16px);border:1px solid var(--accent);border-radius:9px;
+    background:rgba(255,107,53,.10);padding:clamp(5px,.7vmin,10px) clamp(8px,1vmin,14px)}
+  .dep-cs{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(17px,2vmin,30px);color:var(--accent);line-height:1}
+  .dep-ty{flex:0 0 auto;font-size:clamp(11px,1.2vmin,17px);letter-spacing:1.2px;text-transform:uppercase;color:var(--text);white-space:nowrap}
+  .dep-loc{flex:1 1 auto;margin-left:auto;text-align:right;font-size:clamp(11px,1.2vmin,17px);color:var(--dim);
+    text-transform:uppercase;letter-spacing:.6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* Fire Weather tile */
   /* "safe center": centered when the forecast fits, but falls back to top-aligned when the tile is
      tight (red-flag + heat day, 3-row grid) so the SOONEST hours never clip — only the latest do. */
@@ -3891,9 +3902,11 @@
       if(!s.ok) return chip(label,"err");
       return chip(label, s[key]?"on":"");
     }
+    var depPhase=false, depCount=0;   /* the tile's alternate DEPLOYED face — 10 s out of every 50 while any unit is committed elsewhere */
     function render(){
       var body=document.getElementById("teamsBody");
       if(!body) return;
+      var dep=[];                                                  /* write-ins committed elsewhere (TIFMAS etc.) — populated in the state-ok branch only */
       var items=[], s=window.UAV_STATE;                            /* collect {label, cls} for every visible pill, then sort A–Z */
       var maOn=!!(window.MA121_UNTIL && window.MA121_UNTIL>Date.now() && !(stSt&&stSt.macAck===window.MA121_UNTIL));   /* MAC121 dispatched -> auto-on 6h; once the officer ACKS this dispatch in control (macAck), their saved staffing/expiry governs instead — shorten, extend, or stand down */
       items.push({label:"UAV121", cls: !s?"":(!s.ok?"err":(s.o121?"":(s.u121?"on":"")))});   /* scheduled OOS window -> plain idle chip (not green, not red), same as any unstaffed unit */
@@ -3921,17 +3934,39 @@
         });            /* apparatus only while OOS */
         ((stSt&&stSt.writeins)||[]).forEach(function(u){                              /* ad-hoc write-ins */
           if(!u || !u.name || !String(u.name).trim() || expired(u.exp)) return;
+          /* deployed = in service but NOT here. It leaves the pill strip entirely — a rig 400 miles
+             away must never read as quietly available — and rides the DEPLOYED face instead. */
+          if(u.dep && u.mode!=="oos"){ dep.push(u); return; }
           items.push({label:esc2(String(u.name).trim().toUpperCase()), cls:u.mode==="oos"?"oos":"on"});
         });
       }
+      depCount=dep.length;
+      if(!dep.length) depPhase=false;                            /* last deployment cleared mid-cycle -> snap home, never a blank face */
+      if(depPhase && dep.length){
+        body.className="teams-body dep";
+        body.innerHTML='<div class="dep-hd">DEPLOYED</div>'+dep.map(function(u){
+          return '<div class="dep-row"><span class="dep-cs">'+esc2(String(u.name).trim().toUpperCase())+'</span>'+
+                 '<span class="dep-ty">'+esc2(String(u.depTy||"DEPLOYED").trim())+'</span>'+
+                 '<span class="dep-loc">'+esc2(String(u.depLoc||"").trim())+'</span></div>';
+        }).join("");
+        return;
+      }
       var PILL_ORDER={"BC161":"B0"};                             /* manual tweak: Battalion 161 (BC161) sorts just ahead of B121 (Brush), rest alphabetical */
-      items.sort(function(a,b){ return String(PILL_ORDER[a.label]||a.label).localeCompare(String(PILL_ORDER[b.label]||b.label), undefined, {numeric:true}); });   /* alphabetize the pills */
+      items.sort(function(a,b){ return String(PILL_ORDER[a.label]||a.label).localeCompare(String(PILL_ORDER[b.label]||b.label), undefined, {numeric:true}); });   /*alphabetize the pills */
       body.innerHTML=items.map(function(it){ return chip(it.label, it.cls); }).join("");
     }
     window.renderUnits=render;
     render();
     onBoardState(function(ok,st){ stOk=ok; stSt=st; render(); });
     setInterval(render, 60000);                            /* expiry sweep between polls */
+    /* DEPLOYED rotation (dept ask 2026-08-05): while any unit is committed elsewhere, the tile
+       shows its deployed face 10 s out of every 50. Timer runs always and no-ops when nobody is
+       deployed, so a deployment appearing mid-shift starts rotating without any re-arm logic. */
+    setInterval(function(){
+      if(!depCount || stOk!==true) return;                 /* nothing deployed, or state unreadable: the err face must stay up */
+      depPhase=true; render();
+      setTimeout(function(){ depPhase=false; render(); }, 10000);
+    }, 50000);
   })();
 
   /* ── Shift Scheduled Events — officer-set state.calendar:[{date?,time,end?,desc}].
