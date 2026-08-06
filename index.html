@@ -383,6 +383,13 @@
   /* Unconfirmed OOS: flagged, the estimate lapsed, nobody has verified it. Amber and legible at
      every zoom, because the whole point is that a crew sees it and goes to check. The pin art is
      the OOS red hue-shifted to amber — no new asset; replace with drawn art when there's time. */
+  /* Aircraft radio callsign — permanently on the map, because a wall TV gets no hover. Sized and
+     outlined to stay readable over satellite imagery at district zoom. */
+  .helo-cs{background:rgba(13,17,23,.82)!important;border:1px solid rgba(230,237,243,.35)!important;
+    border-radius:6px!important;box-shadow:none!important;color:var(--text)!important;
+    font-family:'Bebas Neue',sans-serif!important;letter-spacing:1px;
+    font-size:clamp(11px,1.15vmin,18px)!important;padding:1px 6px!important;white-space:nowrap}
+  .helo-cs::before{display:none!important}   /* kill Leaflet's tooltip arrow — it reads as noise beside a moving aircraft */
   .hyd-pop .hp-unc{color:#FFB020;font-weight:600}
   .hyd-unc{filter:hue-rotate(34deg) saturate(1.25) brightness(1.12)}
   /* ── PHASE 3 · DRONE TAKEOVER ─────────────────────────────────────────────────────────
@@ -1439,8 +1446,23 @@
             var ic=L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
               html:(function(){var FA={"TANKER":"le-tanker","AIR ATTACK":"le-airattack","LEAD":"le-airattack","FIRE AIR":"le-fireair"};
                 var bd=h.med?"helo-med":(FA[String(h.fire||"")]||(/^(EAGLE|DPS|POACHER)$/.test(String(h.le||""))?("le-"+String(h.le).toLowerCase()):(h.mil?"helo-mil":"")));return '<div style="transform:rotate('+(bd?0:(isFinite(+h.trk)?+h.trk:0))+'deg);width:26px;height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))"><img src="'+(bd||"helo-air")+'.png" srcset="'+(bd||"helo-air")+'@2x.png 2x" width="24" style="display:block;margin:1px auto"></div>';})()});   /* dept badges: HEMS cross + SAPD/DPS/POACHER circles stay upright; gray silhouette rotates to heading */
+            /* RADIO CALLSIGN, ALWAYS ON SCREEN. This used to live only in a hover tooltip, which on a
+               wall-mounted TV nobody touches means it was never readable — the dept saw N361TX
+               overhead and had no way to know it was DPS 107. Order is deliberate: the confirmed
+               radio callsign first, then the aerial-suppression role, then the agency tag, then the
+               tail. Never invent a number — an unlisted DPS ship reads "DPS N361TX", which is true. */
+            var hSafe=function(v){ return String(v==null?"":v).replace(/[<>&"]/g,"").toUpperCase(); };
+            var rcTxt;
+            if(h.vcs)       rcTxt=hSafe(h.vcs);                                        /* confirmed voice callsign — DPS 107 */
+            else if(h.le)   rcTxt=(hSafe(h.le)+" "+hSafe(h.reg)).trim();               /* agency + TAIL: identifies the ship without inventing a number */
+            else if(h.fire) rcTxt=hSafe(h.call||h.fire);                               /* NIFC idents (TNKR 45) ARE the radio callsign; role only if absent */
+            else if(h.med)  rcTxt=("HEMS "+hSafe(h.reg)).trim();
+            else            rcTxt=hSafe(h.call||h.reg);
             L.marker([h.la,h.ln],{icon:ic,keyboard:false,zIndexOffset:600})
-              .bindTooltip((h.mil?"MIL · ":"")+(h.fire?String(h.fire).replace(/[<>&"]/g,"")+" · ":"")+(h.le&&String(h.op||h.reg||h.hex).toUpperCase().indexOf(String(h.le).toUpperCase())<0?String(h.le).replace(/[<>&"]/g,"")+" · ":"")+String(h.op||h.reg||h.hex).replace(/[<>&"]/g,"")+(isFinite(+h.alt)?(" · "+(+h.alt)+" ft"):""),{direction:"top",offset:[0,-10]})
+              /* ONE tooltip per marker — the permanent callsign label IS the tooltip now, so the old
+                 hover detail moves to a popup or the second bind would silently replace the first. */
+              .bindTooltip(rcTxt,{permanent:true,direction:"right",offset:[13,0],className:"helo-cs"})
+              .bindPopup((h.mil?"MIL · ":"")+(h.fire?String(h.fire).replace(/[<>&"]/g,"")+" · ":"")+(h.le&&String(h.op||h.reg||h.hex).toUpperCase().indexOf(String(h.le).toUpperCase())<0?String(h.le).replace(/[<>&"]/g,"")+" · ":"")+String(h.op||h.reg||h.hex).replace(/[<>&"]/g,"")+(isFinite(+h.alt)?(" · "+(+h.alt)+" ft"):""),{maxWidth:260})
               .addTo(heloWallLayer);
           });
         }).catch(function(){});

@@ -1244,11 +1244,15 @@
         }
         L.marker([h.la, h.ln], { icon: ic, keyboard: false, zIndexOffset: 600 })
           .bindPopup((() => {   /* dedupe: a line only earns its place if the title doesn't already say it */
-            const ttl = h.op || h.reg || h.hex, TU = String(ttl).toUpperCase();
+            /* The VOICE CALLSIGN leads the popup — in the seat this is the thing you key the mic
+               with, so it must not be buried under the operator name. Falls back to the old title
+               when unconfirmed; an unlisted ship never shows a made-up number. */
+            const ttl = h.vcs || h.op || h.reg || h.hex, TU = String(ttl).toUpperCase();
             const has = (v) => v && TU.indexOf(String(v).toUpperCase()) >= 0;
             let d = '';
             const sameAsReg = h.call && h.reg && String(h.call).toUpperCase() === String(h.reg).toUpperCase();
             if (h.call && !has(h.call) && !sameAsReg) d += '<br>callsign ' + esc(h.call);   /* a ship squawking its own registration does not need the line twice */
+            if (h.vcs && h.op && !has(h.op)) d += '<br>' + esc(h.op);   /* callsign took the title, so the operator/tail line still earns its place */
             if (h.reg && !has(h.reg)) d += '<br>' + esc(h.reg) + (h.type ? ' (' + esc(h.type) + ')' : '');
             else if (h.type && !has(h.type)) d += '<br>' + esc(h.type);
             return '<div class="hyd-pop"><b>' + esc(ttl) + '</b>' +

@@ -151,7 +151,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 15;
+const WORKER_VERSION = 16;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1699,6 +1699,26 @@ export default {
           "a7c6a5": ["DPS", "DPS N60TX"], "a8ec53": ["DPS", "DPS N674TX"], "a95dbb": ["DPS", "DPS N702TX"],
           "ab4176": ["DPS", "DPS N824TX"], "ab9074": ["DPS", "DPS N844TX"], "ac6e92": ["DPS", "DPS N90TX"]
         };
+        /* VOICE CALLSIGNS \u2014 what the ship is called on the air. NOT available from any feed, verified
+           2026-08-06, so this is a lookup the department maintains:
+             - opendata.adsb.fi: agency aircraft squawk their TAIL in `flight` (N361TX). Its field
+               set carries no telephony/voice callsign at all.
+             - hexdb.io a411c2: gives RegisteredOwners "Texas Department of Public Safety" and the
+               airframe, but no callsign. Its /callsign/ lookups 404 for DPS107 and for the tail.
+           Tracking sites show voice callsigns for AIRLINES because those squawk an operator-prefixed
+           flight ident (AAL1234) that maps to a published ICAO telephony name. A state helicopter
+           squawking its tail has nothing to map from. Hence a hand-maintained table.
+
+           ONLY CONFIRMED PAIRS BELONG HERE. A wrong number is worse than no number \u2014 a crew calling
+           "DPS 104" for the ship overhead is bad radio traffic \u2014 so an unlisted aircraft falls back
+           to agency + tail (DPS N361TX), which is always true.
+
+           SOURCE for the one entry: the department reported 2026-08-06 seeing N361TX airborne and
+           knowing it as DPS 107. NOT independently verified against DPS.
+           OPEN QUESTION, unanswered: is a DPS callsign bound to the AIRFRAME or to the region/crew
+           /mission? Keying by hex is only correct if it follows the airframe. If it does not, this
+           table is the wrong shape and must be rebuilt before more pairs are added. */
+        const RADIO = { "a411c2": "DPS 107" };
         const LE_OPS = /san antonio police|city of san antonio|public safety|texas dps|parks\s*(&|and)\s*wildlife|game warden|bexar county|sheriff/i;   /* \u201ccity of san antonio\u201d because SAPD aircraft are registered to the CITY, not the department — that is how N382BM slipped through. Bexar SO had no ship of its own as of 2026-08 (borrows SAPD/DPS); the regex catches theirs the day it flies */
         /* FIRE AVIATION — Texas suppression aircraft are contracted call-when-needed, so tails
            rotate seasonally and a hex list would rot. Match the NIFC/FAA callsign conventions
@@ -1748,6 +1768,7 @@ export default {
                        op: WATCH[hex] || (lw ? lw[1] : String(a.ownOp || "").slice(0, 40)),
                        call: String(a.flight || "").trim().slice(0, 12), alt: (a.alt_baro === "ground") ? 0 : (isFinite(+a.alt_baro) ? +a.alt_baro : null),
                        gs: isFinite(+a.gs) ? +a.gs : null, trk: isFinite(+a.track) ? +a.track : null,   /* NUMERIC COERCION AT THE SOURCE — these land in client innerHTML/style sinks */
+                       vcs: RADIO[hex] || null,   /* VOICE callsign for radio traffic (DPS 107) — null when unconfirmed; the board falls back, never guesses a number. NOT named `rc`: the upstream adsb.fi record already has an `rc` field (radius of containment) and the collision would mislead the next reader. */
                        med: !!listed, le: le || null, fire: fire || null, mil: (mil && rotor) || undefined });   /* med: HEMS watchlist; le: the callsign crews actually hear (EAGLE/DPS/POACHER/BCSO); fire: aerial suppression; mil: military ROTORCRAFT only — fixed-wing transits are not our business */
         }
         const out = { ok: true, helos, updated: new Date().toISOString() };
