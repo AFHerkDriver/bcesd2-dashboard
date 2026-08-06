@@ -1696,7 +1696,10 @@
     document.addEventListener("visibilitychange", () => {   /* phone screen wakes -> current board NOW, not at the next tick */
       if (document.visibilityState === "visible" && !document.hidden) loadDispatch();
     });
-    loadState(); setInterval(loadState, 15000);
+    /* 15 s was 5,760 Firestore reads/day PER CAB against a 50,000/day quota — the cabs plus the wall
+       boards are what exhausted it on 2026-08-05 and cost the district its officer-set state for the
+       rest of the day. 30 s halves it; a Save still reaches the cab inside half a minute. */
+    loadState(); setInterval(loadState, 30000);
     loadWx(); setInterval(loadWx, 10 * 60 * 1000);
     cxPins(); setInterval(cxPins, 5 * 60 * 1000);
     setInterval(tourLoad, 5 * 60 * 1000);   /* no-ops while the Tour Calls overlay is off; tourStart recomputed each pass so the 0700 reset lands */

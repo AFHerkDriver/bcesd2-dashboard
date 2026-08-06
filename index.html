@@ -2806,7 +2806,14 @@
     var STORE_PROJECT="firehawk-scheduler";
     var K="AIzaSyAWbzE0k8p4WDyrUaBfIRDqyLoklkfu8nQ";
     var DOC="https://firestore.googleapis.com/v1/projects/"+STORE_PROJECT+"/databases/(default)/documents/firehawk/dashboard_state";
-    var POLL=10*1000, subs=[], last=null, lastKey=null, failCount=0;   /* fast poll so an officer Save lands on the wall in seconds */
+    /* POLL was 10 s on a fixed setInterval. That is 8,640 reads/day PER OPEN CLIENT against a
+       50,000/day Firestore quota — roughly six open boards/MDTs/panels and the district loses its
+       officer-set state for the rest of the day, which is exactly what happened 2026-08-05. At 25 s
+       the same quota carries ~17 clients, and a Save still reaches the wall well inside half a
+       minute. MAXPOLL is the backoff ceiling; `delay` is the live interval, `quotaOut` latches a 429
+       so the failure is named honestly instead of reading as a generic outage. */
+    var POLL=25*1000, MAXPOLL=5*60*1000, delay=POLL, timer=null, quotaOut=false;
+    var subs=[], last=null, lastKey=null, failCount=0;
     function notify(ok, st, setAt, key){                      /* fire subscribers ONLY when the state actually changed — the fast poll must not churn tiles (e.g. reset the hospital rotation) */
       var k=(ok?"1":"0")+"|"+(key==null?"":key);
       var changed=(k!==lastKey); lastKey=k; last=[ok,st,setAt];
@@ -2816,10 +2823,14 @@
       if(typeof fetch!=="function"){ notify(false,null,null,"fail"); return; }
       bcFetch(DOC+"?key="+K).then(function(r){
         if(r.status===404) return {__none:true};             /* no doc yet = clean empty state */
+        /* 429 = Firestore daily read quota is gone. This is the ONE failure the poller must not
+           keep hammering: at the base rate an exhausted quota gets re-burned the moment it resets
+           at midnight Pacific, so the board would never recover on its own. Back off hard. */
+        if(r.status===429){ quotaOut=true; throw new Error("HTTP 429"); }
         if(!r.ok) throw new Error("HTTP "+r.status);
         return r.json();
       }).then(function(doc){
-        failCount=0;
+        failCount=0; quotaOut=false; delay=POLL;             /* healthy again — back to the fast poll */
         try{ if(window.updateLinkBand) window.updateLinkBand(false); }catch(e){}   /* link is back */
         /* A MISSING or EMPTY state doc is an absence of data, NOT a verified all-clear. Reporting it
            as ok:true rendered "ALL FACILITIES OPEN" stamped "officer-set" — a false all-clear on
@@ -2830,10 +2841,15 @@
         if(!dj){ notify(false,null,setAt,"emptystate"); return; }
         var st; try{ st=JSON.parse(dj); }catch(e){ notify(false,null,null,"parsefail"); return; }
         notify(true,st,setAt,dj);                             /* key = raw stateJson: it only changes when an officer actually saved something */
-      }).catch(function(){ if(++failCount>=2){ notify(false,null,null,"fail");
-        try{ if(window.updateLinkBand) window.updateLinkBand(true); }catch(e){} } });   /* tolerate a single blip; fail-loud only on a sustained outage */
+      }).catch(function(){ if(++failCount>=2){ notify(false,null,null,quotaOut?"quota":"fail");
+        try{ if(window.updateLinkBand) window.updateLinkBand(true); }catch(e){} }
+        /* exponential backoff, doubling to a 5-minute ceiling. Quota exhaustion jumps straight to
+           the ceiling: nothing this client does will help before the daily reset, and every extra
+           request is quota stolen from tomorrow. */
+        delay = quotaOut ? MAXPOLL : Math.min(MAXPOLL, Math.max(POLL, delay*2));
+      }).then(function(){ if(timer) clearTimeout(timer); timer=setTimeout(load, delay); });   /* self-chained: the interval is adjustable, unlike setInterval */
     }
-    load(); setInterval(load, POLL);
+    load();
     return function(fn){ subs.push(fn); if(last) fn(last[0],last[1],last[2]); };
   })();
 
