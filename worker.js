@@ -123,12 +123,21 @@ function parseNotes(details) {
     e = String(e || "").trim(); if (!e) return;
     let m;
     if ((m = e.match(/^Multi-Agency BCLE Incident #:\s*([A-Z0-9-]+),?\s*([\s\S]*)$/i))) { out.leNo = m[1]; classify(m[2]); return; }
-    if ((m = e.match(/^\[(\w+)\] has closed their incident(?:\s*\[[A-Z0-9-]+\])?,?\s*([\s\S]*)$/i))) { push(m[1] + " closed their incident", 1); classify(m[2]); return; }
+    /* "[BCSO] has closed their incident" — another agency's case lifecycle, not our scene. Dropped
+       as noise per the dept 2026-08-06; it was being pushed as a system note and crowding out real
+       narrative on a card read at a glance. classify(m[2]) stays: a genuine note appended after the
+       boilerplate must still land, or dropping the chatter would take real dispatcher text with it. */
+    if ((m = e.match(/^\[(\w+)\] has closed their incident(?:\s*\[[A-Z0-9-]+\])?,?\s*([\s\S]*)$/i))) { classify(m[2]); return; }
     if ((m = e.match(/Automatic Case Number\(s\) issued for Incident #\[?([A-Z0-9-]+)/i))) { out.caseNo = m[1]; return; }
     if (/^Automatic Case/i.test(e)) return;                                 /* truncated legalese — even cut mid-word */
     if ((m = e.match(/\[Notification\]\s*\[[^\]]*\]-?Problem changed from\s+(.+?)\s+to\s+(.+?)\s+by\b/i))) { push("TYPE CHANGED: " + m[1] + " → " + m[2], 1); return; }
     if (/^(ALL\s+)?UNITS?\s+(WILL\s+)?RESPOND(ING)?\s+ON\b|^RESPOND(ING)?\s+ON\s+[A-Z0-9 ]{2,10}$/i.test(e)) return;   /* channel instructions in every phrasing — the amber channel chip already says it */
     if (/^Multiple Response Areas found/i.test(e)) return;                  /* CAD dispatch-console chatter (observed live 7/31) */
+    /* "No Caution Note" — the ABSENCE of a caution, appearing on 9 of the banked calls surveyed
+       2026-08-06. It is definitionally information-free and it pushes real narrative off a card
+       read at a glance. ONLY the negative form is dropped: a real "Caution Note: ..." carries
+       exactly the kind of warning this board exists to show, and must always survive. */
+    if (/^no\s+caution\s+notes?\.?$/i.test(e)) return;
     push(e, 0);                                                             /* a real dispatcher/caller note */
   };
   parts.forEach(classify);
@@ -151,7 +160,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 16;
+const WORKER_VERSION = 17;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1718,7 +1727,7 @@ export default {
            OPEN QUESTION, unanswered: is a DPS callsign bound to the AIRFRAME or to the region/crew
            /mission? Keying by hex is only correct if it follows the airframe. If it does not, this
            table is the wrong shape and must be rebuilt before more pairs are added. */
-        const RADIO = { "a411c2": "DPS 107" };
+        const RADIO = {};   /* per-airframe overrides, if a ship is ever confirmed to carry its own callsign regardless of region */
         const LE_OPS = /san antonio police|city of san antonio|public safety|texas dps|parks\s*(&|and)\s*wildlife|game warden|bexar county|sheriff/i;   /* \u201ccity of san antonio\u201d because SAPD aircraft are registered to the CITY, not the department — that is how N382BM slipped through. Bexar SO had no ship of its own as of 2026-08 (borrows SAPD/DPS); the regex catches theirs the day it flies */
         /* FIRE AVIATION — Texas suppression aircraft are contracted call-when-needed, so tails
            rotate seasonally and a hex list would rot. Match the NIFC/FAA callsign conventions
@@ -1771,6 +1780,21 @@ export default {
                        vcs: RADIO[hex] || null,   /* VOICE callsign for radio traffic (DPS 107) — null when unconfirmed; the board falls back, never guesses a number. NOT named `rc`: the upstream adsb.fi record already has an `rc` field (radius of containment) and the collision would mislead the next reader. */
                        med: !!listed, le: le || null, fire: fire || null, mil: (mil && rotor) || undefined });   /* med: HEMS watchlist; le: the callsign crews actually hear (EAGLE/DPS/POACHER/BCSO); fire: aerial suppression; mil: military ROTORCRAFT only — fixed-wing transits are not our business */
         }
+        /* DPS CALLSIGNS ARE REGIONAL, NOT PER-AIRFRAME. Corrected 2026-08-06 after the dept pushed
+           back and the RadioReference "Texas Law Enforcement aircraft callsigns" thread laid the
+           scheme out: DPS 100 Austin, 101 Dallas, 102/109/112 Houston, 104 Midland-Odessa,
+           106 Austin/San Antonio (likely fixed-wing), 107 San Antonio/Bexar. So the callsign follows
+           the AREA the ship is working, and an earlier hex table keyed to N361TX was the wrong shape
+           — it would have said "DPS 107" for that airframe over Houston, and stayed silent when a
+           different ship covered Bexar.
+           Every aircraft in this response is already inside the district query radius, so a DPS
+           rotor here IS the Bexar ship. Two deliberate abstentions, because a wrong callsign is
+           worse than a tail:
+             - fixed-wing DPS stays unlabelled (could be 106, we cannot tell rotor-vs-region apart)
+             - if MORE THAN ONE DPS rotor is up we label neither, since nothing in the feed says
+               which one is holding 107 and which is a visitor keeping its home callsign. */
+        const dpsRotors = helos.filter(h => h.le === "DPS" && /^(EC|AS|H1|B4|R4|R6|S7|A1|MD)/i.test(String(h.type || "")));
+        if (dpsRotors.length === 1 && !dpsRotors[0].vcs) dpsRotors[0].vcs = "DPS 107";
         const out = { ok: true, helos, updated: new Date().toISOString() };
         heloMem = { at: Date.now(), out };
         return json(out, 200);
