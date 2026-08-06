@@ -26,6 +26,24 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="vendor/leaflet-1.9.4.css">   <!-- VENDORED (byte-identical to the unpkg build the wall pins by integrity hash): the cab must not depend on a CDN to draw its map -->
 <style>
+  /* PRESS FEEDBACK, EVERY TAPPABLE SURFACE. The reset above sets -webkit-tap-highlight-color to
+     transparent, which kills iOS's native tap flash — so anything WITHOUT an explicit :active
+     state feels broken under a glove: you press, nothing acknowledges, you press again. These are
+     the surfaces that had no state of their own: the AVL chip, the satellite strip, the drone PiP
+     and its size toggle, the camera close, and Leaflet's own zoom/layers buttons.
+     touch-action:manipulation kills the 300 ms double-tap-zoom delay so a press registers now. */
+  #avlChip, #satStrip, #pipSize, #camClose, #dronePip .lbl,
+  .leaflet-bar a, .leaflet-control-layers-toggle { touch-action: manipulation; }
+  #avlChip:active, #satStrip:active, #pipSize:active, #camClose:active,
+  .leaflet-bar a:active, .leaflet-control-layers-toggle:active {
+    transform: translateY(1px); filter: brightness(.85);
+  }
+  /* the PiP is a big target and translating the whole video is jarring — dim its frame instead */
+  #dronePip:active video, #dronePip:active iframe { filter: brightness(.88); }
+  @media (prefers-reduced-motion: reduce) {   /* keep the brightness cue, drop the movement */
+    #avlChip:active, #satStrip:active, #pipSize:active, #camClose:active,
+    .leaflet-bar a:active, .leaflet-control-layers-toggle:active { transform: none; }
+  }
   button:active,.btn:active,a.navbtn:active{transform:translateY(1px);filter:brightness(.85)}   /* gentle press feedback — consistent across every BC2FD page */
   /* MDT tier — Windows touchscreen in the cab. One screen, map-dominant, big touch targets.
      If it doesn't change a decision in the next ten minutes, it isn't on this screen. */
@@ -213,8 +231,15 @@
                   border: 1px solid #F85149; color: #F85149; background: rgba(248,81,73,.12); }
   .ccard .tdops.if { border: 1px dashed #FFC107; color: #FFC107; background: rgba(255,193,7,.10); }
   .gbadge { display: inline-flex; align-items: center; }
-  #noCalls { pointer-events: none; background: rgba(13,17,23,.85); border: 1px solid #30363D; border-radius: 10px;
-             padding: 8px 14px; font-size: 13px; color: #3FB950; align-self: flex-start; }
+  /* NO ACTIVE CALLS wears the standard pill — same background, radius, padding, type size and
+     bordered-status treatment as the rail chips, in the green "checked and clear" state. It used
+     to be a one-off with a grey border and green text, which read as a different kind of object
+     sitting next to them. The pill IS the house style now; new status surfaces should reuse
+     .chip / .chip.ok / .chip.warn / .chip.bad rather than inventing another box. */
+  #noCalls { pointer-events: none; align-self: flex-start;
+             background: rgba(13,17,23,.94); border: 1px solid rgba(63,185,80,.55); border-radius: 10px;
+             box-shadow: 0 0 0 1px rgba(63,185,80,.14);
+             padding: 7px 12px; font-size: 12px; color: #3FB950; }
 
   /* right rail chips — LIVE INSIDE the call band's flex row (margin-left:auto), so call cards and
      the facilities/weather chips can never overlap: the cards shrink, the chips keep their corner */
@@ -222,10 +247,19 @@
           align-items: flex-end; max-width: 34vw; flex: 0 0 auto; }
   .chip { background: rgba(13,17,23,.94); border: 1px solid #30363D; border-radius: 10px; padding: 7px 12px;
           font-size: 12px; color: #8B949E; text-align: right; }
-  .chip.ok { color: #3FB950; border-color: rgba(63,185,80,.5); }
-  .chip.bad { color: #F85149; border-color: #F85149; font-weight: 500; }
-  .chip.warn { color: #FFC107; border-color: rgba(255,193,7,.6); font-weight: 500; }
+  /* Every chip carries a border in ITS OWN state colour, so the rail reads as one set rather than
+     one lit chip beside grey ones. The border is the status: green fine, amber caution, red bad,
+     neutral when a chip is just reporting. The layers control is deliberately NOT touched — it is
+     Leaflet's own furniture, not one of ours. */
+  .chip.ok { color: #3FB950; border-color: rgba(63,185,80,.55); box-shadow: 0 0 0 1px rgba(63,185,80,.14); }
+  .chip.bad { color: #F85149; border-color: #F85149; font-weight: 500; box-shadow: 0 0 0 1px rgba(248,81,73,.20); }
+  .chip.warn { color: #FFC107; border-color: rgba(255,193,7,.65); font-weight: 500; box-shadow: 0 0 0 1px rgba(255,193,7,.16); }
+  .chip:not(.ok):not(.bad):not(.warn) { border-color: rgba(139,148,158,.55); box-shadow: 0 0 0 1px rgba(139,148,158,.12); }
   .chip .sub { display: block; font-size: 10px; color: #8B949E; font-weight: 400; }
+  /* #avlChip sits in the same row and is tappable — matched border weight so the row is coherent */
+  #avlChip { box-shadow: 0 0 0 1px rgba(139,148,158,.12); }
+  #avlChip.err { border-color: rgba(248,81,73,.65); box-shadow: 0 0 0 1px rgba(248,81,73,.18); }
+  #avlChip.coarse { border-color: rgba(210,153,34,.6); box-shadow: 0 0 0 1px rgba(210,153,34,.15); }
 
   /* drone PiP — three sizes: corner, half screen, full screen (tap ⤢ to cycle) */
   #dronePip { position: fixed; right: max(8px, env(safe-area-inset-right)); bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 850; width: min(340px, 40vw); display: none; }   /* clears the bottom-right layers button */
@@ -802,15 +836,17 @@
       const banned = (nm) => rows.some(a => String(a.County || "").toUpperCase() === nm && /^y/i.test(String(a.BurnBan || "")));
       const home = banned(BURN_HOME);
       const ring = BURN_RING.filter(banned);
+      /* Name the county that HAS the ban — that is the fact worth carrying. Red when it is ours,
+         amber when it is one we run into, green only when the whole ring is clear. No line about
+         Bexar being clear: if Bexar were banned the chip would be red and say so. */
       chip.style.display = "";
-      if (home) {                                     /* our own county — the loudest case */
+      if (home) {
         chip.className = "chip bad";
         chip.innerHTML = "BURN BAN &mdash; BEXAR CO" +
           (ring.length ? "<span class='sub'>also " + esc(ring.join(", ")) + "</span>" : "");
-      } else if (ring.length) {                       /* not us, but somewhere we get called into */
+      } else if (ring.length) {
         chip.className = "chip warn";
-        chip.innerHTML = "BURN BAN &mdash; " + esc(ring.join(", ")) +
-          "<span class='sub'>Bexar Co is clear</span>";
+        chip.innerHTML = "BURN BAN &mdash; " + esc(ring.map(c => c + " CO").join(", "));
       } else {
         chip.className = "chip ok";
         chip.textContent = "NO BURN BANS";
