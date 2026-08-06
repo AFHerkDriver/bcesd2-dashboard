@@ -1033,23 +1033,19 @@
   .trow.on{border-left-color:var(--green);background:rgba(52,199,89,.08)}
   .trow.on .ts{color:var(--green)}
   .teams-body.err .trow .ts{color:var(--amber)}
-  /* DEPLOYED face — the units tile's alternate view (15 s out of every 60) while any unit is
-     committed elsewhere (TIFMAS etc.). Ember and loud on purpose: a rig 400 miles away must never
-     read as quietly available, and the rotation exists so the room keeps being reminded.
-     Grid AUTO-FITS: one deployment spans the tile, several fall into columns, nothing clips. */
-  .teams-body.dep{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));
-    align-content:safe center;gap:clamp(6px,.8vmin,12px)}
-  .dep-row{display:flex;flex-direction:column;gap:clamp(2px,.3vmin,5px);min-width:0;border:1px solid var(--accent);
-    border-radius:9px;background:rgba(255,107,53,.10);padding:clamp(5px,.7vmin,10px) clamp(8px,1vmin,14px)}
-  .dep-top{display:flex;align-items:baseline;gap:clamp(8px,1vmin,16px);min-width:0}
-  .dep-cs{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:clamp(17px,2vmin,30px);color:var(--accent);line-height:1}
-  .dep-ty{flex:1 1 auto;min-width:0;font-size:clamp(11px,1.2vmin,17px);letter-spacing:1.2px;text-transform:uppercase;
-    color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  /* location on its own line — the reason the crew looks at this face at all */
-  .dep-loc{font-size:clamp(12px,1.35vmin,19px);color:var(--text);text-transform:uppercase;letter-spacing:.6px;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #teamsHead.dep-tap{cursor:pointer}
-  #teamsHead.dep-tap .name{text-decoration:underline dotted rgba(255,107,53,.55);text-underline-offset:3px}   /* quiet cue that the header flips the tile */
+  /* DEPLOYED pill — the third pill state beside green staffed and red OOS: ember, same chip, same
+     grid, shown on the tile's deployed face (15 s out of every 60, or tap the header). Two lines:
+     "B121 · TIFMAS" in the pill, location under it — the location is the reason the crew looks, so
+     it gets full text colour and the TYPE half takes any ellipsis. The chip grows for the second
+     line; min-height keeps it pill-proportioned when the location is blank. */
+  .tchip.dep{border-color:var(--accent);background:rgba(255,107,53,.14);
+    flex-direction:column;gap:clamp(1px,.2vmin,3px);height:auto;min-height:clamp(30px,3.1vmin,50px);
+    padding:clamp(3px,.4vmin,7px) clamp(5px,.6vmin,9px)}
+  .tchip.dep .tcn{color:var(--accent);max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .tchip.dep .tcl{font-size:clamp(10px,1.15vmin,17px);letter-spacing:.5px;line-height:1.1;color:var(--text);
+    text-transform:uppercase;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tchip.dep .tcl:empty{display:none}
+  #teamsHead.dep-tap{cursor:pointer}   /* no underline cue — at TV size it read as stray dashed lines under the header */
   /* Fire Weather tile */
   /* "safe center": centered when the forecast fits, but falls back to top-aligned when the tile is
      tight (red-flag + heat day, 3-row grid) so the SOONEST hours never clip — only the latest do. */
@@ -3954,14 +3950,14 @@
         /* the HEADER carries the face label — "Deployed Units" here, back to the usual on the home
            face — so no in-body banner steals row space */
         if(hdName) hdName.textContent="Deployed Units";
-        body.className="teams-body dep";
-        /* location on its OWN line under callsign+type — "Lubbock TX" must never be the thing that
-           gets ellipsised away; the grid auto-fits, so one deployment gets the full tile width and
-           several fall into columns without anything clipping */
+        /* SAME pill language as the home face — the ember .dep variant sits beside green staffed and
+           red OOS as a third state, in the same grid, so the two faces read as one tile. Type rides
+           IN the pill ("B121 · TIFMAS"), location on a second line under it. */
+        body.className="teams-body";
         body.innerHTML=dep.map(function(u){
-          return '<div class="dep-row"><div class="dep-top"><span class="dep-cs">'+esc2(String(u.name).trim().toUpperCase())+'</span>'+
-                 '<span class="dep-ty">'+esc2(String(u.depTy||"DEPLOYED").trim())+'</span></div>'+
-                 '<div class="dep-loc">'+esc2(String(u.depLoc||"").trim())+'</div></div>';
+          var ty=String(u.depTy||"").trim();
+          return '<div class="tchip dep"><span class="tcn">'+esc2(String(u.name).trim().toUpperCase())+(ty?(' &middot; '+esc2(ty.toUpperCase())):'')+'</span>'+
+                 '<span class="tcl">'+esc2(String(u.depLoc||"").trim().toUpperCase())+'</span></div>';
         }).join("");
         return;
       }
