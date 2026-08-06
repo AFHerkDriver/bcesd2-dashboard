@@ -108,6 +108,20 @@
   .ccard { pointer-events: auto; flex: 0 1 auto; min-width: 0; max-width: 640px; background: rgba(13,17,23,.94);   /* auto-size: basis comes from the card's own content, capped at 640 — a short call must not drag a wall of empty card across the map. min-width:0 still lets cards compress instead of overflowing under the chips */
            border: 2px solid #F85149; border-radius: 12px; padding: 10px 14px; cursor: pointer; position: relative; }
   .ccard:active { background: rgba(28,34,48,.96); }
+  /* EMERGENCY TONER — a firefighter's radio emergency button. Pulses on its own timer, not the
+     fresh-call strobe, because a mayday must keep shouting until it clears the feed. */
+  .ccard.etone { animation: etone 1s steps(1,end) infinite; border-color: #FF3B30 !important; }
+  .ccard.etone .ty, .ccard.etone .sty, .ccard.etone .mty { color: #fff !important; }
+  .ccard.etone .ty::before, .ccard.etone .sty::before, .ccard.etone .mty::before {
+    content: "EMERGENCY TONER \00B7 "; font-weight: 700; }
+  @keyframes etone {
+    0%,49%   { background: rgba(255,59,48,.32); }
+    50%,100% { background: rgba(255,59,48,.74); }
+  }
+  /* reduced motion: hold the loud state — never quietly fall back to the advisory green */
+  @media (prefers-reduced-motion: reduce) {
+    .ccard.etone { animation: none; background: rgba(255,59,48,.64); }
+  }
   /* AVL chip lives INSIDE #ctrls as a flex sibling of the District button — it inherits the corner
      placement, the 8px gap, and the pip-split lift for free, and can never cover the buttons.
      40px+ tall: the file's gloved-thumb floor applies to this tap target too. */
@@ -443,6 +457,10 @@
   const IDLE_PTS = [[29.454183,-98.755111],[29.505141,-98.782267],[29.405115,-98.701876],[29.413373,-98.785885],[29.49202,-98.74346]];
   const SOUTH_PTS = [[29.21967,-98.45806],[29.17785,-98.42410]];   /* 161 + 162 — ESD 6 frame */
   function districtView() { try { map.fitBounds(IDLE_PTS, { padding: [40, 40], maxZoom: 15 }); } catch (e) {} }
+  /* County frame — bounds come from the bexar-county.json ring drawn as the county line, so the
+     outline and the zoom share one source. Null until that fetch lands; callers fall back. */
+  let COUNTY_BB = null;
+  function countyView() { try { if (COUNTY_BB) map.fitBounds(COUNTY_BB, { padding: [20, 20], maxZoom: 12 }); else districtView(); } catch (e) {} }
   function southView() { try { map.fitBounds(SOUTH_PTS, { padding: [70, 70], maxZoom: 13 }); } catch (e) {} }
   function initMap() {
     const dark = TL("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 20 });
@@ -468,6 +486,23 @@
       { "Radar": radarOverlay, "Station Areas": respOverlay, "Tender Zones": tenderOverlay, "Tour Calls": tourLayer, "Wind Flow": windOverlay },
       { collapsed: true, sortLayers: true, position: "bottomright" }).addTo(map);
     map._layersCtl.addOverlay(rwLayer, "Road Closures");   /* the Roads toggle lives here now, not a corner button */
+    /* TEXAS COUNTY LINES — every county EXCEPT Bexar, which keeps its own always-on white ring.
+       Off by default and lazy: the 141 KB file is only fetched the first time the layer is switched
+       on, which matters more in a cab than on the wall. Dim and thin so the home county still reads. */
+    (function () {
+      const countyLayer = L.layerGroup(); let loaded = false;
+      map._layersCtl.addOverlay(countyLayer, "County Lines");
+      map.on("overlayadd", (e) => {
+        if (e.layer !== countyLayer || loaded) return;
+        loaded = true;                                  /* set before the fetch so a double-tap cannot start two */
+        fetch("tx-counties.json").then(r => r.ok ? r.json() : null).then(j => {
+          if (!j || !Array.isArray(j.c)) { loaded = false; return; }
+          j.c.forEach(entry => (entry[1] || []).forEach(ring =>
+            L.polyline(ring.map(p => [p[1], p[0]]),
+              { color: "#8B949E", weight: 1, opacity: .42, interactive: false }).addTo(countyLayer)));
+        }).catch(() => { loaded = false; });
+      });
+    })();
     map.on("overlayadd", (e) => { if (e.layer === rwLayer) { rwOn = true; rwLoad(); rwTimer = setInterval(rwLoad, 120000); } });
     map.on("overlayremove", (e) => { if (e.layer === rwLayer) { rwOn = false; clearInterval(rwTimer); rwLayer.clearLayers(); } });
     map.on("zoomend", avlZoomRedraw);                      /* AVL micro <-> full badge swap at z13 */
@@ -508,11 +543,14 @@
      ["161",29.21967,-98.45806],["162",29.17785,-98.42410]].forEach(s =>
       L.marker([s[1], s[2]], { icon: L.icon({ iconUrl: "station-" + s[0] + ".png", iconSize: [30, 30], iconAnchor: [15, 15] }),
         interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(map));
-    /* Bexar County line — same soft white dashed ring as the wall (bexar-county.json) */
+    /* Bexar County line — same soft white dashed ring as the wall (bexar-county.json). The same
+       ring supplies the County frame's bounds, so the outline and the zoom can never disagree. */
     fetch("bexar-county.json").then(r => r.ok ? r.json() : null).then(c => {
       if (!c || !Array.isArray(c.ring)) return;
-      L.polyline(c.ring.map(p => [p[1], p[0]]),
+      const latlngs = c.ring.map(p => [p[1], p[0]]);
+      L.polyline(latlngs,
         { color: "#FFFFFF", weight: 2, opacity: .45, dashArray: "7 7", interactive: false }).addTo(map);
+      try { COUNTY_BB = L.latLngBounds(latlngs); } catch (e) {}
     }).catch(() => {});
     fetch("district-bounds.json").then(r => { if (!r.ok) throw 0; return r.json(); }).then(b => {
       ["esd2", "esd6"].forEach(k => (b[k] || []).forEach(ring =>
@@ -551,12 +589,27 @@
     try { map.setView(avlViewCenter(avlLastLL2, tz), tz, { animate: true }); } catch (e) {}   /* offset computed at the zoom we are landing on, not the one we are leaving */
     setTimeout(() => { map._followPan = false; }, 700);   /* clear once the animation has settled */
   });
+  /* Three-way frame cycle: District 2 -> District 6 -> County -> back. The button labels where the
+     NEXT tap goes, the convention this button already used. refitSouth is kept in step so anything
+     else still reading it behaves. */
+  const FRAME_ORDER = ["d2", "d6", "county"];
+  const FRAME_NEXT = {
+    d2:     { to: "d6",     label: "&#8982; District 6", title: "Frame District 6 (161/162)" },
+    d6:     { to: "county", label: "&#8982; County",     title: "Frame all of Bexar County" },
+    county: { to: "d2",     label: "&#8982; District 2", title: "Frame District 2 (121-125)" }
+  };
+  let frameMode = "d2";
+  function paintRefit() { const n = FRAME_NEXT[frameMode]; $("refit").innerHTML = n.label; $("refit").title = n.title; }
+  paintRefit();
   $("refit").addEventListener("click", () => {
     focusCancel();                                   /* a deliberate reframe outranks any auto-focus hold */
-    avlBreakFollow();                                /* and it means the crew wants the district, not themselves */
-    if (refitSouth) { southView(); $("refit").innerHTML = "&#8982; District 2"; }
-    else { districtView(); $("refit").innerHTML = "&#8982; District 6"; }
-    refitSouth = !refitSouth;
+    avlBreakFollow();                                /* and it means the crew wants the map, not themselves */
+    frameMode = FRAME_NEXT[frameMode].to;
+    refitSouth = (frameMode === "d6");
+    if (frameMode === "d6") southView();
+    else if (frameMode === "county") countyView();
+    else districtView();
+    paintRefit();
   });
 
   /* ── HYDRANTS — the department's own db (hydrants.json): SAWS master list 2026-01-30 +
@@ -962,6 +1015,13 @@
      one visual language. Order matters: ALARM/FIRE before MED so "ALARM - FIRE" classes purple. */
   /* general alerts / dispatcher broadcasts — one shared test: colors green, drops nav, ages out at 5 min */
   const GEN_RE = /GENERAL|BURNING|BURN BAN|HYDRANT|CAD OUTAGE|DISREGARD/i;
+  /* EMERGENCY TONER — a firefighter's radio emergency button, carried in the narrative rather than
+     the call type. Both wordings verified against banked calls 2026-08-06 ("Etoner activate on
+     EMS 5", "Activated emergency toner coming from radio 123_ff4"). Bare "emergency activation" is
+     deliberately NOT matched — the feed also carries "iPhone Emergency Crash Activation", a wreck. */
+  const ETONE_RE = /\be[-\s]?toner\b|emergency\s+toner/i;
+  const isEtone = (c) => !!c && ETONE_RE.test(
+    String(c.type || "") + " " + (Array.isArray(c.notes) ? c.notes : []).map(n => (n && n.x) || "").join(" "));
   function callColor(t) { t = String(t || "").toUpperCase();
     if (GEN_RE.test(t)) return "#3FB950";              /* broadcast, not a run — green, before any run class can claim it */
     if (/MVC|MVA|ACCIDENT|COLLISION|CRASH/.test(t)) return "#FF8C42";
@@ -1032,7 +1092,11 @@
   const lvl = (id) => cardLvl[id] || 0;
   const phoneMode = () => { try { return window.matchMedia("(max-width: 640px)").matches; } catch (e) { return false; } };
   function buildCard(c, slim) {
-    const col = callColor(c.type);
+    /* An emergency toner arrives as a plain GENERAL ALERT, which callColor() paints green as a
+       broadcast. Detected from the NARRATIVE — the type never says it — and it overrides both the
+       colour and the card class. See the matching note in index.html for the two live wordings. */
+    const et = isEtone(c);
+    const col = et ? "#FF3B30" : callColor(c.type);
     const attrs = ' data-id="' + esc(c.id) + '"' + (!c.gs && c.lat != null && c.lng != null ? ' data-ll="' + c.lat + "," + c.lng + '"' : "");   /* no tap-to-focus on a suspect geocode */
     /* dispatch stamp: logged = worker first-seen (trustworthy), started = A911's own. Central time
        always — the tour boundary rule applies to clocks too; a phone in another zone must not lie. */
@@ -1043,15 +1107,15 @@
       const m = Math.round((Date.now() - ct) / 60000);
       age = m < 1 ? "now" : m + " min";
     }
-    if (slim) return '<div class="ccard slim"' + attrs + ' style="border-color:' + col + '">' +
+    if (slim) return '<div class="ccard slim' + (et ? ' etone' : '') + '"' + attrs + ' style="border-color:' + col + '">' +
       '<span class="sty" style="color:' + col + '">' + esc(c.type) + "</span>" +
       '<span class="sad">' + esc(c.address) + "</span>" +
       (when ? '<span class="stime">' + when + "</span>" : "") + "</div>";
-    if (lvl(c.id) >= 2) return '<div class="ccard mini"' + attrs + ' style="border-color:' + col + '">' +
+    if (lvl(c.id) >= 2) return '<div class="ccard mini' + (et ? ' etone' : '') + '"' + attrs + ' style="border-color:' + col + '">' +
       '<span class="mty" style="color:' + col + '">' + esc(c.type) + "</span>" +
       (c.mapc ? '<span class="mgrid">' + esc(c.mapc) + "</span>" : "") + "</div>";
     const td = tenderCache[tenderKey(c)];
-    return '<div class="ccard"' + attrs + ' style="border-color:' + col + '">' +
+    return '<div class="ccard' + (et ? ' etone' : '') + '"' + attrs + ' style="border-color:' + col + '">' +
             '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
             (c.mapc ? '<div class="mapgrid">' + esc(c.mapc) + '</div>' : '') +
             '<div class="ad">' + esc(c.address) + (c.apt ? ' <span class="aptc">APT ' + esc(c.apt) + '</span>' : '') + '</div>' +

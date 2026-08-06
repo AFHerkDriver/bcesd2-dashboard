@@ -860,6 +860,22 @@
   .call-e.k-assist{border-left-color:var(--blue);background:rgba(59,130,246,.12)} .call-e.k-assist .ct{color:var(--blue)}
   .call-e.k-mvc{border-left-color:var(--accent);background:rgba(255,107,53,.12)} .call-e.k-mvc .ct{color:var(--accent)}
   .call-e.k-gen{border-left-color:var(--green);background:rgba(52,199,89,.12)} .call-e.k-gen .ct{color:var(--green)}
+  /* EMERGENCY TONER — a firefighter's radio emergency button. Overrides the k-gen advisory green
+     (and every other class) because this is the loudest thing that can cross the board. It pulses
+     on its own timer rather than riding the .fresh strobe: .fresh expires after 30 s, and a mayday
+     must keep shouting until it clears the feed. !important is deliberate — the class arrives
+     alongside k-gen and must win regardless of source order. */
+  .call-e.k-etone{border-left-color:#FF3B30!important;animation:etone 1s steps(1,end) infinite}
+  .call-e.k-etone .ct{color:#fff!important}
+  .call-e.k-etone .ct::before{content:"EMERGENCY TONER \00B7 ";font-weight:700;letter-spacing:.5px}
+  @keyframes etone{
+    0%,49%  {background:rgba(255,59,48,.30);box-shadow:inset 0 0 0 1px rgba(255,59,48,.55)}
+    50%,100%{background:rgba(255,59,48,.72);box-shadow:inset 0 0 0 1px rgba(255,59,48,.95)}
+  }
+  /* reduced motion: hold the loud state rather than flashing — never quietly drop to advisory green */
+  @media (prefers-reduced-motion:reduce){
+    .call-e.k-etone{animation:none;background:rgba(255,59,48,.62)}
+  }
   .call-e.k-fuel{border-left-color:var(--teal);background:rgba(45,212,191,.12)} .call-e.k-fuel .ct{color:var(--teal)}
   .call-e.k-haz{border-left-color:var(--lime);background:rgba(178,255,89,.12)} .call-e.k-haz .ct{color:var(--lime)}
   .call-e.k-rescue{border-left-color:var(--pink);background:rgba(255,79,163,.12)} .call-e.k-rescue .ct{color:var(--pink)}
@@ -1608,9 +1624,15 @@
        (121-125) and District 6 (161/162). STICKY: every auto reframe (tally idle, drone exit,
        focus return) honors the chosen district until toggled back, so the wall can be parked on
        the south district. frameD6 is read by idleView, so the whole reframe machinery follows. */
+    /* THREE frames now, cycled by the corner pill: District 2 -> District 6 -> County -> back.
+       frameD6 stays a boolean so every existing read of it keeps working; FRAME carries the real
+       state. COUNTY_BB is filled by the bexar-county.json fetch below — until it lands the county
+       frame falls back to the district view rather than jumping somewhere wrong. */
+    var FRAME="d2", COUNTY_BB=null;
     var frameD6=false, S_PTS=[[29.21967,-98.45806],[29.17785,-98.42410]];
     function idleView(){ try{
-      if(frameD6) map.fitBounds(S_PTS,{padding:[40,40],maxZoom:13,animate:false});          /* frame 161/162 */
+      if(FRAME==="county" && COUNTY_BB) map.fitBounds(COUNTY_BB,{padding:[24,24],maxZoom:12,animate:false});   /* the whole county */
+      else if(frameD6) map.fitBounds(S_PTS,{padding:[40,40],maxZoom:13,animate:false});      /* frame 161/162 */
       else map.fitBounds(idlePts,{padding:[14,14],maxZoom:15,animate:false});               /* frame 121-125 tightly (animate:false — an animated fit gets cancelled while the map is still settling on load) */
     }catch(e){} }
     idleView();
@@ -1664,14 +1686,19 @@
     /* DISTRICT TOGGLE — lives in the retired runs-outside pill's corner (bottom-left), same text
        style. Label names where the NEXT tap goes, matching the MDT button's convention. */
     (function(){ var el=document.getElementById("dmOff"); if(!el) return;
-      el.hidden=false; el.textContent="District 6";
-      el.title="Frame District 6 (161/162)";
+      /* Three-way cycle. The label names where the NEXT tap goes, keeping the MDT's convention. */
+      var ORDER=["d2","d6","county"];
+      var NEXT={d2:{to:"d6",label:"District 6",title:"Frame District 6 (161/162)"},
+                d6:{to:"county",label:"County",title:"Frame all of Bexar County"},
+                county:{to:"d2",label:"District 2",title:"Frame District 2 (121-125)"}};
+      function paint(){ var n=NEXT[FRAME]; el.textContent=n.label; el.title=n.title; }
+      el.hidden=false; paint();
       try{ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el); }catch(e){}
       el.addEventListener("click",function(){
-        frameD6=!frameD6;
-        el.textContent=frameD6?"District 2":"District 6";
-        el.title=frameD6?"Frame District 2 (121-125)":"Frame District 6 (161/162)";
-        try{ if(focusT){ clearTimeout(focusT); focusT=null; } focusPts=[]; }catch(e){}   /* a deliberate district flip outranks any pending focus return */
+        FRAME=NEXT[FRAME].to;
+        frameD6=(FRAME==="d6");          /* kept in step so every existing read of frameD6 still holds */
+        paint();
+        try{ if(focusT){ clearTimeout(focusT); focusT=null; } focusPts=[]; }catch(e){}   /* a deliberate frame change outranks any pending focus return */
         idleView();
       });
     })();
@@ -1685,8 +1712,11 @@
        reads as "the county, not ours" on both bases. Enhancement layer: file missing = no line. */
     fetch("bexar-county.json").then(function(r){ return r.ok?r.json():null; }).then(function(c){
       if(!c||!Array.isArray(c.ring)) return;
-      L.polyline(c.ring.map(function(p){ return [p[1],p[0]]; }),
+      var latlngs=c.ring.map(function(p){ return [p[1],p[0]]; });
+      L.polyline(latlngs,
         {pane:"boundPane",color:"#FFFFFF",weight:2,opacity:.45,dashArray:"7 7",interactive:false}).addTo(map);
+      /* the same ring gives the County frame its bounds — no second source to drift out of step */
+      try{ COUNTY_BB=L.latLngBounds(latlngs); if(FRAME==="county") idleView(); }catch(e){}
     }).catch(function(){});
     fetch("district-bounds.json").then(function(r){ return r.ok?r.json():null; }).then(function(b){
       if(!b) return;
@@ -1821,6 +1851,27 @@
           radarLayers.forEach(function(l,i){ try{ l.setUrl("https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/"+RADAR_FRAMES[i]+"/{z}/{x}/{y}.png?_="+bk); }catch(e){} }); } }
     }
     layersCtl.addOverlay(radarGroup,"Storm Radar");   /* now switchable by hand, not storms-only */
+    /* ── TEXAS COUNTY LINES — every county EXCEPT Bexar, which has its own always-on white ring.
+       Off by default and LAZY: the 141 KB file is not fetched until the layer is first switched on,
+       so a board that never wants it never pays for it. Dimmer and thinner than the Bexar line on
+       purpose — these are context, and the home county must stay the one that reads. ── */
+    (function(){
+      var countyLayer=L.layerGroup(), loaded=false;
+      layersCtl.addOverlay(countyLayer,"County Lines");
+      map.on("overlayadd",function(e){
+        if(e.layer!==countyLayer || loaded) return;
+        loaded=true;                                   /* set BEFORE the fetch: a fast double-toggle must not start two */
+        fetch("tx-counties.json").then(function(r){ return r.ok?r.json():null; }).then(function(j){
+          if(!j||!Array.isArray(j.c)){ loaded=false; return; }   /* let a retry happen if the file was unreachable */
+          j.c.forEach(function(entry){
+            (entry[1]||[]).forEach(function(ring){
+              L.polyline(ring.map(function(p){ return [p[1],p[0]]; }),
+                {pane:"boundPane",color:"#8B949E",weight:1,opacity:.42,interactive:false}).addTo(countyLayer);
+            });
+          });
+        }).catch(function(){ loaded=false; });
+      });
+    })();
     setTimeout(radarTick,15000); setInterval(radarTick,60000);
     /* ── WIND FLOW — windy.com-style particle streamlines over the district. The field is an IDW
        blend of the 5 station winds (window.WX_WINDS from the weather module), flowing TO (met dir
@@ -3344,6 +3395,20 @@
        long note log is cut mid-word at the tail (the parser marks those with an ellipsis), and
        dispatch may still be typing. Detail lives in the CAD NOTES PARSER header in worker.js. */
     function noteKey(c){ return String((c&&(c.cad_code||c.id))||"").trim(); }
+    /* EMERGENCY TONER — a firefighter's radio emergency button. CAD sends it as an ordinary
+       GENERAL ALERT, which classify() paints GREEN as an advisory, so the single loudest thing that
+       can cross this board looked like a burn-ban notice. Detected from the narrative because the
+       call TYPE never says it. Both live wordings, verified against banked calls 2026-08-06:
+         "Etoner activate on EMS 5 checking status"
+         "Activated emergency toner coming from radio 123_ff4"
+       Deliberately NOT matching bare "emergency activation": the feed also carries "iPhone Emergency
+       Crash Activation", which is a wreck, not a mayday. */
+    var ETONE_RE=/\be[-\s]?toner\b|emergency\s+toner/i;
+    function isEtone(c){
+      if(!c) return false;
+      var ns=Array.isArray(c.notes)?c.notes:[];
+      return ETONE_RE.test(String(c.type||"")+" "+ns.map(function(n){ return (n&&n.x)||""; }).join(" "));
+    }
     function noteBank(c,onlyIfNotes){
       var k=noteKey(c); if(!k) return;
       var ns=Array.isArray(c.notes)?c.notes:[];
@@ -3488,7 +3553,7 @@
                : td==="if"   ? '<span class="ctd if" title="No hydrant within 1,000 ft — tenders if this becomes a working fire">TENDER IF FIRE</span>' : '';
         /* coordinates ride the row so a tap can peek the map — same gate the run tally uses:
            a c.gs (soft-geocoded) fix is not trustworthy enough to zoom a wall board to. */
-        return '<div class="call-e '+classify(c.type)+(isFresh?' fresh':'')+'" data-fx="'+exp+'"'+(noteKey(c)?(' data-nk="'+esc(noteKey(c))+'"'):'')+((c.lat!=null&&c.lng!=null&&!c.gs)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'')+'>'+
+        return '<div class="call-e '+classify(c.type)+(isEtone(c)?' k-etone':'')+(isFresh?' fresh':'')+'" data-fx="'+exp+'"'+(noteKey(c)?(' data-nk="'+esc(noteKey(c))+'"'):'')+((c.lat!=null&&c.lng!=null&&!c.gs)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'')+'>'+
                '<span class="cw">'+dropTime(ts)+'</span>'+                          /* time — far left */
                '<span class="ct">'+esc(c.type||"CALL")+'</span>'+tdh+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
