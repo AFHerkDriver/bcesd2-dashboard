@@ -168,7 +168,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 19;
+const WORKER_VERSION = 20;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -1912,7 +1912,31 @@ export default {
           cur = lst.list_complete ? null : lst.cursor;
         } while (cur);
         entries.sort((a, b) => String(b.t || "").localeCompare(String(a.t || "")));
-        return json({ ok: true, count: entries.length, entries: entries.slice(0, 200) }, 200);
+        /* ── DERIVED OOS SET — which hydrants CAD currently says are out. Replays every banked
+           message oldest-first so the LAST word per hydrant wins; a "back in service" therefore
+           clears an earlier "out", and the boards return that plug to its ordinary blue pin.
+           Match on the hydrant NUMBER, never the street address. Verified against the first three
+           real messages (2026-08-07): both plugs resolve in hydrants.json by id, and BOTH have no
+           address on file — "9734 Durham Mill" matches zero plugs in the dept db, so an
+           address-based parser would have silently failed on the very first message.
+           Idempotent by construction: this is derived on every read, never stored, so the same
+           message arriving twice (as the Talley Rd one did, 15 minutes apart) changes nothing.
+           Direction: BACK is tested before OUT so "was out of service, now back in service" reads
+           as back. Neither pattern matching means NO ACTION — silence never flips a hydrant. */
+        const HYD_ID = /#\s*(\d{4,10})/;
+        const HYD_BACK = /\bback in service\b|\breturned to service\b|\bplaced back in service\b|\bin service\b/i;
+        const HYD_OUT = /\bout of service\b|\bOOS\b/i;
+        const state = new Map();   /* id -> { dir, t } */
+        for (const e of [...entries].sort((a, b) => String(a.t || "").localeCompare(String(b.t || "")))) {
+          const blob = String(e.ty || "") + " " + String(e.ad || "") + " " + String(e.tx || "");
+          const m = HYD_ID.exec(blob); if (!m) continue;
+          const dir = HYD_BACK.test(blob) ? "in"
+                    : (HYD_OUT.test(blob) || /HYDRANT OUT OF SERVICE/i.test(String(e.ty || "")) ? "out" : null);
+          if (dir) state.set(m[1], { dir, t: e.t || "" });
+        }
+        const oos = [];
+        for (const [id, s] of state) if (s.dir === "out") oos.push({ id, since: s.t });
+        return json({ ok: true, count: entries.length, oos, entries: entries.slice(0, 200) }, 200);
       } catch (e) { return json({ ok: false, error: "hydrant log read error" }, 502); }
     }
 

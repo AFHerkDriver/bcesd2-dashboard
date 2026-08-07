@@ -2025,6 +2025,22 @@
        tender water-supply scan — still reads OOS_HYD, so an unconfirmed plug is treated as no water.
        Amber is a request to go look, never a downgrade of the flag. */
     window.OOS_UNC=window.OOS_UNC||[];
+    /* TWO SOURCES, ONE VERDICT. Officer-entered flags (board state) and CAD-derived flags
+       (/hydrantlog) are held apart and unioned, because each arrives on its own clock: the officer
+       list is replaced wholesale on every save, so a CAD flag merged into it would be wiped by the
+       next unrelated edit. A hydrant is out if EITHER says so. CAD flags are keyed HYD<number>,
+       which the shared matcher already resolves to exactly one plug by id — the right key, since
+       both plugs in the first real messages had no address on file. */
+    window.OOS_OFFICER=window.OOS_OFFICER||[];
+    window.OOS_CAD=window.OOS_CAD||[];
+    function oosMerge(){
+      var seen={}, out=[];
+      window.OOS_OFFICER.concat(window.OOS_CAD).forEach(function(o){ if(o&&!seen[o]){ seen[o]=1; out.push(o); } });
+      if(JSON.stringify(out)===JSON.stringify(window.OOS_HYD)) return;
+      window.OOS_HYD=out; hydPainted="";
+      try{ hydUpdate(); oosRepaint(); }catch(e){}
+      try{ if(window.TENDER_RECHECK) window.TENDER_RECHECK(); }catch(e){}   /* water supply changed — the tender scan must re-run */
+    }
     /* SHARED MATCHER CONTRACT (same rule on MDT + control): "HYD 494658" pins ONE plug by
        number; a bare number matches the hydrant id exactly OR anchors at the address start;
        street-name flags match anywhere. Number flags reach plugs with no address on file.
@@ -2052,13 +2068,33 @@
       if(typeof onBoardState!=="function"){ setTimeout(hookOOS,400); return; }
       onBoardState(function(ok,st){                              /* officer OOS list changes repaint the pins */
         var raw=((st&&st.oosHydrants)||[]);
-        var next=raw.map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
+        window.OOS_OFFICER=raw.map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
         /* the amber subset — entries whose estimate lapsed unverified. Legacy string entries have no
-           unc field and are simply never amber, so an older saved state keeps behaving exactly as before. */
+           unc field and are simply never amber, so an older saved state keeps behaving exactly as before.
+           CAD-derived flags are never amber: dispatch is telling us directly, so there is nothing to confirm. */
         var unc=raw.filter(function(x){ return x&&typeof x==="object"&&x.unc; })
                    .map(function(x){ return hydNorm(x.addr); }).filter(Boolean);
-        if(JSON.stringify(next)!==JSON.stringify(window.OOS_HYD)||JSON.stringify(unc)!==JSON.stringify(window.OOS_UNC)){ window.OOS_HYD=next; window.OOS_UNC=unc; hydPainted=""; try{ hydUpdate(); oosRepaint(); }catch(e){} try{ if(window.TENDER_RECHECK) window.TENDER_RECHECK(); }catch(e){} }
+        if(JSON.stringify(unc)!==JSON.stringify(window.OOS_UNC)){ window.OOS_UNC=unc; }
+        oosMerge();
       });
+    })();
+    /* CAD HYDRANT STATUS — dispatch's own out-of-service traffic, parsed worker-side into a current
+       list. Per the dept 2026-08-07: a "back in service" from dispatch is trusted outright and the
+       plug returns to its ordinary blue pin, because no crew is being sent to verify what dispatch
+       has already told us. Hydrant status changes a few times a week, so a 10-minute poll is ample.
+       A failed fetch leaves the last known list in place — it must never silently clear a red pin. */
+    (function(){
+      var HL="https://bc2fd-dash-auth.usafsentinel-45e.workers.dev/hydrantlog";
+      function pull(){
+        var pin=window.BOARD_PIN?window.BOARD_PIN():""; if(!pin) return;
+        bcFetch(HL+"?pin="+encodeURIComponent(pin)).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+          if(!j||!j.ok||!Array.isArray(j.oos)) return;          /* unreadable: hold the last known set */
+          var next=j.oos.map(function(o){ return hydNorm("HYD"+String(o&&o.id!=null?o.id:o)); }).filter(Boolean);
+          if(JSON.stringify(next)===JSON.stringify(window.OOS_CAD)) return;
+          window.OOS_CAD=next; oosMerge();
+        }).catch(function(){});
+      }
+      setTimeout(pull,4000); setInterval(pull,10*60*1000);
     })();
     function hydUpdate(){
       if(map.getZoom()<HYD_Z || !window.HYDB){ hydLayer.clearLayers(); hydPainted=""; return; }
