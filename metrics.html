@@ -161,8 +161,8 @@
   function pct(v,arr){arr=arr.slice().sort(function(a,b){return a-b;});if(!arr.length)return null;return arr[Math.min(arr.length-1,Math.ceil(arr.length*v)-1)];}
 
   function render(months){
-    var all={n:0,nOut:0,byCls:{},byHour:new Array(24).fill(0),bySta:{},byUnit:{},bySft:{},byAid:{},byRecv:{},chutes:[]};
-    months.forEach(function(mo){ all.n+=mo.n||0; all.nOut+=mo.nOut||0;
+    var all={n:0,nOut:0,nNoRig:0,byCls:{},byHour:new Array(24).fill(0),bySta:{},byUnit:{},bySft:{},byAid:{},byRecv:{},chutes:[]};
+    months.forEach(function(mo){ all.n+=mo.n||0; all.nOut+=mo.nOut||0; all.nNoRig+=mo.nNoRig||0;   /* ||0: rollups written before the field existed */
       Object.keys(mo.byAid||{}).forEach(function(k){all.byAid[k]=(all.byAid[k]||0)+mo.byAid[k];});
       Object.keys(mo.byRecv||{}).forEach(function(k){all.byRecv[k]=(all.byRecv[k]||0)+mo.byRecv[k];});
       Object.keys(mo.byCls||{}).forEach(function(k){all.byCls[k]=(all.byCls[k]||0)+mo.byCls[k];});
@@ -263,6 +263,13 @@
     if(f90!=null) b.push((f90<=80?'✅':'⚠️')+' Fire turnout 90th pct '+fmt(f90)+' vs 80s standard'+(f90<=80?' — passing.':' — over; night bunker-up time is the usual driver.'));
     if(peak>=0) b.push('⏰ Peak demand lands in the '+peak+':00 hour — check apparatus availability and move-up posture there first.');
     if(units.length) b.push('🚒 '+units[0]+' is the workhorse ('+all.byUnit[units[0]]+' responses) — watch hours, maintenance, and crew fatigue.');
+    /* NO-APPARATUS OUTLIER — per the dept 2026-08-07: "we never missed a call", so a toned run with
+       no rig on it did not go unanswered. It cleared, was called good intent, or was cancelled before
+       anyone was assigned — typical of alarms a caller phones in to cancel and of assist-LE tones
+       cleared before assignment. Called out so it is read as an outlier instead of quietly inflating
+       the run count, and so nobody reads it as a missed call. */
+    var nr=all.nNoRig||0;
+    if(nr) b.push('📋 '+nr+' tone'+(nr===1?'':'s')+' ('+Math.round(nr/Math.max(1,all.n)*100)+'% of archived runs) show no apparatus assigned — these almost certainly CLEARED before assignment (alarm cancelled by the caller, good intent, or dispatch cleared the tone), not calls that went unanswered. Treat as an outlier when reading run volume.');
     var mut=all.byCls.mutual||0; if(mut) b.push('🤝 '+mut+' MUTUAL AIDE tone'+(mut===1?'':'s')+' archived (out-of-county tone-outs — distinct from the cross-border \u201caid given\u201d count in Call Volume above).');
     var sfts=Object.keys(all.bySft); if(sfts.length>1){ var busy=sfts.sort(function(x,y){return all.bySft[y]-all.bySft[x];})[0];
       b.push('👥 '+busy+' Shift is carrying the most runs ('+all.bySft[busy]+') — luck of the tours early on; a persistent spread is a workload-equity conversation.'); }

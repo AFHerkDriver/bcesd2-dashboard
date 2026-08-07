@@ -168,7 +168,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 18;
+const WORKER_VERSION = 19;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -352,7 +352,14 @@ function inDistrict(rings, lng, lat) {
       if ((yi > lat) !== (yj > lat) && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) ins = !ins; j = i; } }
   return ins;
 }
-function newAgg() { return { n: 0, nOut: 0, byCls: {}, byHour: new Array(24).fill(0), bySta: {}, byUnit: {}, bySft: {}, byAid: {}, byRecv: {}, chutes: [] }; }
+/* nNoRig — incidents that were toned but never had an apparatus assigned. Per the dept
+   (2026-08-07): "we never missed a call", so a run with no rig on it did not go unanswered — it
+   cleared, was called good-intent, or was cancelled before assignment. Typical of alarm calls
+   somebody phones in to cancel, and of assist-LE tones cleared before anyone is assigned.
+   Counted so the district metrics and the chief brief can show it as an OUTLIER rather than
+   letting it quietly inflate the run count. Older rollups predate the field, so every reader must
+   treat a missing value as 0 and a ?rebuild=1 backfills it exactly from the archive. */
+function newAgg() { return { n: 0, nOut: 0, nNoRig: 0, byCls: {}, byHour: new Array(24).fill(0), bySta: {}, byUnit: {}, bySft: {}, byAid: {}, byRecv: {}, chutes: [] }; }
 /* Apply one incident event to an agg doc. kind: "new" (first sighting) | "delta" (units/chute update).
    ev.out (cross-border) -> counted once in nOut, everything else excluded: department metrics stay ours. */
 function aggApply(agg, ev) {
@@ -362,7 +369,13 @@ function aggApply(agg, ev) {
     agg.n++; agg.byCls[ev.cls] = (agg.byCls[ev.cls] || 0) + 1;
     if (ev.hour >= 0 && ev.hour < 24) agg.byHour[ev.hour]++;
     if (ev.sft) { agg.bySft = agg.bySft || {}; agg.bySft[ev.sft] = (agg.bySft[ev.sft] || 0) + 1; }
+    /* toned with nothing assigned yet. Provisional: a rig usually attaches seconds later, and the
+       rigArrived delta below takes it back off. Counting at first sighting and correcting is the
+       only option here — the rollup is incremental and cannot revisit a past incident. */
+    if (!(ev.units || []).some(isRealApparatus)) agg.nNoRig = (agg.nNoRig || 0) + 1;
   }
+  /* the first real apparatus attached to an incident that had none — it was answered after all */
+  if (ev.rigArrived) agg.nNoRig = Math.max(0, (agg.nNoRig || 0) - 1);
   /* Department stations ONLY (121-125, 161, 162). Extra ambulances ride with a staffed station:
      M126 -> 123, M120 -> 121, M119/M127 -> 124 (same remap as the board tally). Units that map to
      no department station (neighbor apparatus on our ground) are excluded from workload stats. */
@@ -2405,9 +2418,14 @@ export default {
                   let out = !inOurs(esdAll, c.lng, c.lat);   /* cross-border response -> mutual-aid tally (buffer keeps annexed-corridor first-due as ours) */
                   let aid = out ? aidDistrictOf(esdAll, c.lng, c.lat) : "";
                   if (aid === "LOC?" && addrInfersOurs(c.address)) { out = false; aid = ""; }   /* flipped geocode, our corridor -> home */
+                  /* "new" carries the FULL unit list, not just newUnits: nNoRig has to judge whether
+                     this incident has any apparatus at all, and on a first sighting newUnits happens
+                     to equal merged anyway. rigArrived fires the moment an incident that had no rig
+                     gets one, which takes it back out of the no-apparatus count. */
+                  const rigArrived = !isNewInc && !prevUnits.some(isRealApparatus) && merged.some(isRealApparatus);
                   (aggDelta[mh.mon] = aggDelta[mh.mon] || []).push(
-                    isNewInc ? { kind: "new", cls, hour: mh.hour, sft, out, aid, units: newUnits, chute: chuteNew ? chute : null }
-                             : { kind: "delta", cls, sft, out, units: newUnits, chute: chuteNew ? chute : null });
+                    isNewInc ? { kind: "new", cls, hour: mh.hour, sft, out, aid, units: merged, chute: chuteNew ? chute : null }
+                             : { kind: "delta", cls, sft, out, units: newUnits, chute: chuteNew ? chute : null, rigArrived });
                   }
                 }
               }

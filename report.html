@@ -96,7 +96,7 @@
 
   <div class="baseline" id="baseline" hidden></div>
 
-  <div class="card"><h2>Month at a Glance</h2><div class="hero" id="kpis"></div></div>
+  <div class="card"><h2>Month at a Glance</h2><div class="hero" id="kpis"></div><p class="hint" id="noRigNote" style="margin-top:10px" hidden></p></div>
 
   <div class="card"><h2>Incident Mix</h2><div id="mix"></div></div>
 
@@ -174,6 +174,22 @@
       '<div class="hb"><b>'+inPct+'%</b><span>In-district</span></div>'+
       '<div class="hb"><b>'+(all.nOut||0)+'</b><span>Mutual aid given</span></div>'+
       '<div class="hb"><b>'+(chAll.length?fmtT(med(chAll)):'—')+'</b><span>Median turnout</span></div>';
+
+    /* NO-APPARATUS OUTLIER — per the dept 2026-08-07: "we never missed a call". A toned run with no
+       rig on it did not go unanswered; it cleared, was called good intent, or was cancelled before
+       assignment (an alarm the caller phones in to cancel, an assist-LE tone cleared before anyone
+       is assigned). Stated next to Total responses so the chief reads it as an outlier in the count
+       rather than as coverage failure. Hidden when zero — no note is better than a note saying none.
+       Rollups written before the field existed report undefined, which reads as 0 here; a
+       ?rebuild=1 backfills the real figure exactly from the archive. */
+    var nr=all.nNoRig||0, nrEl=$('noRigNote');
+    if(nrEl){
+      nrEl.hidden=!nr;
+      if(nr) nrEl.innerHTML='<b>Outlier:</b> '+nr+' of these '+all.n+' tone'+(all.n===1?'':'s')+
+        ' ('+Math.round(nr/Math.max(1,all.n)*100)+'%) show no apparatus assigned. These cleared before assignment &mdash; '+
+        'alarm cancelled by the caller, good intent, or dispatch cleared the tone &mdash; rather than calls that went unanswered. '+
+        'They are counted in Total responses; discount them when reading volume.';
+    }
 
     var clsKeys=Object.keys(all.byCls||{}).sort(function(a,b){return all.byCls[b]-all.byCls[a];});
     var cmx=clsKeys.length?all.byCls[clsKeys[0]]:1;
