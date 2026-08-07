@@ -340,6 +340,9 @@
     <!-- Active911 token-expiry reminder — admin owner (Capt Sanchez) only, from 30 days out. -->
     <div class="tok-warn" id="tokWarn" hidden></div>
 
+    <!-- Hydrant-database freshness — same owner-only pattern, on a 6-month refresh cadence. -->
+    <div class="tok-warn" id="hydWarn" hidden></div>
+
     <div class="hint" style="text-align:center;margin:2px 0 10px">🕐 All dates &amp; times on this panel are <b>San Antonio time (Central)</b>, regardless of your device&rsquo;s clock or location.</div>
 
     <nav class="jump">
@@ -607,7 +610,7 @@
   function unlock(name, tier, pin){
     if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadTypeLog(pin); loadAdmin(pin); }   /* access log + type log + reset + PIN roster are Owner-only (stored tier value stays "admin") */
     loadChuteStats(pin);   /* every officer sees chute times — the worker's /calls needs only a valid PIN, so this was never a data restriction, just a UI one */
-    var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name);
+    var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name); hydDbReminder(name);
     /* Diagnostics is gated on the token owner's NAME ONLY — same identity gate as the token
        reminder above, and deliberately NOT on tier. Do not add a tier check here, and do not move
        #diagCard back inside #adminCard: either one re-imposes admin tier, and the owner signing in
@@ -633,6 +636,39 @@
       el.innerHTML='&#9888; <b>Active911 tokens expire in '+days+' day'+(days===1?'':'s')+'</b> (Jul 17, 2027). Recycle them before they lapse &mdash; dispatch data stops when they do.'; }
     else { el.className='tok-warn crit'; var ago=Math.abs(days);
       el.innerHTML='&#9940; <b>Active911 tokens EXPIRED</b> ('+(ago===0?'today':(ago+' day'+(ago===1?'':'s')+' ago'))+', Jul 17, 2027). Recycle them now &mdash; dispatch data may be down.'; }
+    el.hidden=false;
+  }
+  /* Hydrant-database freshness. Same owner-only shape as the token reminder above, with one
+     deliberate difference: the deadline is DERIVED from the database's own build date instead of
+     being a second hand-kept expiry. HYD_DB_DATE mirrors the "v" field in hydrants.json, and
+     tools/validate.js fails the build if the two ever disagree — so shipping a new database moves
+     the reminder with it and cannot forget to. A constant (not a read of j.v) because the reminder
+     fires at unlock, long before the 1.9 MB database lands on a phone.
+     A stale database is degraded accuracy, not an outage, so this stays amber until badly overdue —
+     overstating it in red next to the token banner would blunt the one that means dispatch is down. */
+  var HYD_DB_DATE='2026-01-30';                  /* == hydrants.json "v" — pinned by validate.js */
+  var HYD_REFRESH_MONTHS=6;
+  function hydDbReminder(name){
+    var el=$g('hydWarn'); if(!el) return; el.hidden=true;
+    if(String(name||'').trim().toLowerCase()!=='capt sanchez') return;   /* owner only — he sources the refresh */
+    var p=/^(\d{4})-(\d{2})-(\d{2})$/.exec(HYD_DB_DATE); if(!p) return;
+    var built=Date.UTC(+p[1],+p[2]-1,+p[3]);
+    var due=Date.UTC(+p[1],+p[2]-1+HYD_REFRESH_MONTHS,+p[3]);
+    var LEAD=30*86400000, now=Date.now(), left=due-now;
+    if(left>LEAD) return;                          /* more than 30 days out -> silent */
+    var pretty=new Date(built).toLocaleDateString([], {month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+    var SRC='Pull a fresh SAWS export plus the Active911 private plugs, then hand it to Claude to rebuild <b>hydrants.json</b>.';
+    if(left>0){ var d=Math.ceil(left/86400000); el.className='tok-warn';
+      el.innerHTML='&#128167; <b>Hydrant database refresh due in '+d+' day'+(d===1?'':'s')+'</b> · current build '+pretty+
+        '. '+SRC; }
+    /* ceil, not floor — left is negative here, and floor rounds AWAY from zero, so any part-day
+       past the deadline counts as a whole extra day: "due today" reads "1 day ago" and the red
+       escalation trips a day early. Same reason the token reminder above ceils. */
+    else { var over=Math.abs(Math.ceil(left/86400000)), months=((now-built)/86400000/30.44).toFixed(1);
+      el.className='tok-warn'+(over>=90?' crit':'');
+      el.innerHTML=(over>=90?'&#9940;':'&#128167;')+' <b>Hydrant database is '+months+' months old</b> · refresh was due '+
+        (over===0?'today':(over+' day'+(over===1?'':'s')+' ago'))+' (build '+pretty+'). '+SRC+
+        ' Until then the map is missing plugs added since, and still shows any pulled out.'; }
     el.hidden=false;
   }
   function accEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }

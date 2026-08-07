@@ -86,6 +86,20 @@ for (const f of PAGES.concat(["sw.js"])) {
 }
 ok("asset existence — every referenced png/json is present");
 
+/* 4c — hydrant-database freshness constant. control.html's HYD_DB_DATE drives the officer's
+   6-month refresh reminder and is a hand-kept copy of hydrants.json's build date. Ship a new
+   database without bumping it and the reminder keeps counting from the OLD build — it goes quiet
+   on a database that is actually stale, which is exactly the false all-clear rule 5 forbids.
+   Pin them together so the reminder cannot lie about the file sitting next to it. */
+{
+  const ctl = fs.readFileSync(path.join(ROOT, "control.html"), "utf8");
+  const m3 = /var HYD_DB_DATE\s*=\s*'(\d{4}-\d{2}-\d{2})'/.exec(ctl);
+  const dbV = JSON.parse(fs.readFileSync(path.join(ROOT, "hydrants.json"), "utf8")).v;
+  if (!m3) fail("control.html: HYD_DB_DATE not found — the hydrant refresh reminder lost its build date");
+  else if (m3[1] !== dbV) fail('HYD_DB_DATE "' + m3[1] + '" != hydrants.json "v" "' + dbV + '" — the refresh reminder is counting from the wrong build');
+  else ok("hydrant db date pinned to hydrants.json (" + dbV + ")");
+}
+
 /* 5 — jsdom smoke */
 let jsdom = null;
 try { jsdom = require("jsdom"); } catch (e) {}
