@@ -1040,6 +1040,20 @@
      the call type. Both wordings verified against banked calls 2026-08-06 ("Etoner activate on
      EMS 5", "Activated emergency toner coming from radio 123_ff4"). Bare "emergency activation" is
      deliberately NOT matched — the feed also carries "iPhone Emergency Crash Activation", a wreck. */
+  /* CURRENT TYPE — CAD reclassifies mid-call and the narrative always carries it
+     ("TYPE CHANGED: Fire - Structure → Fire - Tree/Brush/Grass LIGHT"), but the alert's own type
+     field does not always follow: a mutual-aid copy under another agency's CAD code can keep the
+     ORIGINAL type. Seen live 2026-08-06 on a fire at 17000 FM 1937, where the stale copy was the one
+     still inside the live window. The LAST change wins — calls get reclassified more than once.
+     Drives the colour too, so a MED that becomes an MVC changes palette with it. */
+  const curType = (c) => {
+    const ns = (c && Array.isArray(c.notes)) ? c.notes : [];
+    for (let i = ns.length - 1; i >= 0; i--) {
+      const m = /TYPE CHANGED:\s*.+?\s*(?:→|->)\s*(.+?)\s*$/.exec(String((ns[i] && ns[i].x) || ""));
+      if (m && m[1]) return m[1].toUpperCase();
+    }
+    return String((c && c.type) || "");
+  };
   const ETONE_RE = /\be[-\s]?toner\b|emergency\s+toner/i;
   const isEtone = (c) => !!c && ETONE_RE.test(
     String(c.type || "") + " " + (Array.isArray(c.notes) ? c.notes : []).map(n => (n && n.x) || "").join(" "));
@@ -1117,7 +1131,7 @@
        broadcast. Detected from the NARRATIVE — the type never says it — and it overrides both the
        colour and the card class. See the matching note in index.html for the two live wordings. */
     const et = isEtone(c);
-    const col = et ? "#FF3B30" : callColor(c.type);
+    const col = et ? "#FF3B30" : callColor(curType(c));
     const attrs = ' data-id="' + esc(c.id) + '"' + (!c.gs && c.lat != null && c.lng != null ? ' data-ll="' + c.lat + "," + c.lng + '"' : "");   /* no tap-to-focus on a suspect geocode */
     /* dispatch stamp: logged = worker first-seen (trustworthy), started = A911's own. Central time
        always — the tour boundary rule applies to clocks too; a phone in another zone must not lie. */
@@ -1129,15 +1143,15 @@
       age = m < 1 ? "now" : m + " min";
     }
     if (slim) return '<div class="ccard slim' + (et ? ' etone' : '') + '"' + attrs + ' style="border-color:' + col + '">' +
-      '<span class="sty" style="color:' + col + '">' + esc(c.type) + "</span>" +
+      '<span class="sty" style="color:' + col + '">' + esc(curType(c)) + "</span>" +
       '<span class="sad">' + esc(c.address) + "</span>" +
       (when ? '<span class="stime">' + when + "</span>" : "") + "</div>";
     if (lvl(c.id) >= 2) return '<div class="ccard mini' + (et ? ' etone' : '') + '"' + attrs + ' style="border-color:' + col + '">' +
-      '<span class="mty" style="color:' + col + '">' + esc(c.type) + "</span>" +
+      '<span class="mty" style="color:' + col + '">' + esc(curType(c)) + "</span>" +
       (c.mapc ? '<span class="mgrid">' + esc(c.mapc) + "</span>" : "") + "</div>";
     const td = tenderCache[tenderKey(c)];
     return '<div class="ccard' + (et ? ' etone' : '') + '"' + attrs + ' style="border-color:' + col + '">' +
-            '<div class="ty" style="color:' + col + '">' + esc(c.type) + '</div>' +
+            '<div class="ty" style="color:' + col + '">' + esc(curType(c)) + '</div>' +
             (c.mapc ? '<div class="mapgrid">' + esc(c.mapc) + '</div>' : '') +
             '<div class="ad">' + esc(c.address) + (c.apt ? ' <span class="aptc">APT ' + esc(c.apt) + '</span>' : '') + '</div>' +
             ((c.hist && c.hist.n > 1) ? ('<div class="histc">&#8617; <b>' + ord(c.hist.n) + ' call at this address</b>' +
@@ -1228,7 +1242,7 @@
         const nowMs = Date.now();
         live.forEach(c => {
           if (c.lat == null || c.lng == null) return;
-          const col = callColor(c.type);
+          const col = callColor(curType(c));
           if (!knownIds[c.id]) { knownIds[c.id] = 1;
             if (!c.gs) {                              /* never pulse, ping, or zoom toward a suspect geocode */
               freshUntil[c.id] = nowMs + 60000;
@@ -1240,13 +1254,13 @@
           if (c.gs) {                                  /* flipped-geocode pin: hollow + dashed, labeled — visible but never trusted */
             L.circleMarker([c.lat, c.lng], { radius: 8, color: col, weight: 2, opacity: .8, dashArray: "3 4",
                 fillColor: col, fillOpacity: .12, className: "call-pin" })
-              .bindTooltip(esc(c.type) + " &middot; LOCATION UNVERIFIED — geocode suspect", { direction: "top", offset: [0, -8] }).addTo(callLayer);
+              .bindTooltip(esc(curType(c)) + " &middot; LOCATION UNVERIFIED — geocode suspect", { direction: "top", offset: [0, -8] }).addTo(callLayer);
             return;
           }
           L.circleMarker([c.lat, c.lng], { radius: fresh ? 8 : 7, color: "#0D1117", weight: 2, opacity: .9,
               fillColor: col, fillOpacity: fresh ? .95 : .92,
               className: "call-pin" + (fresh ? " pin-new" : "") })
-            .bindTooltip(esc(c.type), { direction: "top", offset: [0, -8] }).addTo(callLayer);
+            .bindTooltip(esc(curType(c)), { direction: "top", offset: [0, -8] }).addTo(callLayer);
         });
       })
       .then(() => scheduleDispatch())

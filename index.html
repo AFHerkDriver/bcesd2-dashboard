@@ -3341,6 +3341,22 @@
       lastTileOn=!!tileOn; applyTallyVis(); }
     /* advisory board, not CAD: rows age out after 15 min */
     var ADVISORY_MIN=15;
+    /* CURRENT TYPE — CAD reclassifies mid-call ("TYPE CHANGED: Fire - Structure → Fire - Tree/Brush/
+       Grass LIGHT") and the narrative always carries it, but the alert's own type field does not
+       always follow: a mutual-aid copy under another agency's CAD code can keep the ORIGINAL type
+       while our copy updates. Seen live 2026-08-06 on a fire at 17000 FM 1937, where the stale copy
+       was the one still inside the live window, so the board showed STRUCTURE for a grass fire.
+       The LAST change wins — a call can be reclassified more than once. This drives the colour class
+       too, not just the label, so a MED that becomes an MVC changes palette with it. */
+    function curType(c){
+      var t=String((c&&c.type)||"");
+      var ns=(c&&Array.isArray(c.notes))?c.notes:[];
+      for(var i=ns.length-1;i>=0;i--){
+        var m=/TYPE CHANGED:\s*.+?\s*(?:→|->)\s*(.+?)\s*$/.exec(String((ns[i]&&ns[i].x)||""));
+        if(m&&m[1]) return m[1].toUpperCase();
+      }
+      return t;
+    }
     function classify(t){ t=String(t||"").toUpperCase();
       if(/GENERAL|BURNING RECOMMENDATION|BURN BAN/.test(t)) return "k-gen";   /* advisories, not runs — dropped from the run-type tally */
       /* Mutual aid to a neighbouring county — MUST come before the MED test, because
@@ -3504,7 +3520,7 @@
     function tenderCheck(c){
       var k=tenderKey(c);
       if(k in tenderCache) return;
-      var cls=classify(c.type);
+      var cls=classify(curType(c));
       if((cls!=="k-fire" && cls!=="k-alarm") || c.lat==null || c.lng==null || c.gs){ tenderCache[k]=null; return; }   /* suspect coords can't answer a water-supply question */
       if(!window.HYDB) return;                     /* db still loading — retried next poll */
       var H=window.HYDB.h, near=false;
@@ -3553,9 +3569,9 @@
                : td==="if"   ? '<span class="ctd if" title="No hydrant within 1,000 ft — tenders if this becomes a working fire">TENDER IF FIRE</span>' : '';
         /* coordinates ride the row so a tap can peek the map — same gate the run tally uses:
            a c.gs (soft-geocoded) fix is not trustworthy enough to zoom a wall board to. */
-        return '<div class="call-e '+classify(c.type)+(isEtone(c)?' k-etone':'')+(isFresh?' fresh':'')+'" data-fx="'+exp+'"'+(noteKey(c)?(' data-nk="'+esc(noteKey(c))+'"'):'')+((c.lat!=null&&c.lng!=null&&!c.gs)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'')+'>'+
+        return '<div class="call-e '+classify(curType(c))+(isEtone(c)?' k-etone':'')+(isFresh?' fresh':'')+'" data-fx="'+exp+'"'+(noteKey(c)?(' data-nk="'+esc(noteKey(c))+'"'):'')+((c.lat!=null&&c.lng!=null&&!c.gs)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'')+'>'+
                '<span class="cw">'+dropTime(ts)+'</span>'+                          /* time — far left */
-               '<span class="ct">'+esc(c.type||"CALL")+'</span>'+tdh+
+               '<span class="ct">'+esc(curType(c)||"CALL")+'</span>'+tdh+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
                ((c.hist && c.hist.n>=REPEAT_MIN) ? ('<span class="crpt" title="'+c.hist.n+' calls at this address since logging began \u2014 tap the call for the priors">&#8617;'+c.hist.n+'</span>') : '')+
                unitsHtml+                                                            /* units — green, pushed right; a newly-assigned apparatus blinks 10s */
@@ -3881,7 +3897,7 @@
             var sts=stationsFor(c).map(function(s){ return s==="126"?"123":s==="120"?"121":(s==="119"||s==="127")?"124":s; });   /* extra ambulances ride with a staffed station: M126 -> 123, M120 -> 121, M119/M127 -> 124 (none have a tally chip of their own) */
             var seen={};
             sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
-            var cls=classify(c.type);                            /* per-type run tally; GENERAL is an announcement, not a run */
+            var cls=classify(curType(c));                            /* per-type run tally; GENERAL is an announcement, not a run */
             if(cls!=="k-gen"){
               typeCounts[cls]=(typeCounts[cls]||0)+1;
               (RT_RUNS[cls]=RT_RUNS[cls]||[]).push(c);           /* keep the run itself — the detail sheet reads this, no second fetch */
@@ -3967,7 +3983,7 @@
       /* Newest only. Several calls can land between polls; focusing each in turn would queue a
          slideshow, and the governor would swallow all but the first anyway. */
       fresh.sort(function(a,b){ return new Date(b.logged||b.started||0)-new Date(a.logged||a.started||0); });
-      var c=fresh[0], k=classify(c.type);
+      var c=fresh[0], k=classify(curType(c));
       if(k==="k-gen") return;                     /* burn-ban / general alerts are advisories, not runs */
       if(c.lat==null || c.lng==null) return;      /* no coordinate, nothing to focus */
       if(c.gs) return;                            /* worker flagged the geocode suspect (flipped 281 N/S etc.) — never swing the wall to a wrong rooftop */
