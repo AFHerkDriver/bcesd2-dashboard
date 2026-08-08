@@ -168,7 +168,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 20;
+const WORKER_VERSION = 21;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -722,10 +722,20 @@ function dedupeIncidents(rows) {
       if (a) return "a|" + a + "|" + String(r.type || "").toLowerCase().trim(); }
     const tt = String((g.rows[0] || {}).type || "").toLowerCase().replace(/\s+/g, " ").trim();
     return tt ? "t|" + tt : null; };
+  /* WINDOW. Five minutes for anything that could be a real run — two genuine calls at one address
+     are hours apart, not seconds, and that trade is what makes the merge safe.
+     A PURE BROADCAST is different: no address, no units, nobody dispatched. Identical text is a
+     re-page, not a second event, and dispatch re-pages well outside five minutes (the same hydrant
+     back-in-service text arrived at 15:32 AND 15:47, so it showed on the wall twice). Thirty
+     minutes for those, and only when the identity key is the full free-text type — a broadcast
+     that says something genuinely new differs in text and is untouched. */
+  const isBroadcast = (g) => g.rows.every(r =>
+    !String(r.address || "").trim() && !(r.units || []).length);
   const merged2 = [];
   for (const g of [...groups].sort((a, b) => a.t - b.t)) {
     const ak = akOf(g);
-    const hit = ak && merged2.find(x => x.ak === ak && Math.abs(x.t - g.t) <= 5 * 60 * 1000);
+    const win = (ak && ak.charAt(0) === "t" && isBroadcast(g)) ? 30 * 60 * 1000 : 5 * 60 * 1000;
+    const hit = ak && merged2.find(x => x.ak === ak && Math.abs(x.t - g.t) <= win);
     if (hit) hit.rows.push(...g.rows);
     else { g.ak = ak; merged2.push(g); }
   }
@@ -1915,28 +1925,71 @@ export default {
         /* ── DERIVED OOS SET — which hydrants CAD currently says are out. Replays every banked
            message oldest-first so the LAST word per hydrant wins; a "back in service" therefore
            clears an earlier "out", and the boards return that plug to its ordinary blue pin.
-           Match on the hydrant NUMBER, never the street address. Verified against the first three
-           real messages (2026-08-07): both plugs resolve in hydrants.json by id, and BOTH have no
-           address on file — "9734 Durham Mill" matches zero plugs in the dept db, so an
-           address-based parser would have silently failed on the very first message.
-           Idempotent by construction: this is derived on every read, never stored, so the same
-           message arriving twice (as the Talley Rd one did, 15 minutes apart) changes nothing.
-           Direction: BACK is tested before OUT so "was out of service, now back in service" reads
-           as back. Neither pattern matching means NO ACTION — silence never flips a hydrant. */
-        const HYD_ID = /#\s*(\d{4,10})/;
+           Match on the hydrant NUMBER, never the street address: both plugs in the first messages
+           resolve in hydrants.json by id and BOTH have no address on file, so an address parser
+           would have failed silently on message one.
+           Idempotent by construction — derived on every read, never stored — so a repeat changes
+           nothing. Neither direction matching means NO ACTION: silence never flips a hydrant.
+
+           REWRITTEN 2026-08-08 (build 21). Build 20 required a "#" before the number and took only
+           the FIRST id in a message. Dispatch does not word it that way. Real traffic:
+             "Hydrant #1271826 at 9734 Durham Mill has been placed out of service"
+             "Hydrant back in service at 22600 talley rd #1342894"
+             "Hydrant 1053273 on sandy ridge is back in service and hydrant 1351277 on sandy ridge…"
+             "Hydrant 1271826 is back in service on durham mill"
+           The last two carry no "#", so build 20 read them as NO ACTION and left a plug dispatch
+           had cleared sitting red on the wall. Two id forms, and more than one hydrant per page. */
+
+        /* A bare number must follow the word "hydrant" AND be 6+ digits. That second rule is what
+           keeps street numbers out: 48,130 of the 48,516 plugs are 6-7 digits, while the addresses
+           in this very traffic are 4-5 ("9734 Durham Mill", "22600 talley rd"). A "#" is an explicit
+           marker, so that form is trusted down to 4. */
+        const HYD_ID_G = /#\s*(\d{4,10})|\bhydrants?\s+(\d{6,10})/gi;
         const HYD_BACK = /\bback in service\b|\breturned to service\b|\bplaced back in service\b|\bin service\b/i;
         const HYD_OUT = /\bout of service\b|\bOOS\b/i;
+        /* Direction is read per CLAUSE, not per message, so "A is back in service and B is back in
+           service" attributes to both, and a mixed page cannot smear one direction across the other
+           hydrant. A clause with ids but no direction word inherits the page's overall direction. */
+        const hydDirs = (blob) => {
+          const msgDir = HYD_BACK.test(blob) ? "in" : (HYD_OUT.test(blob) ? "out" : null);
+          const found = new Map();
+          for (const clause of blob.split(/\band\b|[;,]/i)) {
+            const dir = HYD_BACK.test(clause) ? "in" : (HYD_OUT.test(clause) ? "out" : msgDir);
+            if (!dir) continue;
+            HYD_ID_G.lastIndex = 0;
+            let m;
+            while ((m = HYD_ID_G.exec(clause))) {
+              const id = m[1] || m[2]; if (!id) continue;
+              /* contradiction inside ONE page keeps the plug OUT — a flag that should have cleared
+                 is an annoyance, a dead plug painted blue is the thing this whole feature exists
+                 to prevent */
+              if (found.get(id) === "out") continue;
+              found.set(id, dir);
+            }
+          }
+          return found;
+        };
         const state = new Map();   /* id -> { dir, t } */
         for (const e of [...entries].sort((a, b) => String(a.t || "").localeCompare(String(b.t || "")))) {
           const blob = String(e.ty || "") + " " + String(e.ad || "") + " " + String(e.tx || "");
-          const m = HYD_ID.exec(blob); if (!m) continue;
-          const dir = HYD_BACK.test(blob) ? "in"
-                    : (HYD_OUT.test(blob) || /HYDRANT OUT OF SERVICE/i.test(String(e.ty || "")) ? "out" : null);
-          if (dir) state.set(m[1], { dir, t: e.t || "" });
+          const dirs = hydDirs(blob);
+          /* the type alone is sometimes the only statement of direction ("HYDRANT OUT OF SERVICE"
+             with an address-only body) — honour it for every id the page named */
+          const tyOut = /HYDRANT[S]?\s+OUT OF SERVICE/i.test(String(e.ty || ""));
+          for (const [id, dir] of dirs) state.set(id, { dir: (tyOut && dir !== "in") ? "out" : dir, t: e.t || "" });
         }
         const oos = [];
         for (const [id, s] of state) if (s.dir === "out") oos.push({ id, since: s.t });
-        return json({ ok: true, count: entries.length, oos, entries: entries.slice(0, 200) }, 200);
+        /* Display list only — the derived set above is already immune to repeats. Dispatch re-pages
+           the same hydrant text (twice 0.4 s apart, and twice 15 minutes apart, both observed), and
+           the officer reading this does not need to see it twice. Keeps the FIRST sighting. */
+        const seenTx = new Set(), dedup = [];
+        for (const e of entries) {
+          const k = (String(e.ty || "").trim() + "|" + String(e.tx || "").trim()).toLowerCase().replace(/\s+/g, " ");
+          if (seenTx.has(k)) continue;
+          seenTx.add(k); dedup.push(e);
+        }
+        return json({ ok: true, count: entries.length, shown: dedup.length, oos, entries: dedup.slice(0, 200) }, 200);
       } catch (e) { return json({ ok: false, error: "hydrant log read error" }, 502); }
     }
 

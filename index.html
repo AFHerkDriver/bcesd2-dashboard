@@ -860,6 +860,9 @@
   .call-e.k-assist{border-left-color:var(--blue);background:rgba(59,130,246,.12)} .call-e.k-assist .ct{color:var(--blue)}
   .call-e.k-mvc{border-left-color:var(--accent);background:rgba(255,107,53,.12)} .call-e.k-mvc .ct{color:var(--accent)}
   .call-e.k-gen{border-left-color:var(--green);background:rgba(52,199,89,.12)} .call-e.k-gen .ct{color:var(--green)}
+  /* A dead hydrant reads red like the default it used to fall through to — the class exists so the
+     run tally can tell it apart from an actual run, not to change how it looks. */
+  .call-e.k-hydout{border-left-color:var(--red);background:rgba(255,59,48,.12)} .call-e.k-hydout .ct{color:var(--red)}
   /* EMERGENCY TONER — a firefighter's radio emergency button. Overrides the k-gen advisory green
      (and every other class) because this is the loudest thing that can cross the board. It pulses
      on its own timer rather than riding the .fresh strobe: .fresh expires after 30 s, and a mayday
@@ -3423,6 +3426,14 @@
       return t;
     }
     function classify(t){ t=String(t||"").toUpperCase();
+      /* HYDRANT TRAFFIC — infrastructure status, never a run. Dispatch words the same event two
+         ways: "GENERAL ALERT" (which fell through to green below) and "HYDRANT(S) BACK IN SERVICE"
+         (which matched nothing and fell through to the RED default), so identical good news landed
+         on the wall in two different colours and one of them looked like a working fire.
+         Out-of-service keeps a red card — it IS bad news — but as its own kind, so that it stops
+         being counted as a run in the district metrics and the chief brief. Must sit ABOVE the
+         GENERAL test, or "HYDRANT ... GENERAL ALERT" wording would never reach here. */
+      if(/HYDRANT/.test(t)) return /OUT OF SERVICE|\bOOS\b/.test(t) ? "k-hydout" : "k-gen";
       if(/GENERAL|BURNING RECOMMENDATION|BURN BAN/.test(t)) return "k-gen";   /* advisories, not runs — dropped from the run-type tally */
       /* Mutual aid to a neighbouring county — MUST come before the MED test, because
          "MUTUAL AIDE - MEDINA CTY" contains "MED" and was being miscounted as an EMS run.
@@ -3439,6 +3450,12 @@
       if(/MED|EMS|SICK|INJUR|BREATH|CARDIAC|CHEST|FALL|UNCONSCIOUS|STROKE|SEIZURE|OVERDOSE|DIABET/.test(t)) return "k-med";
       if(/ASSIST|LIFT|WELFARE|PUBLIC SERVICE|SERVICE CALL/.test(t)) return "k-assist";
       return ""; }
+    /* The kinds that are ANNOUNCEMENTS rather than runs: they must not enter the per-type tally,
+       must not swing the wall map, and must not reach the chief brief as call volume. Was an
+       inline `==="k-gen"` in two places, which silently counted every hydrant page as a run the
+       moment hydrant traffic got its own kind. One list, both call sites. */
+    var ADVISORY_KINDS={"k-gen":1,"k-hydout":1};
+    function isAdvisory(cls){ return !!ADVISORY_KINDS[String(cls||"")]; }
     function displayUnitsArr(units){ if(!units||!units.length) return [];
       var isStation=function(u){ return /^\d{3}[A-F]$/i.test(u); };
       var real=units.filter(function(u){ return !isStation(u); });
@@ -3963,7 +3980,7 @@
             var seen={};
             sts.forEach(function(s){ if(STATIONS.indexOf(s)>=0 && !seen[s]){ seen[s]=1; counts[s]=(counts[s]||0)+1; } });
             var cls=classify(curType(c));                            /* per-type run tally; GENERAL is an announcement, not a run */
-            if(cls!=="k-gen"){
+            if(!isAdvisory(cls)){
               typeCounts[cls]=(typeCounts[cls]||0)+1;
               (RT_RUNS[cls]=RT_RUNS[cls]||[]).push(c);           /* keep the run itself — the detail sheet reads this, no second fetch */
             }
@@ -4049,7 +4066,7 @@
          slideshow, and the governor would swallow all but the first anyway. */
       fresh.sort(function(a,b){ return new Date(b.logged||b.started||0)-new Date(a.logged||a.started||0); });
       var c=fresh[0], k=classify(curType(c));
-      if(k==="k-gen") return;                     /* burn-ban / general alerts are advisories, not runs */
+      if(isAdvisory(k)) return;                   /* burn-ban / general alerts / hydrant traffic are advisories, not runs */
       if(c.lat==null || c.lng==null) return;      /* no coordinate, nothing to focus */
       if(c.gs) return;                            /* worker flagged the geocode suspect (flipped 281 N/S etc.) — never swing the wall to a wrong rooftop */
       var meta=RT_META[k]||RT_META[""];
