@@ -1,6 +1,6 @@
 # Session handoff — read this before your first edit
 
-**Last updated: 2026-08-04, on branch `claude/owner-card-audit-and-remote-control-design` at v215.**
+**Last updated: 2026-08-07, on `main` at v247 / worker build 20. Everything below is deployed.**
 
 ## How this file works — you are expected to replace it
 
@@ -19,11 +19,20 @@ never seen this repo can act without guessing.
 
 ```bash
 git branch --show-current && git fetch origin && git status -sb
-curl -s https://afherkdriver.github.io/bcesd2-dashboard/sw.js | grep -o 'bc2fd-dash-v[0-9]*' | head -1   # what the boards actually run
+curl -s https://afherkdriver.github.io/bcesd2-dashboard/sw.js | grep -o 'bc2fd-dash-v[0-9]*' | head -1
 ```
 
 …and, for the Cloudflare lane, call `workers_list` in-session and compare `bc2fd-dash-auth`'s
-`modified_on` against the table below. That is now a check, not a claim.
+`modified_on` against the table below. That is a check, not a claim.
+
+**CRLF WILL LIE TO YOU.** This is a Windows checkout. Some files are CRLF locally, git blobs and
+GitHub Pages are LF, so a raw `md5sum`/byte-size comparison reports drift that does not exist —
+`mdt.html` reads ~2 KB "short" live purely because it has one CR per line. CLAUDE.md's golden rule #1
+gives the naive command; **strip CR before comparing** or you will chase a phantom:
+
+```bash
+diff <(tr -d '\r' < index.html) <(curl -s https://afherkdriver.github.io/bcesd2-dashboard/index.html)
+```
 
 **Where this file lives, and why.** `.github/` is the one folder GitHub Pages does **not** serve
 (verified: `.github/workflows/validate.yml` returns 404 while `CLAUDE.md` returns 200). So this file
@@ -35,54 +44,63 @@ publishes it, because the repo root is the web root.
 
 | Thing | Where it is |
 |---|---|
-| `main` | `f6f2c86` — v214. **Deployed; this is what the boards run.** |
-| **This branch** | `claude/owner-card-audit-and-remote-control-design` — v215, 2 commits ahead of `main`. **NOT merged, NOT deployed.** |
-| **What the boards actually run** | **v214** (`bc2fd-dash-v214` served, verified live). v215 is unmerged. |
-| Live worker | **build 13**, `modified_on` **2026-08-04T05:11:42Z** (read via `workers_list`). Repo `worker.js` is build 13 and unmodified this session. **No deploy pending.** |
-| SW cache in this branch | `bc2fd-dash-v215` |
+| `main` | `823cb70` — v247. **Deployed and verified live.** No feature branch in play. |
+| What the boards run | **v247** (`bc2fd-dash-v247` served; live files hash-identical to repo after CR-stripping) |
+| Live worker | **build 20**, version `16d1248f-7b1d-4005-bad2-6d34ef8c822e`, deployed 2026-08-07 via wrangler |
+| Deploy pending | **none** — both lanes are current |
 
-**Deploy = merging to `main`.** Pages builds `main`; pushing a feature branch does not reach the wall
-boards. **Never merge to `main` without explicit confirmation from the user** — that push is what puts
-code in front of firefighters.
+**Two lanes, both needing explicit per-deploy confirmation.** `git push` reaches the boards;
+`npx wrangler deploy` reaches the worker. One "yes" covers one deploy, never the next.
 
-## The Cloudflare lane changed on 2026-08-04 — no more manual paste
+## The Cloudflare lane: wrangler works. Use it.
 
-Claude now **deploys `worker.js` to Cloudflare directly, asking the user before every single deploy.**
-Read access is confirmed from a session (`workers_list`); write access was verified by the
-coordinating session with the user's approval (an empty-body `PUT` returned `10021: script body must
-not be empty` — a validation error, so authn/authz passed; nothing was created).
+`npx wrangler deploy` from the repo root deploys `worker.js`. Confirmed working 2026-08-07 — that is
+how build 20 shipped. `wrangler.toml` is committed; the user's `CLOUDFLARE_API_TOKEN` is in their
+environment (**never ask for its value, never print it**).
 
-Consequences:
+- A permission rule for the deploy lives in `.claude/settings.local.json`, scoped to `deploy` only —
+  deliberately **not** `wrangler:*`, which would also hand a session `kv delete` and `secret put`.
+- If the classifier still blocks it, **stop and ask the user to run it** rather than routing around
+  the denial via the Cloudflare API MCP.
+- `_handoff/worker-copy-page.html` is the **fallback**, not the lane. It is regenerated from repo
+  `worker.js`; check its embedded md5 against the source before ever trusting it.
+- Do **not** fetch the deployed script for a byte diff. It is ~175k chars and **bundled**, so it will
+  never match the repo source — permanent false positives. Compare `WORKER_VERSION` and route markers.
 
-- `CLAUDE.md`'s "Deploy targets" section is updated on this branch. Read it there.
-- **`_handoff/worker-PASTE-into-cloudflare.*`, `worker-build12.js`, `worker-build13.js` are obsolete.**
-  They are gitignored and local-only. `worker-build12.js` is a stale copy sitting next to a current
-  one — the exact artifact that caused collision #3 below. Recommend deleting all four; the user's
-  call, on their machine.
-- Do **not** fetch the deployed script for a byte diff. It is ~175k chars and it is **bundled**, so it
-  will never match the repo source — permanent false positives. Compare `WORKER_VERSION` and route
-  markers.
+**CLAUDE.md's "Deploy targets" section still describes the manual paste as the lane.** It is stale on
+that point and is corrected in the same commit as this file.
 
-## What shipped on this branch (v215)
+## Recently shipped (v244–v247) — the hydrant chain
 
-**Diagnostics is name-gated again**, per the user. The gate in `unlock()` was *already* name-only —
-it was the DOM that made it tier-gated: v213 nested `#diagCard` inside `#adminCard`, and anything in
-that card inherits its admin-tier reveal no matter what the JS checks. So the owner holding an
-officer-tier PIN silently lost the health sweep on the surface they own. `#diagCard` is a top-level
-card again, still class-gated (`.adm-tool`) rather than the pre-v213 inline display, so there is one
-visibility idiom on the page instead of two. **The old "Diagnostics double-gate" open question is
-answered and closed.**
+**CAD hydrant flags, end to end and confirmed working on real dispatch traffic.** Dispatch hydrant
+messages bank permanently under `hyd:` in KV (the watch has been live since build 14). `GET
+/hydrantlog` **derives** the current out-of-service set on every read — replays oldest-first, last
+word wins, BACK tested before OUT, no match = no action. Derived, never stored, so a duplicate
+message changes nothing (the first real back-in-service arrived twice, 15 min apart).
 
-**`tools/behavior.js`** — 64 behavioral checks, wired into `tools/validate.js` (so CI enforces them).
-They drive the real `control.html` in jsdom: the real PIN gate, the real unlock path, the real CSS
-cascade. This closes the gap the previous handoff flagged.
+**Match on the hydrant NUMBER, never the address.** Both plugs in the first real messages resolve in
+`hydrants.json` by id and **both have no address on file** — "9734 Durham Mill" matches zero plugs. An
+address-based parser would have failed silently on the very first message.
 
-**`tools/prove-behavior.js`** — breaks a copy of the repo on purpose in each documented way and
-asserts the suite goes red. **All 10 mutations caught.** Run it whenever you touch `behavior.js`.
+**Officer and CAD flags are held apart and unioned** (`OOS_OFFICER` / `OOS_CAD` on the board,
+`oosOfficer` / `oosCadRaw` on the MDT). The officer list is replaced wholesale on every save, so a CAD
+flag merged into it would be wiped by the next unrelated edit.
+
+**Overrides carry the timestamp of the report they override**, so they suppress that report and
+nothing newer — an officer clearing a plug cannot mask it going out again later. A report with no
+timestamp is never suppressed. `state.hydCadClear` is `[{id, since, t}]`.
+
+**The control panel and the MDT both see CAD flags** (v247). The MDT previously read only the officer
+list, so the cab showed a dispatch-flagged plug as ordinary blue while the wall showed it red.
+
+**Hydrant database freshness reminder** (v245). `HYD_DB_DATE` in `control.html` mirrors
+`hydrants.json`'s `v` field; `tools/validate.js` **fails the build if they disagree**, so shipping a
+new database moves the reminder with it. Current database: **2026-01-30**, 48,516 plugs, refresh
+cadence 6 months — it is overdue now and the banner is showing.
 
 ## Traps future edits must not spring
 
-The suite now fails loudly on all of these, but understand *why* before you touch them.
+The suite fails loudly on all of these, but understand *why* before you touch them.
 
 **Trap A — visibility stays class-gated, never inline.** Owner sub-sections show via
 `classList.add('on')` against `.adm-tool{display:none}/.adm-tool.on{display:block}`. An inline
@@ -105,22 +123,17 @@ are **display-only mappers — never feed either into a request body or a tier c
 still prints worker errors **raw** on purpose: that panel's job is literal truth.
 
 **Trap C — the roster rank sort reads rank out of a free-text `name`.** There is no rank field;
-`/pins` returns free text and `admRank()` matches the rank off the front. What actually protects it:
+`/pins` returns free text and `admRank()` matches the rank off the front. What protects it: the
+regexes are `^`-anchored and word-bounded — that is the load-bearing part, and it is why a surname is
+not mistaken for a rank. The real hazards are **dropping an entry** or **dropping an anchor**, both of
+which `prove-behavior.js` mutates and the suite catches. Reordering `ADM_RANKS` is harmless (verified
+empirically) but pointless. Unranked names sort last, alphabetically — visible, not silent. Per the
+user there is exactly **one** plain "Chief", and it is **Chief Rodriguez**.
 
-- **The regexes are `^`-anchored and word-bounded.** That is the load-bearing part. Anchoring is why
-  a surname is not mistaken for a rank and why "BC2FD Wall Board" does not read as a Batt Chief.
-- **CORRECTION to the previous handoff:** it claimed the `ADM_RANKS` *match order* is load-bearing
-  because "Asst Chief Vasquez also matches a bare `/^chief/`". **That is false** — `/^chief\b/` does
-  not match `"asst chief vasquez"`, precisely because it is anchored. Verified empirically across all
-  ranks and abbreviations: reordering the array into rank order produces an identical sort. The real
-  hazards are **dropping an entry** or **dropping an anchor**, both of which `prove-behavior.js`
-  mutates and the suite catches. Reordering it is harmless — but pointless, so don't bother.
-- The rank is stripped before names compare, so "Captain Zamora" and "Capt Alvarez" sort by surname.
-- Anything unranked sorts last, alphabetically. A misspelled or reordered rank ("Sanchez, Capt")
-  falls to the bottom rather than sorting wrong — visible, not silent.
-- Per the user: there is exactly **one** plain "Chief", and it is **Chief Rodriguez**.
-
-Sorting is client-side on purpose: no worker change needed.
+**Trap D — the control page's PIN-gate IIFE is a real scope boundary.** `accWhen()`, `$g()` and
+friends live inside it and are **not** visible to `renderOOS`/`renderCadOOS` out in the main script.
+The render smoke cannot catch this class of bug, because it only bites in code that draws *after* an
+authenticated fetch. Drive the real page if you add anything there.
 
 ## Sessions ARE fighting. Three confirmed collisions.
 
@@ -134,12 +147,12 @@ Not hypothetical — each was found and fixed in this repo:
    no `/pins` — while its README said to paste it over the live worker.
 
 **Common thread: a stale local copy presented as current, with nothing warning anyone.**
-Collision #3 is now designed out of existence (no paste step). Collision #2 is a `workers_list` call
-away. **Collision #1 is unchanged and is the live risk.**
+Collision #2 is a `workers_list` call away. **Collision #1 is unchanged and is the live risk.**
 
 ### Rules that would have prevented all three
 
 - Fetch and diff against `origin/<branch>` **before** the first edit. Never trust the working copy.
+  (Strip CR first — see the CRLF warning above.)
 - Run `git branch --show-current` and confirm it matches what the user said.
 - Repo-root `worker.js` is the ONE source of truth. Convenience copies are re-derived from it, never
   the reverse.
@@ -155,22 +168,20 @@ deliberately.
 
 ## Open
 
-- **Remote control is DESIGNED, NOT BUILT.** See **`.github/REMOTE-CONTROL.md`** (new this session).
-  Short version: the Cloudflare lane becoming readable shrinks the problem from "a system" to a
-  preflight check. Recommended first version is `tools/preflight.js` (pure git + Pages, ~80 lines, no
-  credentials) plus a `workers_list` ritual. One optional worker change — an unauthenticated
-  `GET /version` — makes the whole check credential-free. **Three open questions for the user are at
-  the bottom of that file; they should be answered before anything is built.**
-- **v213/v214/v215 Owner card is still unexercised against the real worker in the field.** But see
-  the next line — that is now much easier than the previous handoff believed.
-- **The "you can't test against the real worker from localhost" belief is FALSE.** Worker build 13
-  reflects any `localhost`/`127.0.0.1` origin on any port. Verified live 2026-08-04:
-  `OPTIONS /verify` with `Origin: http://localhost:8080` answers
-  `Access-Control-Allow-Origin: http://localhost:8080`. **The Owner card can be driven for real from
-  a local preview with a real PIN, today, with no deploy.** `CLAUDE.md`'s "Local preview note" said
-  the opposite and is corrected on this branch. (CORS here is response-header only — the worker never
-  rejects by origin — so `curl` and node scripts reach every route too. Everything stays PIN-gated.)
+- **Hydrant database refresh is due.** Build date 2026-01-30, 6-month cadence, currently overdue. The
+  user pulls a fresh SAWS export plus the Active911 private plugs; rebuilding `hydrants.json` from it
+  is a Claude job. Bump `HYD_DB_DATE` in `control.html` in the same commit or validate.js fails.
+- **`?rebuild=1` on metrics** to backfill `nNoRig` into existing monthly rollups (build 19+ is live,
+  so this can be done any time).
+- **Firestore is piggybacked on the `firehawk-scheduler` project.** A 429 quota exhaustion on
+  2026-08-05 took out the board's officer state and, through a hidden coupling, the map. Polling is
+  now 25 s with exponential backoff to 5 min and a quota latch. Splitting it into its own project is
+  **discussed, not decided.**
+- **Fleetio integration** — the user chose API version `2025-05-05` but has not said what data they
+  want out of it. Blocked on that.
 - **Worker rate limiter** — parked; the Cloudflare `RL` binding was never created, so it is inert.
+- **Remote control** — see `.github/REMOTE-CONTROL.md`. Largely overtaken by the Cloudflare lane
+  becoming both readable and writable from a session.
 
 ## Verify before you push
 
@@ -180,4 +191,7 @@ node tools/validate.js
 node tools/prove-behavior.js   # only if you touched tools/behavior.js
 ```
 
-All checks pass on this branch: **ALL CHECKS PASS**, behavioral 64/64, mutations 10/10 caught.
+Still yours by hand, because no script can: the deployed file is non-empty AND the Actions run is
+green (**commit truth ≠ serve truth**), and `.nojekyll` exists in the repo root.
+
+State at last update: **ALL CHECKS PASS**, behavioral 64/64.

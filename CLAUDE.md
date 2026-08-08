@@ -22,19 +22,21 @@ all-clear.**
 
 ## Deploy targets (critical — two different systems)
 - `index.html`, `control.html`, `sw.js` → **`git push`** to this repo (GitHub Pages).
-- `worker.js` → **pasted into the Cloudflare dashboard by a human** (worker `bc2fd-dash-auth`).
+- `worker.js` → **`npx wrangler deploy`** from the repo root (worker `bc2fd-dash-auth`).
   A `git push` does NOT deploy the worker — it is a separate lane and a separate action, every time.
-  **Paste from the repo-root `worker.js`, never from `_handoff/` — those copies go stale silently
-  and a stale one has already caused a near-miss.**
-  *Why not automated (tested 2026-08-05, do not re-litigate):* the Cloudflare API write permission
-  is real — a `PUT` of an empty script reached Cloudflare's **script validator** (`10021: script
-  body must not be empty`), which is past authn/authz. What blocks it is getting the 180 KB of
-  source into the request. The `cloudflare-api` execute sandbox has a blanket egress block — a
-  bare `fetch` to raw.githubusercontent, GitHub Pages, jsDelivr and Statically **all returned 403**,
-  four unrelated hosts, so it reaches the Cloudflare API and nothing else. The only remaining route
-  is inlining the source into the tool call, which means escaping 180 KB of JS full of regex,
-  backticks and quotes — one bad escape ships a corrupted dispatch relay. Not worth it.
-  If you automate this later, the missing piece is a fetchable source, not permission.
+  *Status (verified 2026-08-07):* **wrangler works and is the lane.** Build 20 shipped this way.
+  `wrangler.toml` is committed; the user's `CLOUDFLARE_API_TOKEN` is in their environment — never
+  ask for its value and never print it. A permission rule scoped to `deploy` (not `wrangler:*`,
+  which would also grant `kv delete` and `secret put`) lives in `.claude/settings.local.json`.
+  If the permission classifier blocks the command anyway, **stop and ask the user to run it** —
+  do not route around the denial via the Cloudflare API MCP.
+  The `_handoff/` copy-paste page is now a **fallback**, not the lane. If you ever fall back to it,
+  paste from a page regenerated from the repo-root `worker.js` and check its embedded md5 first —
+  those copies go stale silently and a stale one has already caused a near-miss.
+  *(History, so it is not re-litigated: this said "human paste only" because a 2026-08-05 probe
+  found the `cloudflare-api` execute sandbox egress-blocked, leaving no way to get 180 KB of source
+  into an API call. That analysis was correct about that route and irrelevant to this one —
+  wrangler reads the file off disk and never needs the source in a tool call.)*
   **`worker.js` in this repo is the SOURCE OF TRUTH** (as of 2026-07-19) — Claude authors and
   maintains it here. Edit the repo copy, validate, then deploy *that file*. Never hand-edit in the
   Cloudflare dashboard, or the two drift apart again — that drift previously left the repo copy
@@ -56,7 +58,9 @@ all-clear.**
 1. **Pull live before editing.** Other sessions touch this codebase. Fetch the deployed
    file and diff before changing anything — a stale local copy has silently erased
    shipped work before. Never assume the working copy is current.
-   `curl -s https://raw.githubusercontent.com/AFHerkDriver/bcesd2-dashboard/main/index.html | md5sum`
+   **This is a Windows checkout and CRLF will fake a drift alarm** — some files are CRLF locally
+   while git blobs and Pages are LF, so a raw md5 always mismatches. Strip CR before comparing:
+   `diff <(tr -d '\r' < index.html) <(curl -s https://afherkdriver.github.io/bcesd2-dashboard/index.html)`
 2. **Single-file, surgical edits.** Edit with count-asserted string replacements; grep
    after to confirm the change actually landed and is unique.
 3. **Bump the SW cache on every `index.html` or `sw.js` change.** Increment the cache
