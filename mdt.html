@@ -623,7 +623,27 @@
   }).catch(() => {});   /* absent db -> no dots, no tender chips; dispatch banner is the loud one */
   const HYD_Z = 16.2;
   const respOverlay = L.layerGroup();   /* station response areas — opt-in from the layers control */
+  /* oosHyd is DERIVED — never assign it directly. Officer flags (board state) and dispatch flags
+     (/hydrantlog) arrive on separate clocks, so they are held apart and unioned, exactly as the wall
+     board does it. Without this the cab screen showed a plug dispatch had called dead as ordinary
+     blue while the wall showed it red — the crew standing at the hydrant got the weaker picture. */
   let hydPainted = "", oosHyd = [];
+  let oosOfficer = [], oosCadRaw = [], hydClear = {};      /* hydClear: id -> `since` of the overridden report */
+  function oosDerive() {
+    const cad = [];
+    for (const o of oosCadRaw) {
+      const id = String(o && o.id != null ? o.id : o), since = String((o && o.since) || "");
+      const ov = hydClear[id];
+      if (ov != null && since && since <= String(ov)) continue;   /* officer override, and nothing newer since */
+      const k = hydNorm("HYD" + id); if (k) cad.push(k);
+    }
+    const seen = {}, out = [];
+    for (const o of oosOfficer.concat(cad)) if (o && !seen[o]) { seen[o] = 1; out.push(o); }
+    if (JSON.stringify(out) === JSON.stringify(oosHyd)) return;
+    oosHyd = out; hydPainted = "";
+    try { hydUpdate(); oosRepaint(); } catch (e) {}
+    for (const k in tenderCache) delete tenderCache[k];           /* water supply changed — the tender scan must re-run */
+  }
   const hIc = (f, s) => L.icon({ iconUrl: f + ".png", iconRetinaUrl: f + "@2x.png", iconSize: [s, s], iconAnchor: [s / 2, s] });
   const hydIcon = hIc("hydrant-marker", 20), hydIconBig = hIc("hydrant-marker-hv", 26), hydIconOOS = hIc("hydrant-marker-oos", 26);
   /* suffix synonyms canonicalize BEFORE stripping — an officer's "Applewhite Road" must match the
@@ -946,11 +966,27 @@
       if (!divs.length) { chip.style.display = "none"; }
       else { chip.style.display = ""; chip.className = "chip bad";
         chip.innerHTML = divs.length + " ON DIVERSION<span class='sub'>" + divs.slice(0, 4).map(d => esc(d.name) + " — " + esc(d.status)).join(" · ") + "</span>"; }
-      const next = (st.oosHydrants || []).map(x => hydNorm(x && x.addr != null ? x.addr : x)).filter(Boolean);
-      if (JSON.stringify(next) !== JSON.stringify(oosHyd)) { oosHyd = next; hydPainted = ""; hydUpdate(); oosRepaint(); for (const k in tenderCache) delete tenderCache[k]; }   /* flag changes re-answer the water-supply question */
+      oosOfficer = (st.oosHydrants || []).map(x => hydNorm(x && x.addr != null ? x.addr : x)).filter(Boolean);
+      hydClear = {};
+      for (const c of (st.hydCadClear || [])) if (c && c.id != null) hydClear[String(c.id)] = String(c.since || "");
+      oosDerive();   /* flag changes re-answer the water-supply question */
     }).catch(() => {
       if (++stateFails >= 2) { const chip = $("hospChip"); chip.style.display = ""; chip.className = "chip bad"; chip.textContent = "DIVERSION STATUS UNKNOWN — verify via MEDCOM"; }
     });
+  }
+
+  /* ── DISPATCH-FLAGGED HYDRANTS — the same /hydrantlog the wall board polls, derived fresh by the
+     worker on every read. 10 minutes is ample (hydrant status moves a few times a week) and it is
+     deliberately NOT tied to the dispatch poll, which runs every 6-15 s. A failed fetch keeps the
+     last known set: this must never silently turn a red plug blue in the cab. ── */
+  function pullHydLog() {
+    if (!PIN) return;
+    fetch(WORKER + "/hydrantlog?pin=" + encodeURIComponent(PIN))
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        if (!j || !j.ok || !Array.isArray(j.oos)) return;    /* unreadable: hold what we have */
+        oosCadRaw = j.oos; oosDerive();
+      }).catch(() => {});
   }
 
   /* ── DISPATCH — the reason this screen exists. Poll every 15 s; two consecutive failures =
@@ -1911,6 +1947,10 @@
       if (document.visibilityState === "visible" && !document.hidden) loadBurn();
     }, 30 * 60 * 1000);   /* bans change at most once a day — 30 min is generous, and gated like loadState */
     loadWx(); setInterval(loadWx, 10 * 60 * 1000);
+    /* NOT visibility-gated, unlike loadState. This is one small worker read every 10 minutes, not a
+       Firestore document, and a rig whose screen has been off is exactly the one that must not wake
+       up showing a dead plug as blue. */
+    pullHydLog(); setInterval(pullHydLog, 10 * 60 * 1000);
     cxPins(); setInterval(cxPins, 5 * 60 * 1000);
     setInterval(tourLoad, 5 * 60 * 1000);   /* no-ops while the Tour Calls overlay is off; tourStart recomputed each pass so the 0700 reset lands */
     loadDrones(); setInterval(loadDrones, 20000);

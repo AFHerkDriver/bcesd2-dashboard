@@ -115,6 +115,16 @@
     cursor:pointer;background:none;border:1px solid #FFB020;color:#FFB020}
   .oosconf.back{border-color:#34C759;color:#34C759}
   .oosconf:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+  /* Dispatch-flagged plugs — read-only mirror of what CAD currently says, with the override.
+     Red edge while the flag stands, dimmed with a green edge once an officer has overridden it. */
+  .cad-sec{border-top:1px solid var(--border);margin-top:14px;padding-top:12px}
+  .cad-sec > h3{font-size:14px;font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;
+    color:var(--text);margin:0 0 6px;display:flex;align-items:center;gap:8px}
+  .cadrow{border-left:3px solid var(--red);padding-left:8px;flex-wrap:wrap}
+  .cadrow.cadov{border-left-color:#34C759;opacity:.72}
+  .cadid{font-weight:700;font-size:14px;color:var(--text);white-space:nowrap}
+  .cadmeta{flex:1 1 180px;min-width:0;font-size:12px;line-height:1.4;color:var(--dim)}
+  .cadrow.cadov .cadmeta{color:#34C759}
   /* Deployed write-ins: the checkbox rides the staffed row; the detail line opens beneath it */
   .widep{display:flex;align-items:center;gap:6px;font-size:13px;color:#FF6B35;white-space:nowrap;cursor:pointer;min-height:34px}
   .widep input{width:18px;height:18px;accent-color:#FF6B35;cursor:pointer}
@@ -452,6 +462,15 @@
       <div class="hint">Enter the hydrant&rsquo;s street address (e.g. <b>11219 CHARISMATIC</b>) <b>or its hydrant number</b> (e.g. <b>494658</b>, or <b>HYD 494658</b> to force number-only matching) &mdash; the <b>&#10003;</b> confirms it matched a plug in the department hydrant db, and both maps show the red slashed pin at ANY zoom. Numbers work for plugs with no address on file; suffix spelling (Road vs RD) doesn&rsquo;t matter. Remove the entry when the hydrant is repaired.</div>
       <div id="oosList"></div>
       <button class="add" id="addOOS">+ Flag a hydrant OOS</button>
+
+      <!-- Dispatch-flagged plugs. NOT part of the officer list above — CAD flags are derived fresh
+           from the hydrant traffic log on every read, so they must never be merged into the saved
+           list (a save would freeze one in place and it would outlive dispatch clearing it). -->
+      <div class="cad-sec">
+        <h3>From Dispatch <span class="tag live">CAD</span></h3>
+        <div class="hint">Flagged automatically from dispatch hydrant traffic &mdash; these are already red on both boards. Dispatch clears them itself when it sends a back-in-service. <b>Override</b> only when you know better than the CAD message; it shows the plug IN SERVICE everywhere, and lapses by itself if dispatch reports that hydrant out again.</div>
+        <div id="oosCad"></div>
+      </div>
     </div>
 
     <!-- NWS — the live-NWS-driven overrides, folded: Flood / Fire Weather -->
@@ -610,6 +629,7 @@
   function unlock(name, tier, pin){
     if(tier==='admin'){ loadAccessLog(pin); wireReset(); loadTypeLog(pin); loadAdmin(pin); }   /* access log + type log + reset + PIN roster are Owner-only (stored tier value stays "admin") */
     loadChuteStats(pin);   /* every officer sees chute times — the worker's /calls needs only a valid PIN, so this was never a data restriction, just a UI one */
+    loadCadOOS(pin);       /* dispatch-flagged hydrants — same route the boards poll, so this mirrors what is painted red */
     var g=$g('gate'); if(g) g.classList.add('hide'); tokenReminder(name); hydDbReminder(name);
     /* Diagnostics is gated on the token owner's NAME ONLY — same identity gate as the token
        reminder above, and deliberately NOT on tier. Do not add a tier check here, and do not move
@@ -1106,6 +1126,10 @@ function defaults(){
     apparatus:{ l123:false, ap124:false, l125:false },   /* true = OUT OF SERVICE */
     tExp:{}, aExp:{},                                    /* unit -> optional expiry (datetime-local); board auto-reverts past it */
     oosHydrants:[],                                      /* address fragments; board flags matching CAD hydrants with the red slashed pin */
+    /* Officer overrides of DISPATCH-flagged plugs: [{id, since, t}]. `since` is the timestamp of the
+       exact CAD report being overridden — the boards suppress that report and nothing newer, so a
+       hydrant that goes out AGAIN after an override flags again instead of staying silently blue. */
+    hydCadClear:[],
     writeins:[],                                         /* [{name, mode:'on'|'oos', exp}] ad-hoc units */
     announcements:[],                                   /* EMPTY — demo text here once masqueraded as live board state after a failed load */
     calendar:[],
@@ -1511,11 +1535,36 @@ function hydNormC(s){ return String(s||'').toUpperCase()
   .replace(/\b(ROAD|DRIVE|STREET|LANE|TRAIL|PARKWAY|BOULEVARD|AVENUE|HIGHWAY|CIRCLE|COURT|PLACE|COVE|BEND|CROSSING|EXPRESSWAY)\b/g,function(m){
     return {ROAD:'RD',DRIVE:'DR',STREET:'ST',LANE:'LN',TRAIL:'TRL',PARKWAY:'PKWY',BOULEVARD:'BLVD',AVENUE:'AVE',HIGHWAY:'HWY',CIRCLE:'CIR',COURT:'CT',PLACE:'PL',COVE:'CV',BEND:'BND',CROSSING:'XING',EXPRESSWAY:'EXPY'}[m]; })
   .replace(/[^A-Z0-9]/g,''); }
+var HYDI=null;   /* id -> {m:main inches, a:address} — so a CAD flag can be shown as more than a bare number */
 function loadHydDb(){ if(HYDN||HYDN_REQ) return; HYDN_REQ=true;
   fetch('hydrants.json').then(function(r){ return r.ok?r.json():null; }).then(function(j){
-    if(j&&Array.isArray(j.h)){ HYDN=[]; j.h.forEach(function(h){ HYDN.push([h[4]?hydNormC(h[4]):'',String(h[0])]); });   /* every plug, address or not — number flags must validate against the address-less ones too */
+    if(j&&Array.isArray(j.h)){ HYDN=[]; HYDI={}; j.h.forEach(function(h){ HYDN.push([h[4]?hydNormC(h[4]):'',String(h[0])]);   /* every plug, address or not — number flags must validate against the address-less ones too */
+        HYDI[String(h[0])]={m:h[1]||0, a:h[4]||''}; });
       try{ renderOOS(); }catch(e){} }
   }).catch(function(){}); }
+/* ── DISPATCH-FLAGGED PLUGS. Same /hydrantlog the boards poll, same derived set, so what the officer
+   sees here is exactly what is painted red out there. Read-only: the override is recorded in board
+   state, never by editing this list. A failed fetch leaves the section saying so rather than
+   rendering an empty "none" — an unreachable worker must not read as an all-clear. ── */
+window.CAD_OOS=null;        /* null = not loaded yet, [] = dispatch has nothing flagged */
+window.CAD_ERR='';
+function loadCadOOS(pin){
+  if(!pin) return;
+  fetch(CTL_AUTH+'/hydrantlog?pin='+encodeURIComponent(pin))
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(j){
+      if(j&&j.ok&&Array.isArray(j.oos)){ window.CAD_OOS=j.oos; window.CAD_ERR=''; }
+      else { window.CAD_ERR='Dispatch hydrant log unreadable'; }
+      try{ renderOOS(); }catch(e){}
+    })
+    .catch(function(){ window.CAD_ERR='Could not reach the dispatch hydrant log'; try{ renderOOS(); }catch(e){} });
+}
+function cadClearIdx(id){
+  if(!Array.isArray(state.hydCadClear)) state.hydCadClear=[];
+  for(var i=0;i<state.hydCadClear.length;i++){ var c=state.hydCadClear[i];
+    if(c&&String(c.id)===String(id)) return i; }
+  return -1;
+}
 /* An OOS entry is EITHER a legacy plain string OR {addr,exp,unc}. Both shapes ship together and
    need no board change: index.html and mdt.html already read `x.addr!=null ? x.addr : x`. Always
    go through these — never index the array element directly, or a legacy string silently becomes
@@ -1559,9 +1608,60 @@ function renderOOS(){
     box.appendChild(row);
   });
   state.oosHydrants.forEach(function(a,i){ setOOSBadge(i); });
+  var cad=renderCadOOS();
   var s=$('oosFoldSum'); if(s){ var n=state.oosHydrants.length,
     u=state.oosHydrants.filter(function(x){ return x&&typeof x==='object'&&x.unc; }).length;
-    s.textContent=n?('· '+n+' OOS'+(u?(' · '+u+' to confirm'):'')):'· none'; s.className='fold-sum'+(n?' bad':''); }
+    var parts=[];
+    if(n) parts.push(n+' OOS'+(u?(' · '+u+' to confirm'):''));
+    if(cad.live) parts.push(cad.live+' from CAD');
+    if(cad.ov) parts.push(cad.ov+' overridden');          /* an override hides a red pin — never let it be invisible here */
+    s.textContent=parts.length?('· '+parts.join(' · ')):'· none';
+    s.className='fold-sum'+((n||cad.live)?' bad':''); }
+}
+/* Central time, matching the rest of the panel. Deliberately a separate copy of accWhen(), which
+   lives inside the PIN-gate IIFE and is not in scope out here. */
+function cadWhen(t){
+  try{ return new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'}); }
+  catch(e){ return String(t||''); }
+}
+/* Renders the dispatch-flagged section and reports its counts back to the fold summary. */
+function renderCadOOS(){
+  var box=$('oosCad'); if(!box) return {live:0,ov:0};
+  if(!Array.isArray(state.hydCadClear)) state.hydCadClear=[];
+  var arr=window.CAD_OOS;
+  if(window.CAD_ERR){ box.innerHTML='<div class="hint" style="color:var(--red)"><b>&#9888; '+esc(window.CAD_ERR)+'.</b> Dispatch flags cannot be shown &mdash; this is NOT an all-clear. The boards keep painting whatever they last read.</div>'; return {live:0,ov:0}; }
+  if(arr===null){ box.innerHTML='<div class="hint">Reading the dispatch hydrant log&hellip;</div>'; return {live:0,ov:0}; }
+  if(!arr.length){ box.innerHTML='<div class="hint">Dispatch has no hydrants flagged right now.</div>'; return {live:0,ov:0}; }
+  box.innerHTML='';
+  var live=0, ov=0;
+  arr.forEach(function(o){
+    var id=String(o&&o.id!=null?o.id:o), since=String((o&&o.since)||'');
+    var ci=cadClearIdx(id), c=ci>=0?state.hydCadClear[ci]:null;
+    /* an override only covers the report it was made against — a NEWER CAD report re-flags the plug
+       and the stale override is shown as lapsed rather than silently suppressing live information */
+    var covered=!!(c && since && String(since)<=String(c.since||''));
+    var rec=HYDI?HYDI[id]:null;
+    var meta=[];
+    if(rec){ meta.push(rec.m?(rec.m+'" main'):'main size unknown');
+             meta.push(rec.a?rec.a:'no address on file'); }
+    else if(HYDI) meta.push('<b style="color:var(--red)">not found in the hydrant db</b>');
+    else meta.push('matching against the hydrant db&hellip;');
+    if(since) meta.push('flagged '+esc(cadWhen(since)));
+    var row=document.createElement('div');
+    row.className='list-row cadrow'+(covered?' cadov':'');
+    if(covered){ ov++;
+      row.innerHTML='<span class="cadid">#'+esc(id)+'</span>'+
+        '<span class="cadmeta"><b>Overridden</b> &mdash; showing IN SERVICE on both boards. '+meta.join(' &middot; ')+'</span>'+
+        '<button class="oosconf" data-cadundo="'+esc(id)+'">Undo &mdash; still out</button>';
+    } else { live++;
+      var lapsed=c?' <b style="color:#FFB020">Earlier override lapsed &mdash; dispatch flagged it again.</b>':'';
+      row.innerHTML='<span class="cadid">#'+esc(id)+'</span>'+
+        '<span class="cadmeta">'+meta.join(' &middot; ')+lapsed+'</span>'+
+        '<button class="oosconf back" data-cadclear="'+esc(id)+'" data-cadsince="'+esc(since)+'">Override &mdash; back in service</button>';
+    }
+    box.appendChild(row);
+  });
+  return {live:live, ov:ov};
 }
 function renderWi(){
   var box=$('wiList'); if(!box) return; box.innerHTML='';
@@ -1592,6 +1692,20 @@ document.addEventListener('click', function(e){
   /* Confirming a hydrant back in service is the ONLY thing that clears the flag — never a clock. */
   var ob=e.target.closest&&e.target.closest('[data-oosback]'); if(ob){ state.oosHydrants.splice(+ob.getAttribute('data-oosback'),1); renderOOS(); return; }
   var os=e.target.closest&&e.target.closest('[data-oosstill]'); if(os){ var oo=oosObj(+os.getAttribute('data-oosstill')); oo.unc=0; oo.exp=''; renderOOS(); return; }
+  /* Overriding a DISPATCH flag turns a red pin blue on every board — the one action here that can
+     hide a hydrant dispatch has told us is dead. It is stamped with the timestamp of the report it
+     overrides, so it covers that report and nothing after it, and it still needs a Save. */
+  var cc=e.target.closest&&e.target.closest('[data-cadclear]');
+  if(cc){ var cid=cc.getAttribute('data-cadclear'), csince=cc.getAttribute('data-cadsince')||'';
+    if(!Array.isArray(state.hydCadClear)) state.hydCadClear=[];
+    var ex=cadClearIdx(cid);
+    var recd={id:String(cid), since:String(csince), t:new Date().toISOString()};
+    if(ex>=0) state.hydCadClear[ex]=recd; else state.hydCadClear.push(recd);
+    renderOOS(); setDirty(true); return; }
+  var cu=e.target.closest&&e.target.closest('[data-cadundo]');
+  if(cu){ var ui=cadClearIdx(cu.getAttribute('data-cadundo'));
+    if(ui>=0) state.hydCadClear.splice(ui,1);
+    renderOOS(); setDirty(true); return; }
   var wd=e.target.closest&&e.target.closest('.wdel'); if(wd){ state.writeins.splice(+wd.getAttribute('data-wi'),1); renderWi(); return; }
   var sb=e.target.closest&&e.target.closest('.wiseg button'); if(sb){ var seg=sb.parentElement, i=+seg.getAttribute('data-wi');
     state.writeins[i].mode=sb.getAttribute('data-v'); renderWi(); return; }   /* full re-render: the Deployed checkbox + detail line follow the mode */

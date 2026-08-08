@@ -2039,6 +2039,25 @@
        both plugs in the first real messages had no address on file. */
     window.OOS_OFFICER=window.OOS_OFFICER||[];
     window.OOS_CAD=window.OOS_CAD||[];
+    /* CAD flags as they arrived, with the timestamp of each report, plus the officer overrides that
+       may suppress them. Kept raw because the two arrive on different clocks — a state save and a
+       10-minute poll — and either one has to be able to recompute the answer from the other. */
+    window.OOS_CAD_RAW=window.OOS_CAD_RAW||[];        /* [{id, since}] straight off /hydrantlog */
+    window.HYD_CLEAR=window.HYD_CLEAR||{};            /* id -> `since` of the report an officer overrode */
+    /* An override covers the ONE report it was made against. A later report for the same hydrant has
+       a newer `since`, so it flags again — an officer clearing a plug today can never mask it going
+       out again next month. An entry with no `since` is never suppressed: unknown age is not consent. */
+    function cadApply(){
+      var out=[];
+      window.OOS_CAD_RAW.forEach(function(o){
+        var id=String(o&&o.id!=null?o.id:o), since=String((o&&o.since)||"");
+        var ov=window.HYD_CLEAR[id];
+        if(ov!=null && since && since<=String(ov)) return;      /* overridden, and no newer report since */
+        var k=hydNorm("HYD"+id); if(k) out.push(k);
+      });
+      if(JSON.stringify(out)===JSON.stringify(window.OOS_CAD)) return;
+      window.OOS_CAD=out; oosMerge();
+    }
     function oosMerge(){
       var seen={}, out=[];
       window.OOS_OFFICER.concat(window.OOS_CAD).forEach(function(o){ if(o&&!seen[o]){ seen[o]=1; out.push(o); } });
@@ -2075,6 +2094,11 @@
       onBoardState(function(ok,st){                              /* officer OOS list changes repaint the pins */
         var raw=((st&&st.oosHydrants)||[]);
         window.OOS_OFFICER=raw.map(function(x){ return hydNorm(x&&x.addr!=null?x.addr:x); }).filter(Boolean);
+        /* officer overrides of dispatch flags ride the same state document — rebuild the lookup and
+           re-derive, so an override takes effect on the next save instead of the next 10-minute poll */
+        var cl={}; ((st&&st.hydCadClear)||[]).forEach(function(c){ if(c&&c.id!=null) cl[String(c.id)]=String(c.since||""); });
+        window.HYD_CLEAR=cl;
+        try{ cadApply(); }catch(e){}
         /* the amber subset — entries whose estimate lapsed unverified. Legacy string entries have no
            unc field and are simply never amber, so an older saved state keeps behaving exactly as before.
            CAD-derived flags are never amber: dispatch is telling us directly, so there is nothing to confirm. */
@@ -2095,9 +2119,8 @@
         var pin=window.BOARD_PIN?window.BOARD_PIN():""; if(!pin) return;
         bcFetch(HL+"?pin="+encodeURIComponent(pin)).then(function(r){ return r.ok?r.json():null; }).then(function(j){
           if(!j||!j.ok||!Array.isArray(j.oos)) return;          /* unreadable: hold the last known set */
-          var next=j.oos.map(function(o){ return hydNorm("HYD"+String(o&&o.id!=null?o.id:o)); }).filter(Boolean);
-          if(JSON.stringify(next)===JSON.stringify(window.OOS_CAD)) return;
-          window.OOS_CAD=next; oosMerge();
+          window.OOS_CAD_RAW=j.oos;                             /* keep `since` — cadApply needs it to expire stale overrides */
+          cadApply();
         }).catch(function(){});
       }
       setTimeout(pull,4000); setInterval(pull,10*60*1000);
