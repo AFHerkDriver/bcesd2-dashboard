@@ -168,7 +168,7 @@ const isRealApparatus = (u) => /^[A-Za-z].*\d{3}$/.test(String(u));
 /* ── WORKER BUILD NUMBER — bump by 1 on EVERY worker.js edit. The control panel's diagnostics
    compares this (via /verify) against the build it was deployed expecting, so a lagging paste
    finally has a warning light instead of being discovered by a wrong recount. ── */
-const WORKER_VERSION = 21;
+const WORKER_VERSION = 22;
 
 /* Address-history key — conservative normalize: uppercase, alnum+space only. Intersections are
    valid repeat locations too. Empty address = no history row. */
@@ -2353,29 +2353,76 @@ export default {
           if (addrInfersOurs(c.address) && c.lat > 29.36) { c.gs = 1; continue; }
           if (esdAll && !inOurs(esdAll, c.lng, c.lat) && aidDistrictOf(esdAll, c.lng, c.lat) === "LOC?") c.gs = 1;
         }
+        /* ── TWO GEOCODERS (build 22). Census alone left a whole class unrepaired, and it is the
+           dangerous class: an address on a RING road, where the same block number exists on two
+           arcs 44 km apart. Census missed "2201-2351 W LOOP 1604 S", so the repair never fired and
+           an MVC that Station 123 worked plotted on the east side of Loop 1604 (2026-08-08).
+           ArcGIS resolves that at score 98.67, and resolves INTERSECTIONS at 100 — which is why
+           the old "intersections: the geocoder can't" skip is gone. Census genuinely cannot do
+           them; ArcGIS returns Addr_type StreetInt, and dispatch gives us a cross street on most
+           calls.
+
+           ORDER MATTERS, AND IT IS CENSUS FIRST. Measured on the live cache before shipping:
+           ArcGIS returns Addr_type "StreetAddress" with score 100 for 16850, 19190 and 20799
+           US Hwy 281 S while placing all three within ~50 m of each other (29.1244 / 29.1246 /
+           29.1248) — addresses four thousand numbers apart cannot share a point, so that is
+           interpolation collapsing onto a segment end. Census returns three distinct points that
+           march south as the numbers climb, which is what 281 actually does. Census owns the
+           authoritative TIGER address ranges; ArcGIS is the fallback for what Census cannot parse.
+           Running ArcGIS first would have degraded the entire 281 corridor — Stations 161 and 162 —
+           to fix Loop 1604. A high score is not accuracy.
+
+           Unchanged and load-bearing: the credibility gate. A hit only replaces A911's point if it
+           lands inside our districts (or on the south corridor for a south-corridor address). Note
+           it would NOT have caught the 281 collapse above — those points sit squarely in the south
+           district — which is exactly why the provider order is doing real work here, not the gate. ── */
+        const geoArc = async (ad, sig) => {
+          const r = await fetch("https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates" +
+            "?f=json&maxLocations=1&outFields=Addr_type&singleLine=" + encodeURIComponent(ad + ", San Antonio, TX"), { signal: sig });
+          const j = r.ok ? await r.json() : null;
+          const cd = j && Array.isArray(j.candidates) && j.candidates[0];
+          /* 85 keeps "close enough to be plausible, wrong enough to be dangerous" out. Real hits
+             here score 98-100; a fuzzy fallback match is exactly what the credibility gate below
+             cannot always catch, because a wrong SA address can still sit inside our districts. */
+          if (!cd || !cd.location || !(cd.score >= 85)) return null;
+          return { la: +cd.location.y, ln: +cd.location.x };
+        };
+        const geoCensus = async (ad, sig) => {
+          /* south-corridor addresses NEED the 78264 zip: "24037 US Hwy 281" exists on BOTH ends of the
+             highway and Census (like A911) otherwise matches the north one (verified live: no zip -> 29.665N,
+             zip 78264 -> 29.168S). Everything else gets the mail city, which Census requires. */
+          const suffix = addrInfersOurs(ad) ? ", San Antonio, TX 78264" : ", San Antonio, TX";
+          const r = await fetch("https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=json&address=" +
+            encodeURIComponent(ad + suffix), { signal: sig });
+          const j = r.ok ? await r.json() : null;
+          const mm = j && j.result && Array.isArray(j.result.addressMatches) && j.result.addressMatches[0];
+          return (mm && mm.coordinates) ? { la: +mm.coordinates.y, ln: +mm.coordinates.x } : null;
+        };
         let geoBudget = 2;
+        const geoDeadline = Date.now() + 7000;   /* whole repair phase. Two providers x two addresses could otherwise outlast the board's own poll cadence — a late feed is a worse failure than an unrepaired pin */
         for (const c of calls) {
           if (!c.gs) continue;
           const ad = String(c.address || "").trim();
-          if (!ad || /[&\/@]|\bAND\b/i.test(ad)) continue;          /* intersections: the geocoder can't, the boards keep gs handling */
-          const gk = "geo:" + ad.toUpperCase().replace(/\s+/g, " ");
+          if (!ad) continue;
+          /* geo2, not geo — a MISS cached under the Census-only logic is not evidence of a miss
+             under ArcGIS, and the two addresses that caused this bug are both sitting in the old
+             namespace as {"miss":1} for another 29 days. Old geo: rows age out on their own TTL. */
+          const gk = "geo2:" + ad.toUpperCase().replace(/\s+/g, " ");
           let hit = null;
           const cached = await env.PINS.get(gk);
           if (cached) { try { hit = JSON.parse(cached); } catch (e) {} }
-          else if (geoBudget > 0) {
+          else if (geoBudget > 0 && Date.now() < geoDeadline) {
             geoBudget--;
             try {
               const ac = new AbortController(); const tt = setTimeout(() => ac.abort(), 4000);
-              /* south-corridor addresses NEED the 78264 zip: "24037 US Hwy 281" exists on BOTH ends of the
-                 highway and Census (like A911) otherwise matches the north one (verified live: no zip -> 29.665N,
-                 zip 78264 -> 29.168S). Everything else gets the mail city, which Census requires. */
-              const suffix = addrInfersOurs(ad) ? ", San Antonio, TX 78264" : ", San Antonio, TX";
-              const gr = await fetch("https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=json&address=" +
-                encodeURIComponent(ad + suffix), { signal: ac.signal });
-              clearTimeout(tt);
-              const gj = gr.ok ? await gr.json() : null;
-              const mm = gj && gj.result && Array.isArray(gj.result.addressMatches) && gj.result.addressMatches[0];
-              hit = (mm && mm.coordinates) ? { la: +mm.coordinates.y, ln: +mm.coordinates.x } : { miss: 1 };
+              try {
+                /* intersections go straight to ArcGIS — Census provably cannot resolve them, so
+                   asking it first would only burn half the deadline to learn that again */
+                const isInt = /[&\/@]|\bAND\b/i.test(ad);
+                if (!isInt) hit = await geoCensus(ad, ac.signal);
+                if (!hit && Date.now() < geoDeadline) hit = await geoArc(ad, ac.signal);
+              } finally { clearTimeout(tt); }
+              hit = hit || { miss: 1 };
               await env.PINS.put(gk, JSON.stringify(hit), { expirationTtl: 30 * 86400 });   /* misses cached too — a dead address must not burn the budget every poll */
             } catch (e) { hit = null; }                                  /* network fault: uncached, retried next poll */
           }

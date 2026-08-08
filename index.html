@@ -4156,7 +4156,15 @@
               Object.keys(RT_RUNS).forEach(function(k){
                 var meta=RT_META[k]||RT_META[""];
                 RT_RUNS[k].forEach(function(c){
-                  if(c.lat==null||c.lng==null) return;
+                  /* !c.gs is the SAME gate the run sheet and the tap-to-zoom already use. It was
+                     missing here, and this is the pin on the wall: an MVC whose address geocoded
+                     onto the far arc of Loop 1604 plotted 44 km east of the rigs working it
+                     (2026-08-08, "2201-2351 W Loop 1604 S"). The comment above promises the tally,
+                     the run sheet and the map cannot tell three different stories — this is what
+                     kept that promise from being true. A suspect run still counts in the tally and
+                     still lists in the sheet, labelled "no pin"; it just does not get to claim a
+                     place on the map it has not earned. */
+                  if(c.lat==null||c.lng==null||c.gs) return;
                   pins.push({lat:c.lat, lng:c.lng, color:rtColor(meta[1]), label:meta[0]+" · "+String(c.type||"").replace(/^[A-Z]+\s*-\s*/i,""),
                              time:(function(){ try{ return new Date(c.logged||c.started).toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZone:CT_ZONE}); }catch(e){ return ""; } })()});
                 });
