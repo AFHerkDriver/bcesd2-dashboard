@@ -1616,7 +1616,13 @@
     var idlePts=[];
     var stationLayer=L.layerGroup().addTo(map);
     STATIONS.forEach(function(s){
-      var ic=L.icon({iconUrl:"station-"+s.n+".png",iconSize:[30,30],iconAnchor:[15,15],className:"station-ic"});
+      /* 36, not 30 — the art is 60 px square, so anything at or below 60 is a DOWNsample and stays
+         crisp at any ratio; 60 is the ceiling past which these would start to soften.
+         (Chased a report that 120 looked blurrier than the rest and found no difference to fix:
+         all eight are 60x60 8-bit RGBA, all drawn through this one line, all landing on whole
+         pixels, and 120 measures marginally the SHARPEST of the set. Left at parity deliberately —
+         there is nothing wrong with that badge. Bigger helps every emblem read at wall distance.) */
+      var ic=L.icon({iconUrl:"station-"+s.n+".png",iconSize:[36,36],iconAnchor:[18,18],className:"station-ic"});
       L.marker([s.lat,s.lng],{icon:ic,interactive:false,keyboard:false,zIndexOffset:-1000}).addTo(stationLayer);
       if(+s.n>120 && +s.n<130) idlePts.push([s.lat,s.lng]);   /* default view frames 121-125; 120 (far south) + 161/162 stay plotted, shown when a drone heads their way */
     });
