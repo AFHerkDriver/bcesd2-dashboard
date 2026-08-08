@@ -392,6 +392,27 @@
   .helo-cs::before{display:none!important}   /* kill Leaflet's tooltip arrow — it reads as noise beside a moving aircraft */
   .hyd-pop .hp-unc{color:#FFB020;font-weight:600}
   .hyd-unc{filter:hue-rotate(34deg) saturate(1.25) brightness(1.12)}
+  /* ── HYDRANT STATE FLIP — the 15 s peek that follows a tap on a hydrant page. The plug is drawn
+     in the state it was in BEFORE the message, held long enough to register, then swapped to the
+     state the message puts it in. A halo runs the whole time so the eye finds it on a 1080-line
+     wall from across the bay; the swap itself gets a one-shot punch so the CHANGE is the thing you
+     see, not just the end state. Reduced-motion drops to a static ring — the colour still flips,
+     which is the information. ── */
+  .hyd-fx{animation:hydhalo 1.2s ease-in-out infinite}
+  .hyd-fx.hyd-punch{animation:hydhalo 1.2s ease-in-out infinite, hydpunch .55s cubic-bezier(.2,1.6,.35,1) 1}
+  @keyframes hydhalo{
+    0%,100%{filter:drop-shadow(0 0 3px rgba(255,255,255,.9))}
+    50%    {filter:drop-shadow(0 0 11px rgba(255,255,255,1))}}
+  @keyframes hydpunch{ 0%{transform:scale(1)} 42%{transform:scale(1.75)} 100%{transform:scale(1)} }
+  .hyd-fx-tip{font-family:'Bebas Neue',sans-serif;letter-spacing:1.2px;
+    font-size:clamp(13px,1.25vmin,20px);padding:3px 9px;border-radius:7px;white-space:nowrap;
+    background:rgba(13,17,23,.94);border:1px solid var(--border);color:var(--text)}
+  .hyd-fx-tip::before{border:none!important}          /* Leaflet's little arrow fights the border */
+  .hyd-fx-tip b{font-weight:700}
+  .hyd-fx-tip .fxo{color:var(--red)} .hyd-fx-tip .fxi{color:var(--blue)}
+  .hyd-fx-tip .fxwas{color:var(--dim);font-size:.82em;letter-spacing:.8px}
+  @media (prefers-reduced-motion:reduce){
+    .hyd-fx,.hyd-fx.hyd-punch{animation:none;filter:drop-shadow(0 0 7px rgba(255,255,255,.95))}}
   /* ── PHASE 3 · DRONE TAKEOVER ─────────────────────────────────────────────────────────
      The tile becomes the whole wall through position:fixed, so nothing in the grid moves.
      That is not a style preference: the feeds are IFRAMES, and reparenting an iframe reloads
@@ -2021,6 +2042,76 @@
        the control panel. It is never drawn blue — an unverified hydrant is not water you have.
        Hue-shifted from the OOS art so no new asset is needed; swap in drawn amber art later. */
     var hydIconUNC=L.icon({iconUrl:"hydrant-marker-oos.png",iconRetinaUrl:"hydrant-marker-oos@2x.png",iconSize:[26,26],iconAnchor:[13,26],className:"hyd-unc"});
+    /* ── STATE-FLIP ART. Deliberately a size up on the layer art (32 vs 26) so the focused plug
+       fully covers whatever hydLayer/oosLayer already drew underneath at the same anchor — two pins
+       peeking out from behind each other during a state change would be the one moment you cannot
+       afford ambiguity. `punch` is a one-shot class, so it is a SEPARATE icon object: Leaflet only
+       reapplies className on setIcon, and reusing one object would leave the animation stuck on. */
+    function hydFxIcon(state, punch){
+      var url = state==="out" ? "hydrant-marker-oos" : "hydrant-marker";
+      return L.icon({iconUrl:url+".png", iconRetinaUrl:url+"@2x.png",
+        iconSize:[32,32], iconAnchor:[16,32], className:"hyd-fx"+(punch?" hyd-punch":"")});
+    }
+    map.createPane("hydFxPane"); map.getPane("hydFxPane").style.zIndex=458;   /* over hydPane 455, under call pins 600 */
+    var hydFxLayer=L.layerGroup().addTo(map), hydFxTimers=[];
+    function hydFxClear(){ hydFxTimers.forEach(clearTimeout); hydFxTimers=[]; try{ hydFxLayer.clearLayers(); }catch(e){} }
+    /* id -> plug row, built once. 48k linear scans per tap would work but this is read on every
+       hydrant page and the index costs one pass. */
+    var HYD_IDX=null;
+    function hydIdx(){
+      if(HYD_IDX || !window.HYDB) return HYD_IDX;
+      HYD_IDX={}; window.HYDB.h.forEach(function(h){ HYD_IDX[String(h[0])]=h; });
+      return HYD_IDX;
+    }
+    function hydFxLabel(h, state, was){
+      var lbl = state==="out" ? '<span class="fxo">OUT OF SERVICE</span>' : '<span class="fxi">IN SERVICE</span>';
+      return '<b>HYD '+hEsc(h[0])+'</b> &middot; '+lbl+
+             (was?' <span class="fxwas">was '+(was==="out"?"out":"in service")+'</span>':'')+
+             ((h[1]||0)?(' <span class="fxwas">'+h[1]+'&Prime;</span>'):'');
+    }
+    /* ── THE PEEK. `spec` is "id:dir,id:dir" — parsed off the call row, so a page naming two plugs
+       going opposite ways animates each correctly. Draws every plug in its PRIOR state, holds it,
+       then flips. Returns false when nothing resolved, so the caller can say so out loud rather
+       than opening notes over a map that quietly did nothing. ── */
+    var HYD_FX_MS=2200, HYD_FX_ZOOM=16.6;   /* zoom sits ABOVE HYD_Z 16.2 so the neighbouring live plugs draw too — "this one is dead, that one is not" is the operational answer */
+    window.BC2FD_HYD_PEEK=function(spec){
+      /* FIRST, before any early return. Every exit below leaves the map clean, because the failure
+         paths are exactly where stale markers do damage: tap a page whose plug we cannot place and
+         the PREVIOUS hydrant's flip would still be sitting there, reading as this call's answer. */
+      hydFxClear();
+      if(!pinsOn) return "busy";                       /* drone ops own the map */
+      var idx=hydIdx(); if(!idx) return "nodb";        /* hydrant db has not landed yet */
+      var want=[], miss=[];
+      String(spec||"").split(",").forEach(function(part){
+        var bits=part.split(":"), id=String(bits[0]||"").trim(); if(!id) return;
+        var h=idx[id];
+        if(h && h[2]!=null && h[3]!=null) want.push({h:h, dir:(bits[1]==="out"?"out":"in")});
+        else miss.push(id);
+      });
+      /* A plug dispatch named that our copy of the database does not hold. It HAPPENS — hydrant
+         1351277 on Sandy Ridge is real and is absent from the 2026-01-30 build — and it must be
+         said out loud, not swallowed. Animating the one plug we found while staying silent about
+         the other would tell a crew the page was about one hydrant when it was about two. */
+      window.HYD_MISS=miss;
+      if(!want.length) return "hydnf";                 /* nothing resolved to a plug we hold */
+      var exp=Date.now()+15000;
+      focusPts=want.map(function(w){ return {ll:[w.h[2],w.h[3]], exp:exp, z:HYD_FX_ZOOM}; });
+      reframe();
+      var mk=want.map(function(w){
+        var was = w.dir==="out" ? "in" : "out";        /* it was the OTHER state a moment ago */
+        var m=L.marker([w.h[2],w.h[3]],{icon:hydFxIcon(was),zIndexOffset:2000,keyboard:false,pane:"hydFxPane"}).addTo(hydFxLayer);
+        m.bindTooltip(hydFxLabel(w.h,was),{permanent:true,direction:"top",offset:[0,-30],className:"hyd-fx-tip"});
+        return m;
+      });
+      hydFxTimers.push(setTimeout(function(){
+        mk.forEach(function(m,i){
+          try{ m.setIcon(hydFxIcon(want[i].dir,true));
+               m.setTooltipContent(hydFxLabel(want[i].h, want[i].dir, want[i].dir==="out"?"in":"out")); }catch(e){}
+        });
+      }, HYD_FX_MS));
+      hydFxTimers.push(setTimeout(hydFxClear, 15000));   /* clear WITH the notes, not after */
+      return miss.length ? "hydpart" : "";               /* peeked, but say which plugs we could not place */
+    };
     /* suffix synonyms canonicalize BEFORE stripping — an officer's "Applewhite Road" must match
        the db's "APPLEWHITE RD"; both sides of every comparison pass through here */
     function hydNorm(s){ return String(s||"").toUpperCase()
@@ -2291,8 +2382,11 @@
       if(focusT){ clearTimeout(focusT); focusT=null; }
       if(!focusPts.length){ baseRestore(); districtView(); offscreenNote(); return; }
       try{
-        if(focusPts.length===1){ map.setView(focusPts[0].ll,CALL_ZOOM,{animate:false}); baseSat(); }   /* one call: rooftop imagery + parcel numbers */
-        else { baseRestore(); map.fitBounds(L.latLngBounds(focusPts.map(function(p){ return p.ll; })).pad(0.35),{animate:false,maxZoom:FOCUS_ZOOM}); }   /* multiple: wide frame, district look */
+        /* p.z lets a caller ask for a specific zoom. It has to be read HERE, not just set once at
+           peek time, because reframe re-runs on a timer while the peek is up and would otherwise
+           snap a hydrant focus back to CALL_ZOOM — below HYD_Z, where the plugs stop drawing. */
+        if(focusPts.length===1){ map.setView(focusPts[0].ll,(focusPts[0].z||CALL_ZOOM),{animate:false}); baseSat(); }   /* one call: rooftop imagery + parcel numbers */
+        else { baseRestore(); map.fitBounds(L.latLngBounds(focusPts.map(function(p){ return p.ll; })).pad(0.35),{animate:false,maxZoom:(focusPts[0].z||FOCUS_ZOOM)}); }   /* multiple: wide frame, district look */
       }catch(e){}
       var next=focusPts.reduce(function(m,p){ return Math.min(m,p.exp); },Infinity)-now;
       focusT=setTimeout(reframe, Math.max(250,next));   /* re-evaluate when the next pulse ends */
@@ -3456,6 +3550,38 @@
        moment hydrant traffic got its own kind. One list, both call sites. */
     var ADVISORY_KINDS={"k-gen":1,"k-hydout":1};
     function isAdvisory(cls){ return !!ADVISORY_KINDS[String(cls||"")]; }
+    /* ── HYDRANT PAGE -> plug ids + per-plug direction. The SAME rule the worker's /hydrantlog
+       derivation runs (build 21), and it must stay in step: a bare number has to follow the word
+       "hydrant" AND be 6+ digits, because street numbers in this traffic are 4-5 ("9734 Durham
+       Mill", "22600 talley rd") while 48,130 of the 48,516 plugs are 6-7. Direction is read per
+       clause so "A back and B back" credits both and a mixed page cannot smear one direction
+       across the other plug. Returns "id:dir,id:dir" for the row to carry, or "" for not-a-hydrant
+       -page. Read-only: this drives the map peek, never the OOS verdict — that stays the worker's,
+       so a parser disagreement can never paint a plug the wrong colour on its own. ── */
+    var HYD_MSG_ID=/#\s*(\d{4,10})|\bhydrants?\s+(\d{6,10})/gi;
+    var HYD_MSG_BACK=/\bback in service\b|\breturned to service\b|\bplaced back in service\b|\bin service\b/i;
+    var HYD_MSG_OUT=/\bout of service\b|\bOOS\b/i;
+    function hydSpec(c){
+      if(!c) return "";
+      var notes=(c.notes&&c.notes.length)?c.notes.map(function(n){ return String((n&&n.x)||""); }).join(" | "):"";
+      var blob=String(curType(c)||"")+" "+String(c.address||"")+" "+notes;
+      if(!/HYDRANT/i.test(blob)) return "";
+      var msgDir=HYD_MSG_BACK.test(blob)?"in":(HYD_MSG_OUT.test(blob)?"out":null);
+      var seen={}, order=[];
+      blob.split(/\band\b|[;,]/i).forEach(function(cl){
+        var dir=HYD_MSG_BACK.test(cl)?"in":(HYD_MSG_OUT.test(cl)?"out":msgDir);
+        if(!dir) return;
+        HYD_MSG_ID.lastIndex=0;
+        var m;
+        while((m=HYD_MSG_ID.exec(cl))){
+          var id=m[1]||m[2]; if(!id) continue;
+          if(seen[id]==="out") continue;      /* contradiction in one page keeps it OUT, as the worker does */
+          if(!(id in seen)) order.push(id);
+          seen[id]=dir;
+        }
+      });
+      return order.map(function(id){ return id+":"+seen[id]; }).join(",");
+    }
     function displayUnitsArr(units){ if(!units||!units.length) return [];
       var isStation=function(u){ return /^\d{3}[A-F]$/i.test(u); };
       var real=units.filter(function(u){ return !isStation(u); });
@@ -3524,7 +3650,24 @@
       if(NT_KEY && NOTE_MEM[NT_KEY]) ntPaint();   /* dock open on a live call — new dispatcher notes appear as they land */
     }
     /* ── the dock ── */
-    var NT_KEY="", NT_FALL=null, NT_TIMER=null, NT_LIVE=false, NT_T0=0, NT_MAP="";   /* NT_LIVE: opened from Active Calls (operational) rather than the run tally (debrief). NT_T0: when this open began, so a repaint resumes the countdown instead of restarting it. NT_MAP: "" the map moved, "busy" drone ops own it, "nopin" no trustworthy fix — a zoom that DID NOT HAPPEN must never look like a zoom that broke */
+    var NT_MB_TXT={
+      busy:  "MAP BUSY &middot; DRONE OPS",
+      nopin: "NO PIN",
+      nodb:  "HYDRANT DB NOT LOADED"
+    };
+    /* Name the plug numbers we could not place. "PLUG NOT IN DB" alone would leave the officer
+       unable to tell WHICH hydrant of a two-hydrant page went unshown, and the number is the only
+       handle they have on it — it is what they would carry to dispatch or to a database refresh. */
+    function NT_MB(k){
+      if(k==="hydnf" || k==="hydpart"){
+        var m=(window.HYD_MISS||[]).slice(0,3).map(function(x){ return "#"+x; });
+        var more=(window.HYD_MISS||[]).length-m.length;
+        var who=m.length?(m.join(", ")+(more>0?(" +"+more):"")):"PLUG";
+        return (k==="hydpart"?"ALSO ":"")+who+" NOT IN HYDRANT DB";
+      }
+      return NT_MB_TXT[k] || "NO PIN";
+    }
+    var NT_KEY="", NT_FALL=null, NT_TIMER=null, NT_LIVE=false, NT_T0=0, NT_MAP="";   /* NT_LIVE: opened from Active Calls (operational) rather than the run tally (debrief). NT_T0: whenthis open began, so a repaint resumes the countdown instead of restarting it. NT_MAP: "" the map moved, "busy" drone ops own it, "nopin" no trustworthy fix — a zoom that DID NOT HAPPEN must never look like a zoom that broke */
     function ntSized(){ try{ if(window.BC2FD_MAP_RESIZE) window.BC2FD_MAP_RESIZE(); }catch(e){} }
     function ntClose(){
       NT_KEY=""; NT_FALL=null; NT_LIVE=false; NT_MAP="";
@@ -3566,7 +3709,10 @@
         '<span class="nt-ad">'+esc(ad)+'</span><span class="nt-tm">'+esc(dropTime(ts))+'</span>'+
         /* say so when the map did NOT move. The run sheet already refuses to fail silently on a busy
            map (.rs-busy); a live call deserves the same honesty, or a refused zoom reads as a bug. */
-        (NT_MAP?('<span class="nt-mb">'+(NT_MAP==="busy"?"MAP BUSY &middot; DRONE OPS":"NO PIN")+'</span>'):'')+
+        /* Each reason says WHICH thing was missing. "NO PIN" on a hydrant page that failed to
+           resolve would be a lie by vagueness — the plug number not being in our database is a
+           gap in the database, and the officer should be told that, not shrugged at. */
+        (NT_MAP?('<span class="nt-mb">'+NT_MB(NT_MAP)+'</span>'):'')+
         '<button type="button" class="nt-x" aria-label="Close notes">&#10005;</button></div>'+
         '<div class="nt-body">'+hs+body+'</div>'+
         /* ONLY on a live call. The run tally is for debrief — the reader already knows it is
@@ -3650,8 +3796,11 @@
         var tdh= td==="need" ? '<span class="ctd need" title="No hydrant within 1,000 ft — tender/drafting water supply">TENDER OPS</span>'
                : td==="if"   ? '<span class="ctd if" title="No hydrant within 1,000 ft — tenders if this becomes a working fire">TENDER IF FIRE</span>' : '';
         /* coordinates ride the row so a tap can peek the map — same gate the run tally uses:
-           a c.gs (soft-geocoded) fix is not trustworthy enough to zoom a wall board to. */
-        return '<div class="call-e '+classify(curType(c))+(isEtone(c)?' k-etone':'')+(isFresh?' fresh':'')+'" data-fx="'+exp+'"'+(noteKey(c)?(' data-nk="'+esc(noteKey(c))+'"'):'')+((c.lat!=null&&c.lng!=null&&!c.gs)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'')+'>'+
+           a c.gs (soft-geocoded) fix is not trustworthy enough to zoom a wall board to.
+           data-hyd rides alongside for hydrant pages: those carry no coordinate at all (dispatch
+           puts the location in the body text), so the peek resolves the plug by NUMBER instead. */
+        var hspec=hydSpec(c);
+        return '<div class="call-e '+classify(curType(c))+(isEtone(c)?' k-etone':'')+(isFresh?' fresh':'')+'" data-fx="'+exp+'"'+(hspec?(' data-hyd="'+esc(hspec)+'"'):'')+(noteKey(c)?(' data-nk="'+esc(noteKey(c))+'"'):'')+((c.lat!=null&&c.lng!=null&&!c.gs)?(' data-lat="'+c.lat+'" data-lng="'+c.lng+'"'):'')+'>'+
                '<span class="cw">'+dropTime(ts)+'</span>'+                          /* time — far left */
                '<span class="ct">'+esc(curType(c)||"CALL")+'</span>'+tdh+
                '<span class="ca">'+esc(c.address||"")+'</span>'+
@@ -3671,7 +3820,13 @@
       b.addEventListener("click",function(e){
         var row=e.target.closest && e.target.closest(".call-e[data-nk]"); if(!row) return;
         var mst="";
-        if(!row.hasAttribute("data-lat")) mst="nopin";    /* soft-geocoded or no fix — the run sheet labels these too */
+        /* A hydrant page beats a coordinate. It usually has no coordinate at all, and even when it
+           does, the address is the street the plug sits on — the plug ITSELF is what the tap is
+           asking about, and the map answers by flipping it rather than dropping a pin nearby. */
+        if(row.hasAttribute("data-hyd")){
+          try{ mst=window.BC2FD_HYD_PEEK ? window.BC2FD_HYD_PEEK(row.getAttribute("data-hyd")) : "nopin"; }catch(err){ mst="nopin"; }
+        }
+        else if(!row.hasAttribute("data-lat")) mst="nopin";    /* soft-geocoded or no fix — the run sheet labels these too */
         else { try{ mst=(window.BC2FD_MAP_PEEK && window.BC2FD_MAP_PEEK(parseFloat(row.getAttribute("data-lat")),parseFloat(row.getAttribute("data-lng")))) ? "" : "busy"; }catch(err){ mst="busy"; } }
         ntOpen(row.getAttribute("data-nk"),null,true,mst);    /* Active Calls -> operational view, carries the caveat */
       });
